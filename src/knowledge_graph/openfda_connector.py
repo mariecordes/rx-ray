@@ -1,7 +1,9 @@
+import os
 import logging
 import json
 import requests
 from pathlib import Path
+from typing import Optional
 
 # Configure logging
 logging.basicConfig(
@@ -10,15 +12,19 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-BASE_URL = "https://api.fda.gov/drug/label.json"
+# Load environment variables from .env file
+from dotenv import load_dotenv  # type: ignore
+load_dotenv()
 
 
 class OpenFDAConnector:
     """Connector for fetching drug label data from OpenFDA."""
     
-    def __init__(self):
-        pass
-        
+    def __init__(self, base_url: str = None, timeout: int = 10):
+        self.base_url = os.getenv("OPENFDA_BASE_URL", base_url)
+        print(f"Using OpenFDA Base URL: {self.base_url}")
+        self.timeout = timeout
+    
     def query_api_for_generic_name(self, drug_name: str, search_limit: int = None) -> dict:
         """Query OpenFDA API for a drug by generic name."""
         
@@ -31,7 +37,7 @@ class OpenFDAConnector:
         
         try:
             logger.info(f"Querying OpenFDA API for '{drug_name}'...")
-            response = requests.get(BASE_URL, params=params, timeout=10)
+            response = requests.get(self.base_url, params=params, timeout=self.timeout)
             response.raise_for_status()
             data = response.json()
             total = data.get("meta", {}).get("results", {}).get("total", 0)
