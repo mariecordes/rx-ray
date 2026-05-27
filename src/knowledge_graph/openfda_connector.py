@@ -55,6 +55,65 @@ class OpenFDAConnector:
         except json.JSONDecodeError as e:
             logger.error(f"Failed to parse OpenFDA response: {e}")
             return {}
+    
+    def test_api(self, drug_name: str = "aspirin") -> Optional[dict]:
+        """Test OpenFDA API with a simple query."""
+        try:
+            params = {
+                "search": f"openfda.generic_name:{drug_name}",
+                "limit": 1
+            }
+            
+            logger.info(f"Querying OpenFDA API for '{drug_name}'...")
+            response = requests.get(self.base_url, params=params, timeout=self.timeout)
+            response.raise_for_status()
+            
+            data = response.json()
+            total = data.get("meta", {}).get("results", {}).get("total", 0)
+            
+            if total > 0:
+                logger.info(f"OpenFDA API working. Found {total} result(s) for '{drug_name}'")
+                result = data["results"][0]
+                logger.info(f"  - Brand: {result.get('openfda', {}).get('brand_name', ['N/A'])[0]}")
+                logger.info(f"  - Generic: {result.get('openfda', {}).get('generic_name', ['N/A'])[0]}")
+                logger.info(f"  - Manufacturer: {result.get('openfda', {}).get('manufacturer_name', ['N/A'])[0]}")
+                return result
+            else:
+                logger.warning(f"No OpenFDA results for '{drug_name}'")
+                return None
+        
+        except requests.exceptions.RequestException as e:
+            logger.error(f"OpenFDA API request failed: {e}")
+            return None
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse OpenFDA response: {e}")
+            return None
+    
+    def test_rxcui_search(self, rxcui: str) -> Optional[dict]:
+        """Test OpenFDA search by RXCUI."""
+        try:
+            params = {
+                "search": f"openfda.rxcui:{rxcui}",
+                "limit": 1
+            }
+            
+            logger.info(f"Querying OpenFDA API by RXCUI: {rxcui}...")
+            response = requests.get(self.base_url, params=params, timeout=self.timeout)
+            response.raise_for_status()
+            
+            data = response.json()
+            total = data.get("meta", {}).get("results", {}).get("total", 0)
+            
+            if total > 0:
+                logger.info(f"Found {total} label(s) for RXCUI {rxcui}")
+                return data["results"][0]
+            else:
+                logger.warning(f"No OpenFDA labels for RXCUI {rxcui}")
+                return None
+        
+        except requests.exceptions.RequestException as e:
+            logger.error(f"OpenFDA API request failed: {e}")
+            return None
 
 
 if __name__ == "__main__":
