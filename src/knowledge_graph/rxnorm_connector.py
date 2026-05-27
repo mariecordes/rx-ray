@@ -6,10 +6,6 @@ from typing import Optional
 
 import mysql.connector
 
-# Load environment variables from .env file
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from dotenv import load_dotenv  # type: ignore
-
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -17,19 +13,31 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Add project root to path
-project_root = Path(__file__).parent.parent
-sys.path.insert(0, str(project_root))
+# # Add project root to path
+# project_root = Path(__file__).parent.parent
+# sys.path.insert(0, str(project_root))
+
+# Load environment variables from .env file
+from dotenv import load_dotenv  # type: ignore
+load_dotenv()
 
 
 class RxNormConnector:
     """Test MySQL connection to RxNorm database."""
     
-    def __init__(self, host: str, user: str, password: str, database: str):
-        self.host = host
-        self.user = user
-        self.password = password
-        self.database = database
+    def __init__(self, host: str = None, user: str = None, password: str = None, database: str = None):
+        
+        rxnorm_config = {
+            "host": os.getenv("RXNORM_HOST", host or "localhost"),
+            "user": os.getenv("RXNORM_USER", user or "root"),
+            "password": os.getenv("RXNORM_PASSWORD", password or ""),
+            "database": os.getenv("RXNORM_DATABASE", database or "rxnorm"),
+        }
+
+        self.host = host or rxnorm_config["host"]
+        self.user = user or rxnorm_config["user"]
+        self.password = password or rxnorm_config["password"]
+        self.database = database or rxnorm_config["database"]
         self.connection = None
     
     def connect(self) -> bool:
