@@ -216,3 +216,11 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# gitignore additions during development
+00_DO_NOT_USE_backup/
+.DS_Store
+data/**/*
+*.html
+*.graphml
+uv.lock
