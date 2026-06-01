@@ -1,5 +1,6 @@
 import logging
 from typing import List, Dict, Any, Optional
+import pandas as pd
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -212,6 +213,141 @@ class RxNormExtractor:
         }
         
         return drug_data
+    
+    def get_rxnconso_df(self) -> pd.DataFrame:
+        """
+        Get entire RXNCONSO table as a pandas DataFrame.
+        
+        Returns:
+            DataFrame with all RXNCONSO records
+        """
+        try:
+            query = "SELECT * FROM rxnconso"
+            df = pd.read_sql(query, self.conn)
+            logger.info(f"Loaded RXNCONSO: {len(df)} rows")
+            return df
+        except Exception as e:
+            logger.error(f"Error loading RXNCONSO: {e}")
+            return pd.DataFrame()
+    
+    def get_rxnrel_df(self) -> pd.DataFrame:
+        """
+        Get entire RXNREL table as a pandas DataFrame.
+        
+        Returns:
+            DataFrame with all RXNREL records
+        """
+        try:
+            query = "SELECT * FROM rxnrel"
+            df = pd.read_sql(query, self.conn)
+            logger.info(f"Loaded RXNREL: {len(df)} rows")
+            return df
+        except Exception as e:
+            logger.error(f"Error loading RXNREL: {e}")
+            return pd.DataFrame()
+    
+    def get_rxnsat_df(self) -> pd.DataFrame:
+        """
+        Get entire RXNSAT table as a pandas DataFrame.
+        
+        Returns:
+            DataFrame with all RXNSAT records
+        """
+        try:
+            query = "SELECT * FROM rxnsat"
+            df = pd.read_sql(query, self.conn)
+            logger.info(f"Loaded RXNSAT: {len(df)} rows")
+            return df
+        except Exception as e:
+            logger.error(f"Error loading RXNSAT: {e}")
+            return pd.DataFrame()
+    
+    def get_rxnrel_with_drug_names(self) -> pd.DataFrame:
+        """
+        Return RXNREL relationships with appended drug names for both RXCUI1 and RXCUI2.
+
+        The RXNREL table contains relationships between RXCUI1 and RXCUI2, but not
+        the actual drug names. This function joins RXNREL to RXNCONSO twice to append
+        preferred names for both concepts.
+
+        Preferred-name logic:
+        - Prefer RXNORM source names
+        - Prefer English terms
+        - Prefer non-suppressed terms
+        - Prefer current prescribable content when available
+        - Prefer clinically useful term types such as SCD, SBD, IN, PIN, MIN, BN
+
+        Returns:
+            pandas DataFrame with RXCUI1, RXCUI1_NAME, RXCUI1_TTY, RELA,
+            RXCUI2, RXCUI2_NAME, RXCUI2_TTY.
+            Returns an empty DataFrame if an error occurs.
+        """
+        try:
+            query = """
+            WITH preferred_names AS (
+                SELECT
+                    RXCUI,
+                    STR,
+                    TTY,
+                    SAB,
+                    SUPPRESS,
+                    CVF,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY RXCUI
+                        ORDER BY
+                            CASE WHEN SAB = 'RXNORM' THEN 0 ELSE 1 END,
+                            CASE WHEN LAT = 'ENG' THEN 0 ELSE 1 END,
+                            CASE WHEN SUPPRESS = 'N' THEN 0 ELSE 1 END,
+                            CASE WHEN CVF = '4096' THEN 0 ELSE 1 END,
+                            CASE TTY
+                                WHEN 'SCD' THEN 1
+                                WHEN 'SBD' THEN 2
+                                WHEN 'IN'  THEN 3
+                                WHEN 'PIN' THEN 4
+                                WHEN 'MIN' THEN 5
+                                WHEN 'BN'  THEN 6
+                                WHEN 'SCDF' THEN 7
+                                WHEN 'SBDF' THEN 8
+                                WHEN 'SCDC' THEN 9
+                                WHEN 'SBDC' THEN 10
+                                ELSE 99
+                            END,
+                            LENGTH(STR),
+                            STR
+                    ) AS rn
+                FROM rxnconso
+                WHERE RXCUI IS NOT NULL
+                AND STR IS NOT NULL
+                AND LAT = 'ENG'
+                AND SUPPRESS = 'N'
+            )
+            SELECT
+                r.RXCUI1,
+                n1.STR AS RXCUI1_NAME,
+                n1.TTY AS RXCUI1_TTY,
+
+                r.RELA,
+
+                r.RXCUI2,
+                n2.STR AS RXCUI2_NAME,
+                n2.TTY AS RXCUI2_TTY
+            FROM rxnrel r
+            JOIN preferred_names n1
+                ON r.RXCUI1 = n1.RXCUI
+            AND n1.rn = 1
+            JOIN preferred_names n2
+                ON r.RXCUI2 = n2.RXCUI
+            AND n2.rn = 1
+            WHERE r.RXCUI1 IS NOT NULL
+            AND r.RXCUI2 IS NOT NULL
+            """
+
+            df = pd.read_sql(query, self.conn)
+            return df
+
+        except Exception as e:
+            logger.error(f"Error getting RXNREL relationships with drug names: {e}")
+            return pd.DataFrame()
 
 
 if __name__ == "__main__":
