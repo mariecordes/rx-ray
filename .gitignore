@@ -218,6 +218,7 @@ __marimo__/
 .streamlit/secrets.toml
 
 # gitignore additions during development
+data/cache/
 00_DO_NOT_USE_backup/
 .DS_Store
 data/**/*
