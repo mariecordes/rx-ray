@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   Database,
@@ -15,7 +15,12 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { DrugDossier, LabelSection, RxNormEdge } from "@/lib/types";
+import {
+  DrugDossier,
+  LabelSection,
+  OpenFDALabelRecord,
+  RxNormEdge,
+} from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const sectionLabels: Record<string, string> = {
@@ -41,6 +46,13 @@ function joinValues(values?: string[] | null) {
   return values.join(", ");
 }
 
+function primaryValue(values?: string[] | null) {
+  if (!values || values.length === 0) {
+    return null;
+  }
+  return values[0];
+}
+
 function groupEdges(edges: RxNormEdge[]) {
   return edges.reduce<Record<string, RxNormEdge[]>>((groups, edge) => {
     groups[edge.relation] = groups[edge.relation] ?? [];
@@ -55,8 +67,11 @@ export function DossierExplorer() {
   const [openfdaLimit, setOpenfdaLimit] = useState(5);
   const [dossier, setDossier] = useState<DrugDossier | null>(null);
   const [selectedSection, setSelectedSection] = useState<string | null>(null);
+  const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const sourcesPanelRef = useRef<HTMLDivElement>(null);
+  const labelEvidencePanelRef = useRef<HTMLDivElement>(null);
 
   const labelEvidence = dossier?.label_evidence ?? null;
   const sectionEntries = useMemo(() => {
@@ -74,9 +89,47 @@ export function DossierExplorer() {
       ])
     );
   }, [labelEvidence]);
+  const sourceNumberById = useMemo(() => {
+    return new Map(
+      (labelEvidence?.label_records ?? []).map((record, index) => [
+        record.source_id,
+        index + 1,
+      ])
+    );
+  }, [labelEvidence]);
   const groupedEdges = useMemo(() => {
     return groupEdges(dossier?.rxnorm_neighborhood.edges ?? []);
   }, [dossier]);
+
+  function selectSourceFromEvidence(sourceId?: string | null) {
+    if (!sourceId) {
+      return;
+    }
+    const nextSourceId = selectedSourceId === sourceId ? null : sourceId;
+    setSelectedSourceId(nextSourceId);
+    if (!nextSourceId) {
+      return;
+    }
+    sourcesPanelRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "nearest",
+    });
+  }
+
+  function selectSourceFromSourcePanel(sourceId?: string | null) {
+    if (!sourceId) {
+      return;
+    }
+    const nextSourceId = selectedSourceId === sourceId ? null : sourceId;
+    setSelectedSourceId(nextSourceId);
+    if (!nextSourceId) {
+      return;
+    }
+    labelEvidencePanelRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "nearest",
+    });
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -106,6 +159,7 @@ export function DossierExplorer() {
       setDossier(payload);
       const firstSection = Object.keys(payload.label_evidence?.sections ?? {})[0];
       setSelectedSection(firstSection ?? null);
+      setSelectedSourceId(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to build dossier");
     } finally {
@@ -186,22 +240,32 @@ export function DossierExplorer() {
         {!dossier ? (
           <EmptyState />
         ) : (
-          <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
-            <div className="flex flex-col gap-5">
-              <Overview dossier={dossier} />
-              <RxNormPanel
-                groupedEdges={groupedEdges}
-                truncated={dossier.rxnorm_neighborhood.truncated}
-              />
+          <div className="flex flex-col gap-5">
+            <Overview dossier={dossier} />
+            <RxNormPanel
+              groupedEdges={groupedEdges}
+              truncated={dossier.rxnorm_neighborhood.truncated}
+            />
+            <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
               <LabelEvidencePanel
+                ref={labelEvidencePanelRef}
                 activeSection={activeSection}
                 activeTexts={activeTexts}
                 sectionEntries={sectionEntries}
                 sourceById={sourceById}
+                sourceNumberById={sourceNumberById}
+                selectedSourceId={selectedSourceId}
                 onSelectSection={setSelectedSection}
+                onSelectSource={selectSourceFromEvidence}
+              />
+              <SourcesPanel
+                ref={sourcesPanelRef}
+                labelEvidence={labelEvidence}
+                selectedSourceId={selectedSourceId}
+                sourceNumberById={sourceNumberById}
+                onSelectSource={selectSourceFromSourcePanel}
               />
             </div>
-            <SourcesPanel labelEvidence={labelEvidence} />
           </div>
         )}
       </div>
@@ -352,20 +416,29 @@ function RxNormPanel({
 }
 
 function LabelEvidencePanel({
+  ref,
   activeSection,
   activeTexts,
   sectionEntries,
   sourceById,
+  sourceNumberById,
+  selectedSourceId,
   onSelectSection,
+  onSelectSource,
 }: {
+  ref: React.RefObject<HTMLDivElement | null>;
   activeSection: string | null;
   activeTexts: LabelSection[];
   sectionEntries: [string, LabelSection[]][];
-  sourceById: Map<string | null | undefined, { manufacturer_names: string[] }>;
+  sourceById: Map<string | null | undefined, OpenFDALabelRecord>;
+  sourceNumberById: Map<string | null | undefined, number>;
+  selectedSourceId: string | null;
   onSelectSection: (section: string) => void;
+  onSelectSource: (sourceId?: string | null) => void;
 }) {
   return (
-    <Card>
+    <div ref={ref}>
+      <Card>
       <CardHeader className="flex flex-row items-center justify-between gap-3">
         <CardTitle>Label Evidence</CardTitle>
         <FileText className="size-4 text-slate-400" />
@@ -392,39 +465,65 @@ function LabelEvidencePanel({
             <div className="space-y-3">
               {activeTexts.map((entry, index) => {
                 const source = sourceById.get(entry.source_id);
+                const sourceNumber = sourceNumberById.get(entry.source_id);
+                const brandName = primaryValue(source?.brand_names);
+                const manufacturerName = primaryValue(source?.manufacturer_names);
+                const isSelected = entry.source_id === selectedSourceId;
                 return (
-                  <article
+                  <button
                     key={`${entry.source_id}-${index}`}
-                    className="rounded-md border border-slate-200 bg-slate-50 p-3"
+                    type="button"
+                    onClick={() => onSelectSource(entry.source_id)}
+                    className={cn(
+                      "w-full rounded-md border p-3 text-left transition",
+                      isSelected
+                        ? "border-cyan-400 bg-cyan-50 shadow-sm"
+                        : "border-slate-200 bg-slate-50 hover:border-slate-300 hover:bg-white"
+                    )}
                   >
                     <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
-                      <Badge>{entry.source_id ?? "unknown source"}</Badge>
-                      <span>{entry.effective_time ?? "no effective date"}</span>
-                      <span>{joinValues(source?.manufacturer_names)}</span>
+                      {sourceNumber ? (
+                        <span className="inline-flex items-center rounded-md border border-cyan-200 bg-cyan-50 px-2 py-0.5 font-medium text-cyan-800">
+                          Source {sourceNumber}
+                        </span>
+                      ) : (
+                        <Badge>Source unknown</Badge>
+                      )}
+                      {brandName ? <span>{brandName}</span> : null}
+                      {manufacturerName ? <span>· {manufacturerName}</span> : null}
                     </div>
                     <p className="whitespace-pre-wrap text-sm leading-6 text-slate-800">
                       {entry.text}
                     </p>
-                  </article>
+                  </button>
                 );
               })}
             </div>
           </div>
         )}
       </CardContent>
-    </Card>
+      </Card>
+    </div>
   );
 }
 
-function SourcesPanel({
+const SourcesPanel = function SourcesPanel({
   labelEvidence,
+  selectedSourceId,
+  sourceNumberById,
+  onSelectSource,
+  ref,
 }: {
   labelEvidence: DrugDossier["label_evidence"];
+  selectedSourceId: string | null;
+  sourceNumberById: Map<string | null | undefined, number>;
+  onSelectSource: (sourceId?: string | null) => void;
+  ref: React.RefObject<HTMLDivElement | null>;
 }) {
   const records = labelEvidence?.label_records ?? [];
 
   return (
-    <aside className="flex flex-col gap-5">
+    <aside ref={ref} className="flex flex-col gap-5">
       <Card className="xl:sticky xl:top-5">
         <CardHeader className="flex flex-row items-center justify-between gap-3">
           <CardTitle>Sources</CardTitle>
@@ -444,36 +543,43 @@ function SourcesPanel({
             <p className="text-sm text-slate-600">No label records returned.</p>
           ) : (
             <div className="space-y-3">
-              {records.map((record) => (
-                <div
-                  key={record.source_id ?? record.id ?? record.set_id}
-                  className={cn(
-                    "rounded-md border border-slate-200 p-3 text-sm",
-                    "bg-white"
-                  )}
-                >
-                  <div className="mb-2 flex flex-wrap gap-2">
-                    <Badge>{record.source_id ?? "unknown source"}</Badge>
-                    {record.effective_time ? (
-                      <Badge>{record.effective_time}</Badge>
-                    ) : null}
-                    {record.version ? <Badge>v{record.version}</Badge> : null}
-                  </div>
-                  <dl className="space-y-2 text-slate-700">
-                    <SourceRow label="Brand" value={joinValues(record.brand_names)} />
-                    <SourceRow
-                      label="Generic"
-                      value={joinValues(record.generic_names)}
-                    />
-                    <SourceRow
-                      label="Manufacturer"
-                      value={joinValues(record.manufacturer_names)}
-                    />
-                    <SourceRow label="SPL set" value={joinValues(record.spl_set_ids)} />
-                    <SourceRow label="NDC" value={joinValues(record.product_ndcs)} />
-                  </dl>
-                </div>
-              ))}
+              {records.map((record) => {
+                const sourceNumber = sourceNumberById.get(record.source_id);
+                const isSelected = record.source_id === selectedSourceId;
+                return (
+                  <button
+                    key={record.source_id ?? record.id ?? record.set_id}
+                    type="button"
+                    onClick={() => onSelectSource(record.source_id)}
+                    className={cn(
+                      "w-full rounded-md border p-3 text-left text-sm transition",
+                      isSelected
+                        ? "border-cyan-400 bg-cyan-50 shadow-sm"
+                        : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
+                    )}
+                  >
+                    <div className="mb-3 flex flex-wrap items-center gap-2">
+                      <Badge className="bg-cyan-50 text-cyan-800">
+                        Source {sourceNumber ?? "?"}
+                      </Badge>
+                    </div>
+                    <dl className="space-y-2 text-slate-700">
+                      <SourceRow
+                        label="Brand"
+                        value={joinValues(record.brand_names)}
+                      />
+                      <SourceRow
+                        label="Generic"
+                        value={joinValues(record.generic_names)}
+                      />
+                      <SourceRow
+                        label="Manufacturer"
+                        value={joinValues(record.manufacturer_names)}
+                      />
+                    </dl>
+                  </button>
+                );
+              })}
             </div>
           )}
           {labelEvidence?.errors.length ? (
@@ -485,7 +591,7 @@ function SourcesPanel({
       </Card>
     </aside>
   );
-}
+};
 
 function SourceRow({ label, value }: { label: string; value: string }) {
   return (
