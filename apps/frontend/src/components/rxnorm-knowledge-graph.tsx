@@ -1,11 +1,24 @@
 "use client";
 
-import type { MouseEvent } from "react";
+import {
+  forceCenter,
+  forceCollide,
+  forceLink,
+  forceManyBody,
+  forceSimulation,
+} from "d3-force";
+import type { MouseEvent, PointerEvent, WheelEvent } from "react";
 import { useMemo, useRef, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DrugDossier, RxNormConcept, RxNormEdge } from "@/lib/types";
+
+const GRAPH_WIDTH = 900;
+const GRAPH_HEIGHT = 520;
+const MAX_VISUAL_NODES = 80;
+const MAX_VISUAL_EDGES = 120;
+const MAX_CENTER_EDGES = 42;
 
 const ttyStyles: Record<string, { label: string; fill: string; stroke: string }> = {
   IN: { label: "Ingredient", fill: "#ecfeff", stroke: "#0891b2" },
@@ -120,69 +133,331 @@ function edgeTooltip(edge: RxNormEdge) {
   )} ${displayNodeName(edge.source_name)}`;
 }
 
-export function RxNormKnowledgeGraph({ dossier }: { dossier: DrugDossier }) {
-  const [selectedRxcui, setSelectedRxcui] = useState<string | null>(
-    dossier.resolved_drug?.rxcui ?? null
+type VisualNode = RxNormConcept & {
+  depthLevel: 0 | 1 | 2;
+};
+
+type ForceNode = VisualNode & {
+  fx?: number;
+  fy?: number;
+  x?: number;
+  y?: number;
+};
+
+type ForceLink = {
+  source: string | ForceNode;
+  target: string | ForceNode;
+};
+
+function buildVisualGraph(
+  centerRxcui: string | null,
+  nodes: RxNormConcept[],
+  edges: RxNormEdge[]
+) {
+  const nodeMap = buildNodeMap(nodes);
+  const centerEdges = centerRxcui
+    ? edges.filter(
+        (edge) =>
+          edge.source_rxcui === centerRxcui || edge.target_rxcui === centerRxcui
+      )
+    : [];
+  const firstHopIds = new Set<string>();
+  for (const edge of centerEdges) {
+    if (edge.source_rxcui !== centerRxcui) {
+      firstHopIds.add(edge.source_rxcui);
+    }
+    if (edge.target_rxcui !== centerRxcui) {
+      firstHopIds.add(edge.target_rxcui);
+    }
+  }
+
+  const selectedIds = new Set<string>();
+  if (centerRxcui) {
+    selectedIds.add(centerRxcui);
+  }
+
+  const visualEdges: RxNormEdge[] = [];
+  for (const edge of centerEdges) {
+    if (visualEdges.length >= MAX_CENTER_EDGES) {
+      break;
+    }
+    const newNodeCount =
+      Number(!selectedIds.has(edge.source_rxcui)) +
+      Number(!selectedIds.has(edge.target_rxcui));
+    if (selectedIds.size + newNodeCount > MAX_VISUAL_NODES) {
+      continue;
+    }
+    visualEdges.push(edge);
+    selectedIds.add(edge.source_rxcui);
+    selectedIds.add(edge.target_rxcui);
+  }
+
+  const contextEdges = edges.filter((edge) => !centerEdges.includes(edge));
+  for (const edge of contextEdges) {
+    if (visualEdges.length >= MAX_VISUAL_EDGES) {
+      break;
+    }
+    const knownEndpoints =
+      selectedIds.has(edge.source_rxcui) || selectedIds.has(edge.target_rxcui);
+    const newNodeCount =
+      Number(!selectedIds.has(edge.source_rxcui)) +
+      Number(!selectedIds.has(edge.target_rxcui));
+
+    if (!knownEndpoints || selectedIds.size + newNodeCount > MAX_VISUAL_NODES) {
+      continue;
+    }
+
+    visualEdges.push(edge);
+    selectedIds.add(edge.source_rxcui);
+    selectedIds.add(edge.target_rxcui);
+  }
+
+  const visualNodes: VisualNode[] = Array.from(selectedIds)
+    .map((rxcui) => nodeMap.get(rxcui))
+    .filter((node): node is RxNormConcept => Boolean(node))
+    .map((node) => ({
+      ...node,
+      depthLevel:
+        node.rxcui === centerRxcui ? 0 : firstHopIds.has(node.rxcui) ? 1 : 2,
+    }));
+
+  return { firstHopIds, visualEdges, visualNodes };
+}
+
+function computeLayout(
+  centerRxcui: string | null,
+  visualNodes: VisualNode[],
+  visualEdges: RxNormEdge[]
+) {
+  const simulationNodes = visualNodes.map((node, index) => {
+    const angle = (2 * Math.PI * index) / Math.max(visualNodes.length, 1);
+    const radius = node.depthLevel === 0 ? 72 : node.depthLevel === 1 ? 170 : 250;
+    return {
+      ...node,
+      x: GRAPH_WIDTH / 2 + radius * Math.cos(angle),
+      y: GRAPH_HEIGHT / 2 + radius * Math.sin(angle),
+    };
+  });
+
+  const links: ForceLink[] = visualEdges.map((edge) => ({
+    source: edge.target_rxcui,
+    target: edge.source_rxcui,
+  }));
+
+  const simulation = forceSimulation<ForceNode>(simulationNodes)
+    .force(
+      "link",
+      forceLink<ForceNode, ForceLink>(links)
+        .id((node) => node.rxcui)
+        .distance((link) => {
+          const source =
+            typeof link.source === "string" ? null : link.source;
+          const target =
+            typeof link.target === "string" ? null : link.target;
+          if (!source || !target) {
+            return 100;
+          }
+          return source.depthLevel === 0 || target.depthLevel === 0 ? 138 : 96;
+        })
+        .strength(0.34)
+    )
+    .force("charge", forceManyBody().strength(-310))
+    .force(
+      "collide",
+      forceCollide((node) => {
+        return nodeRadius(node as ForceNode) + 10;
+      })
+    )
+    .force("center", forceCenter(GRAPH_WIDTH / 2, GRAPH_HEIGHT / 2))
+    .stop();
+
+  for (let tick = 0; tick < 260; tick += 1) {
+    simulation.tick();
+  }
+
+  return new Map(
+    simulationNodes.map((node) => [
+      node.rxcui,
+      {
+        ...node,
+        x: Math.max(40, Math.min(GRAPH_WIDTH - 40, node.x ?? GRAPH_WIDTH / 2)),
+        y: Math.max(40, Math.min(GRAPH_HEIGHT - 40, node.y ?? GRAPH_HEIGHT / 2)),
+      },
+    ])
   );
+}
+
+function nodeRadius(node: Pick<VisualNode, "depthLevel">) {
+  if (node.depthLevel === 0) {
+    return 34;
+  }
+  if (node.depthLevel === 1) {
+    return 22;
+  }
+  return 14;
+}
+
+export function RxNormKnowledgeGraph({ dossier }: { dossier: DrugDossier }) {
+  const [selectedRxcui, setSelectedRxcui] = useState<string | null>(null);
   const [tooltip, setTooltip] = useState<{
     text: string;
     x: number;
     y: number;
   } | null>(null);
+  const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [panDrag, setPanDrag] = useState<{
+    x: number;
+    y: number;
+    startPanX: number;
+    startPanY: number;
+  } | null>(null);
+  const [nodeDrag, setNodeDrag] = useState<string | null>(null);
+  const [nodeOverrides, setNodeOverrides] = useState<
+    Map<string, { x: number; y: number }>
+  >(new Map());
   const graphFrameRef = useRef<HTMLDivElement>(null);
+  const svgRef = useRef<SVGSVGElement>(null);
   const edges = dossier.rxnorm_neighborhood.edges;
   const nodes = dossier.rxnorm_neighborhood.nodes;
   const centerRxcui = dossier.resolved_drug?.rxcui ?? null;
-  const nodeMap = useMemo(() => buildNodeMap(nodes), [nodes]);
-  const visualEdges = useMemo(() => edges.slice(0, 40), [edges]);
-  const visualRxcuis = useMemo(() => {
-    const ids = new Set<string>();
-    if (centerRxcui) {
-      ids.add(centerRxcui);
-    }
-    for (const edge of visualEdges) {
-      ids.add(edge.source_rxcui);
-      ids.add(edge.target_rxcui);
-    }
-    return Array.from(ids);
-  }, [centerRxcui, visualEdges]);
+  const { visualEdges, visualNodes } = useMemo(
+    () => buildVisualGraph(centerRxcui, nodes, edges),
+    [centerRxcui, edges, nodes]
+  );
+  const layoutNodes = useMemo(
+    () => computeLayout(centerRxcui, visualNodes, visualEdges),
+    [centerRxcui, visualEdges, visualNodes]
+  );
   const positionedNodes = useMemo(() => {
-    const width = 900;
-    const height = 460;
-    const center = { x: width / 2, y: height / 2 };
-    const neighborIds = visualRxcuis.filter((rxcui) => rxcui !== centerRxcui);
-    const radius = Math.min(180, 92 + neighborIds.length * 7);
-
     return new Map(
-      visualRxcuis.map((rxcui) => {
-        if (rxcui === centerRxcui) {
-          return [rxcui, center];
-        }
-        const neighborIndex = neighborIds.indexOf(rxcui);
-        const angle =
-          (2 * Math.PI * neighborIndex) / Math.max(neighborIds.length, 1);
-        return [
-          rxcui,
-          {
-            x: center.x + radius * Math.cos(angle),
-            y: center.y + radius * Math.sin(angle),
-          },
-        ];
+      Array.from(layoutNodes.entries()).map(([rxcui, node]) => {
+        const override = nodeOverrides.get(rxcui);
+        return [rxcui, override ? { ...node, ...override } : node];
       })
     );
-  }, [centerRxcui, visualRxcuis]);
-  const selectedNode = selectedRxcui ? nodeMap.get(selectedRxcui) : null;
+  }, [layoutNodes, nodeOverrides]);
+  const visualRxcuis = useMemo(
+    () => visualNodes.map((node) => node.rxcui),
+    [visualNodes]
+  );
+  const selectedNode = selectedRxcui
+    ? positionedNodes.get(selectedRxcui) ?? null
+    : null;
+  const searchedNode = centerRxcui
+    ? positionedNodes.get(centerRxcui) ?? null
+    : null;
+  const selectedNeighborIds = useMemo(() => {
+    if (!selectedRxcui) {
+      return new Set<string>();
+    }
+    const ids = new Set<string>([selectedRxcui]);
+    for (const edge of visualEdges) {
+      if (edge.source_rxcui === selectedRxcui) {
+        ids.add(edge.target_rxcui);
+      }
+      if (edge.target_rxcui === selectedRxcui) {
+        ids.add(edge.source_rxcui);
+      }
+    }
+    return ids;
+  }, [selectedRxcui, visualEdges]);
   const visibleNodeTypes = useMemo(() => {
     return Array.from(
       new Set(
-        visualRxcuis.map((rxcui) => nodeMap.get(rxcui)?.tty).filter(Boolean)
+        visualRxcuis
+          .map((rxcui) => positionedNodes.get(rxcui)?.tty)
+          .filter((tty): tty is string => Boolean(tty))
       )
     ).sort((left, right) =>
       getTtyStyle(left).label.localeCompare(getTtyStyle(right).label)
     );
-  }, [nodeMap, visualRxcuis]);
+  }, [positionedNodes, visualRxcuis]);
   const truncated =
     dossier.rxnorm_neighborhood.truncated || edges.length > visualEdges.length;
+
+  function screenToGraph(clientX: number, clientY: number) {
+    const svg = svgRef.current;
+    if (!svg) {
+      return { x: GRAPH_WIDTH / 2, y: GRAPH_HEIGHT / 2 };
+    }
+    const bounds = svg.getBoundingClientRect();
+    const viewX = ((clientX - bounds.left) / bounds.width) * GRAPH_WIDTH;
+    const viewY = ((clientY - bounds.top) / bounds.height) * GRAPH_HEIGHT;
+    return {
+      x: (viewX - pan.x) / zoom,
+      y: (viewY - pan.y) / zoom,
+    };
+  }
+
+  function handleWheel(event: WheelEvent<SVGSVGElement>) {
+    event.preventDefault();
+    const nextZoom = Math.max(
+      0.55,
+      Math.min(2.6, zoom * (event.deltaY > 0 ? 0.9 : 1.1))
+    );
+    setZoom(nextZoom);
+  }
+
+  function handleCanvasPointerDown(event: PointerEvent<SVGSVGElement>) {
+    setPanDrag({
+      x: event.clientX,
+      y: event.clientY,
+      startPanX: pan.x,
+      startPanY: pan.y,
+    });
+  }
+
+  function handleNodePointerDown(
+    event: PointerEvent<SVGGElement>,
+    rxcui: string
+  ) {
+    event.stopPropagation();
+    setNodeDrag(rxcui);
+  }
+
+  function handlePointerMove(event: PointerEvent<SVGSVGElement>) {
+    if (nodeDrag) {
+      const point = screenToGraph(event.clientX, event.clientY);
+      setNodeOverrides((current) => {
+        const next = new Map(current);
+        next.set(nodeDrag, {
+          x: Math.max(24, Math.min(GRAPH_WIDTH - 24, point.x)),
+          y: Math.max(24, Math.min(GRAPH_HEIGHT - 24, point.y)),
+        });
+        return next;
+      });
+      return;
+    }
+
+    if (panDrag) {
+      const svg = svgRef.current;
+      if (!svg) {
+        return;
+      }
+      const bounds = svg.getBoundingClientRect();
+      const scaleX = GRAPH_WIDTH / bounds.width;
+      const scaleY = GRAPH_HEIGHT / bounds.height;
+      setPan({
+        x: panDrag.startPanX + (event.clientX - panDrag.x) * scaleX,
+        y: panDrag.startPanY + (event.clientY - panDrag.y) * scaleY,
+      });
+    }
+  }
+
+  function handlePointerUp() {
+    setPanDrag(null);
+    setNodeDrag(null);
+  }
+
+  function edgeIsIncident(edge: RxNormEdge) {
+    if (!selectedRxcui) {
+      return false;
+    }
+    return (
+      edge.source_rxcui === selectedRxcui || edge.target_rxcui === selectedRxcui
+    );
+  }
 
   function updateTooltip(event: MouseEvent<SVGElement>, text: string) {
     const frame = graphFrameRef.current;
@@ -217,10 +492,16 @@ export function RxNormKnowledgeGraph({ dossier }: { dossier: DrugDossier }) {
               className="relative overflow-hidden rounded-md border border-slate-200 bg-white"
             >
               <svg
-                viewBox="0 0 900 460"
-                className="h-[360px] w-full sm:h-[420px]"
+                ref={svgRef}
+                viewBox={`0 0 ${GRAPH_WIDTH} ${GRAPH_HEIGHT}`}
+                className="h-[380px] w-full cursor-grab touch-none sm:h-[520px]"
                 role="img"
                 aria-label="RxNorm local knowledge graph"
+                onPointerDown={handleCanvasPointerDown}
+                onPointerMove={handlePointerMove}
+                onPointerUp={handlePointerUp}
+                onPointerLeave={handlePointerUp}
+                onWheel={handleWheel}
               >
                 <defs>
                   <marker
@@ -234,6 +515,7 @@ export function RxNormKnowledgeGraph({ dossier }: { dossier: DrugDossier }) {
                     <path d="M0,0 L8,4 L0,8 Z" fill="#94a3b8" />
                   </marker>
                 </defs>
+                <g transform={`translate(${pan.x} ${pan.y}) scale(${zoom})`}>
                 {visualEdges.map((edge) => {
                   const source = positionedNodes.get(edge.target_rxcui);
                   const target = positionedNodes.get(edge.source_rxcui);
@@ -241,6 +523,10 @@ export function RxNormKnowledgeGraph({ dossier }: { dossier: DrugDossier }) {
                     return null;
                   }
                   const tooltipText = edgeTooltip(edge);
+                  const touchesCenter =
+                    edge.source_rxcui === centerRxcui ||
+                    edge.target_rxcui === centerRxcui;
+                  const incident = edgeIsIncident(edge);
                   return (
                     <g key={`${edge.source_rxcui}-${edge.relation}-${edge.target_rxcui}`}>
                       <line
@@ -264,8 +550,21 @@ export function RxNormKnowledgeGraph({ dossier }: { dossier: DrugDossier }) {
                         x2={target.x}
                         y1={source.y}
                         y2={target.y}
-                        stroke="#cbd5e1"
-                        strokeWidth="1.5"
+                        stroke={
+                          incident
+                            ? "#0f172a"
+                            : touchesCenter
+                              ? "#64748b"
+                              : "#d1d5db"
+                        }
+                        strokeOpacity={
+                          selectedRxcui && !incident && selectedRxcui !== centerRxcui
+                            ? 0.28
+                            : touchesCenter
+                              ? 0.78
+                              : 0.5
+                        }
+                        strokeWidth={incident ? 2.5 : touchesCenter ? 1.8 : 1.25}
                         markerEnd="url(#arrow)"
                         pointerEvents="none"
                       />
@@ -273,25 +572,32 @@ export function RxNormKnowledgeGraph({ dossier }: { dossier: DrugDossier }) {
                   );
                 })}
                 {visualRxcuis.map((rxcui) => {
-                  const node = nodeMap.get(rxcui);
                   const point = positionedNodes.get(rxcui);
-                  if (!node || !point) {
+                  if (!point) {
                     return null;
                   }
                   const isCenter = rxcui === centerRxcui;
                   const isSelected = rxcui === selectedRxcui;
-                  const style = getTtyStyle(node.tty);
-                  const radius = isCenter ? 34 : 24;
+                  const isHighlighted = selectedNeighborIds.has(rxcui);
+                  const style = getTtyStyle(point.tty);
+                  const radius = nodeRadius(point);
+                  const showLabel =
+                    isCenter ||
+                    isSelected ||
+                    (selectedRxcui ? isHighlighted : false);
                   return (
                     <g
                       key={rxcui}
-                      className="cursor-pointer"
+                      className="cursor-grab"
                       onClick={() => setSelectedRxcui(rxcui)}
+                      onPointerDown={(event) =>
+                        handleNodePointerDown(event, rxcui)
+                      }
                       onMouseEnter={(event) =>
-                        updateTooltip(event, nodeTooltip(node))
+                        updateTooltip(event, nodeTooltip(point))
                       }
                       onMouseMove={(event) =>
-                        updateTooltip(event, nodeTooltip(node))
+                        updateTooltip(event, nodeTooltip(point))
                       }
                       onMouseLeave={() => setTooltip(null)}
                     >
@@ -300,20 +606,38 @@ export function RxNormKnowledgeGraph({ dossier }: { dossier: DrugDossier }) {
                         cy={point.y}
                         r={radius}
                         fill={style.fill}
-                        stroke={isSelected ? "#0f172a" : style.stroke}
-                        strokeWidth={isSelected ? 4 : 2}
+                        stroke={
+                          isSelected || (isCenter && !selectedRxcui)
+                            ? "#0f172a"
+                            : style.stroke
+                        }
+                        strokeWidth={
+                          isSelected || (isCenter && !selectedRxcui) ? 4 : 2
+                        }
+                        opacity={
+                          selectedRxcui && !isHighlighted && !isCenter ? 0.26 : 1
+                        }
                       />
-                      <text
-                        x={point.x}
-                        y={point.y + radius + 16}
-                        className="fill-slate-700 text-[12px] font-medium"
-                        textAnchor="middle"
-                      >
-                        {shortLabel(displayNodeName(node.name), isCenter ? 28 : 20)}
-                      </text>
+                      {showLabel ? (
+                        <text
+                          x={point.x}
+                          y={point.y + radius + 15}
+                          className="pointer-events-none fill-slate-700 text-[11px] font-medium"
+                          opacity={
+                            selectedRxcui && !isHighlighted && !isCenter ? 0.32 : 1
+                          }
+                          textAnchor="middle"
+                        >
+                          {shortLabel(
+                            displayNodeName(point.name),
+                            isCenter ? 28 : 20
+                          )}
+                        </text>
+                      ) : null}
                     </g>
                   );
                 })}
+                </g>
               </svg>
               {tooltip ? (
                 <div
@@ -343,7 +667,16 @@ export function RxNormKnowledgeGraph({ dossier }: { dossier: DrugDossier }) {
                     </div>
                   </div>
                 ) : (
-                  <p className="mt-2 text-sm text-slate-600">Select a node.</p>
+                  <div className="mt-2 space-y-2">
+                    <p className="text-sm text-slate-600">
+                      Showing a local network around the searched concept.
+                    </p>
+                    {searchedNode ? (
+                      <div className="flex flex-wrap gap-2">
+                        <Badge>Search: {displayNodeName(searchedNode.name)}</Badge>
+                      </div>
+                    ) : null}
+                  </div>
                 )}
               </div>
 

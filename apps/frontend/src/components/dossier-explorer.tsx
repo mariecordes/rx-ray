@@ -51,7 +51,7 @@ function primaryValue(values?: string[] | null) {
 
 export function DossierExplorer() {
   const [drug, setDrug] = useState("aspirin");
-  const [maxEdges, setMaxEdges] = useState(75);
+  const [maxEdges, setMaxEdges] = useState(150);
   const [openfdaLimit, setOpenfdaLimit] = useState(5);
   const [dossier, setDossier] = useState<DrugDossier | null>(null);
   const [selectedSection, setSelectedSection] = useState<string | null>(null);
@@ -128,7 +128,7 @@ export function DossierExplorer() {
         },
         body: JSON.stringify({
           drug,
-          depth: 1,
+          depth: 2,
           max_edges: maxEdges,
           openfda_limit: openfdaLimit,
           include_openfda: true,
