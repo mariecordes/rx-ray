@@ -7,6 +7,7 @@ import {
   forceManyBody,
   forceSimulation,
 } from "d3-force";
+import { Maximize2, Minus, Plus } from "lucide-react";
 import type { MouseEvent, PointerEvent, WheelEvent } from "react";
 import { useMemo, useRef, useState } from "react";
 
@@ -17,8 +18,11 @@ import { DrugDossier, RxNormConcept, RxNormEdge } from "@/lib/types";
 const GRAPH_WIDTH = 900;
 const GRAPH_HEIGHT = 520;
 const MAX_VISUAL_NODES = 80;
-const MAX_VISUAL_EDGES = 120;
-const MAX_CENTER_EDGES = 42;
+const DEFAULT_DISPLAYED_EDGES = 200;
+const MAX_DISPLAYED_EDGES = 400;
+const MIN_ZOOM = 0.75;
+const MAX_ZOOM = 2;
+const FOCUS_ZOOM = 1.55;
 
 const ttyStyles: Record<string, { label: string; fill: string; stroke: string }> = {
   IN: { label: "Ingredient", fill: "#ecfeff", stroke: "#0891b2" },
@@ -152,7 +156,8 @@ type ForceLink = {
 function buildVisualGraph(
   centerRxcui: string | null,
   nodes: RxNormConcept[],
-  edges: RxNormEdge[]
+  edges: RxNormEdge[],
+  edgeLimit: number
 ) {
   const nodeMap = buildNodeMap(nodes);
   const centerEdges = centerRxcui
@@ -177,8 +182,9 @@ function buildVisualGraph(
   }
 
   const visualEdges: RxNormEdge[] = [];
+  const centerEdgeLimit = Math.max(24, Math.floor(edgeLimit * 0.35));
   for (const edge of centerEdges) {
-    if (visualEdges.length >= MAX_CENTER_EDGES) {
+    if (visualEdges.length >= centerEdgeLimit) {
       break;
     }
     const newNodeCount =
@@ -194,7 +200,7 @@ function buildVisualGraph(
 
   const contextEdges = edges.filter((edge) => !centerEdges.includes(edge));
   for (const edge of contextEdges) {
-    if (visualEdges.length >= MAX_VISUAL_EDGES) {
+    if (visualEdges.length >= edgeLimit) {
       break;
     }
     const knownEndpoints =
@@ -289,12 +295,36 @@ function computeLayout(
 
 function nodeRadius(node: Pick<VisualNode, "depthLevel">) {
   if (node.depthLevel === 0) {
-    return 34;
+    return 24;
   }
   if (node.depthLevel === 1) {
-    return 22;
+    return 16;
   }
-  return 14;
+  return 9;
+}
+
+type LayoutPoint = VisualNode & {
+  x: number;
+  y: number;
+};
+
+function trimEdge(
+  source: LayoutPoint,
+  target: LayoutPoint,
+  sourceRadius: number,
+  targetRadius: number
+) {
+  const dx = target.x - source.x;
+  const dy = target.y - source.y;
+  const distance = Math.hypot(dx, dy) || 1;
+  const unitX = dx / distance;
+  const unitY = dy / distance;
+  return {
+    x1: source.x + unitX * (sourceRadius + 2),
+    y1: source.y + unitY * (sourceRadius + 2),
+    x2: target.x - unitX * (targetRadius + 2),
+    y2: target.y - unitY * (targetRadius + 2),
+  };
 }
 
 export function RxNormKnowledgeGraph({ dossier }: { dossier: DrugDossier }) {
@@ -304,6 +334,7 @@ export function RxNormKnowledgeGraph({ dossier }: { dossier: DrugDossier }) {
     x: number;
     y: number;
   } | null>(null);
+  const [displayedEdges, setDisplayedEdges] = useState(DEFAULT_DISPLAYED_EDGES);
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [panDrag, setPanDrag] = useState<{
@@ -311,6 +342,7 @@ export function RxNormKnowledgeGraph({ dossier }: { dossier: DrugDossier }) {
     y: number;
     startPanX: number;
     startPanY: number;
+    moved: boolean;
   } | null>(null);
   const [nodeDrag, setNodeDrag] = useState<string | null>(null);
   const [nodeOverrides, setNodeOverrides] = useState<
@@ -321,9 +353,10 @@ export function RxNormKnowledgeGraph({ dossier }: { dossier: DrugDossier }) {
   const edges = dossier.rxnorm_neighborhood.edges;
   const nodes = dossier.rxnorm_neighborhood.nodes;
   const centerRxcui = dossier.resolved_drug?.rxcui ?? null;
+  const edgeLimit = Math.min(displayedEdges, MAX_DISPLAYED_EDGES, edges.length);
   const { visualEdges, visualNodes } = useMemo(
-    () => buildVisualGraph(centerRxcui, nodes, edges),
-    [centerRxcui, edges, nodes]
+    () => buildVisualGraph(centerRxcui, nodes, edges, edgeLimit),
+    [centerRxcui, edgeLimit, edges, nodes]
   );
   const layoutNodes = useMemo(
     () => computeLayout(centerRxcui, visualNodes, visualEdges),
@@ -392,11 +425,33 @@ export function RxNormKnowledgeGraph({ dossier }: { dossier: DrugDossier }) {
 
   function handleWheel(event: WheelEvent<SVGSVGElement>) {
     event.preventDefault();
+    const svg = svgRef.current;
+    if (!svg) {
+      return;
+    }
+    const bounds = svg.getBoundingClientRect();
+    const viewX = ((event.clientX - bounds.left) / bounds.width) * GRAPH_WIDTH;
+    const viewY = ((event.clientY - bounds.top) / bounds.height) * GRAPH_HEIGHT;
+    const graphX = (viewX - pan.x) / zoom;
+    const graphY = (viewY - pan.y) / zoom;
     const nextZoom = Math.max(
-      0.55,
-      Math.min(2.6, zoom * (event.deltaY > 0 ? 0.9 : 1.1))
+      MIN_ZOOM,
+      Math.min(MAX_ZOOM, zoom * (event.deltaY > 0 ? 0.9 : 1.1))
     );
     setZoom(nextZoom);
+    setPan({
+      x: viewX - graphX * nextZoom,
+      y: viewY - graphY * nextZoom,
+    });
+  }
+
+  function setBoundedZoom(value: number) {
+    setZoom(Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, value)));
+  }
+
+  function resetView() {
+    setZoom(1);
+    setPan({ x: 0, y: 0 });
   }
 
   function handleCanvasPointerDown(event: PointerEvent<SVGSVGElement>) {
@@ -405,6 +460,7 @@ export function RxNormKnowledgeGraph({ dossier }: { dossier: DrugDossier }) {
       y: event.clientY,
       startPanX: pan.x,
       startPanY: pan.y,
+      moved: false,
     });
   }
 
@@ -414,6 +470,19 @@ export function RxNormKnowledgeGraph({ dossier }: { dossier: DrugDossier }) {
   ) {
     event.stopPropagation();
     setNodeDrag(rxcui);
+  }
+
+  function focusNode(rxcui: string) {
+    const node = positionedNodes.get(rxcui);
+    if (!node) {
+      return;
+    }
+    setSelectedRxcui(rxcui);
+    setBoundedZoom(FOCUS_ZOOM);
+    setPan({
+      x: GRAPH_WIDTH / 2 - node.x * FOCUS_ZOOM,
+      y: GRAPH_HEIGHT / 2 - node.y * FOCUS_ZOOM,
+    });
   }
 
   function handlePointerMove(event: PointerEvent<SVGSVGElement>) {
@@ -438,14 +507,22 @@ export function RxNormKnowledgeGraph({ dossier }: { dossier: DrugDossier }) {
       const bounds = svg.getBoundingClientRect();
       const scaleX = GRAPH_WIDTH / bounds.width;
       const scaleY = GRAPH_HEIGHT / bounds.height;
+      const deltaX = event.clientX - panDrag.x;
+      const deltaY = event.clientY - panDrag.y;
       setPan({
-        x: panDrag.startPanX + (event.clientX - panDrag.x) * scaleX,
-        y: panDrag.startPanY + (event.clientY - panDrag.y) * scaleY,
+        x: panDrag.startPanX + deltaX * scaleX,
+        y: panDrag.startPanY + deltaY * scaleY,
       });
+      if (!panDrag.moved && Math.hypot(deltaX, deltaY) > 4) {
+        setPanDrag({ ...panDrag, moved: true });
+      }
     }
   }
 
   function handlePointerUp() {
+    if (panDrag && !panDrag.moved && !nodeDrag) {
+      setSelectedRxcui(null);
+    }
     setPanDrag(null);
     setNodeDrag(null);
   }
@@ -486,15 +563,15 @@ export function RxNormKnowledgeGraph({ dossier }: { dossier: DrugDossier }) {
         {edges.length === 0 ? (
           <p className="text-sm text-slate-600">No RxNorm edges returned.</p>
         ) : (
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
+          <div className="grid items-stretch gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
             <div
               ref={graphFrameRef}
-              className="relative overflow-hidden rounded-md border border-slate-200 bg-white"
+              className="relative min-h-[520px] overflow-hidden rounded-md border border-slate-200 bg-white"
             >
               <svg
                 ref={svgRef}
                 viewBox={`0 0 ${GRAPH_WIDTH} ${GRAPH_HEIGHT}`}
-                className="h-[380px] w-full cursor-grab touch-none sm:h-[520px]"
+                className="h-full min-h-[520px] w-full cursor-grab touch-none"
                 role="img"
                 aria-label="RxNorm local knowledge graph"
                 onPointerDown={handleCanvasPointerDown}
@@ -506,13 +583,13 @@ export function RxNormKnowledgeGraph({ dossier }: { dossier: DrugDossier }) {
                 <defs>
                   <marker
                     id="arrow"
-                    markerHeight="8"
-                    markerWidth="8"
+                    markerHeight="5"
+                    markerWidth="5"
                     orient="auto"
-                    refX="8"
-                    refY="4"
+                    refX="5"
+                    refY="2.5"
                   >
-                    <path d="M0,0 L8,4 L0,8 Z" fill="#94a3b8" />
+                    <path d="M0,0 L5,2.5 L0,5 Z" fill="context-stroke" />
                   </marker>
                 </defs>
                 <g transform={`translate(${pan.x} ${pan.y}) scale(${zoom})`}>
@@ -522,6 +599,12 @@ export function RxNormKnowledgeGraph({ dossier }: { dossier: DrugDossier }) {
                   if (!source || !target) {
                     return null;
                   }
+                  const trimmed = trimEdge(
+                    source,
+                    target,
+                    nodeRadius(source),
+                    nodeRadius(target)
+                  );
                   const tooltipText = edgeTooltip(edge);
                   const touchesCenter =
                     edge.source_rxcui === centerRxcui ||
@@ -530,10 +613,10 @@ export function RxNormKnowledgeGraph({ dossier }: { dossier: DrugDossier }) {
                   return (
                     <g key={`${edge.source_rxcui}-${edge.relation}-${edge.target_rxcui}`}>
                       <line
-                        x1={source.x}
-                        x2={target.x}
-                        y1={source.y}
-                        y2={target.y}
+                        x1={trimmed.x1}
+                        x2={trimmed.x2}
+                        y1={trimmed.y1}
+                        y2={trimmed.y2}
                         stroke="transparent"
                         strokeWidth="14"
                         className="cursor-default"
@@ -546,10 +629,10 @@ export function RxNormKnowledgeGraph({ dossier }: { dossier: DrugDossier }) {
                         onMouseLeave={() => setTooltip(null)}
                       />
                       <line
-                        x1={source.x}
-                        x2={target.x}
-                        y1={source.y}
-                        y2={target.y}
+                        x1={trimmed.x1}
+                        x2={trimmed.x2}
+                        y1={trimmed.y1}
+                        y2={trimmed.y2}
                         stroke={
                           incident
                             ? "#0f172a"
@@ -565,7 +648,7 @@ export function RxNormKnowledgeGraph({ dossier }: { dossier: DrugDossier }) {
                               : 0.5
                         }
                         strokeWidth={incident ? 2.5 : touchesCenter ? 1.8 : 1.25}
-                        markerEnd="url(#arrow)"
+                        markerEnd={incident ? "url(#arrow)" : undefined}
                         pointerEvents="none"
                       />
                     </g>
@@ -589,7 +672,12 @@ export function RxNormKnowledgeGraph({ dossier }: { dossier: DrugDossier }) {
                     <g
                       key={rxcui}
                       className="cursor-grab"
-                      onClick={() => setSelectedRxcui(rxcui)}
+                      onClick={() =>
+                        setSelectedRxcui((current) =>
+                          current === rxcui ? null : rxcui
+                        )
+                      }
+                      onDoubleClick={() => focusNode(rxcui)}
                       onPointerDown={(event) =>
                         handleNodePointerDown(event, rxcui)
                       }
@@ -652,6 +740,59 @@ export function RxNormKnowledgeGraph({ dossier }: { dossier: DrugDossier }) {
               ) : null}
             </div>
             <div className="space-y-3">
+              <div className="rounded-md border border-slate-200 bg-white p-3">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <div className="text-xs font-medium uppercase text-slate-500">
+                    Graph controls
+                  </div>
+                  <div className="flex gap-1">
+                    <button
+                      type="button"
+                      aria-label="Zoom out"
+                      className="grid size-8 place-items-center rounded-md border border-slate-200 text-slate-700 hover:bg-slate-50"
+                      onClick={() => setBoundedZoom(zoom - 0.18)}
+                    >
+                      <Minus className="size-4" />
+                    </button>
+                    <button
+                      type="button"
+                      aria-label="Reset graph view"
+                      className="grid size-8 place-items-center rounded-md border border-slate-200 text-slate-700 hover:bg-slate-50"
+                      onClick={resetView}
+                    >
+                      <Maximize2 className="size-4" />
+                    </button>
+                    <button
+                      type="button"
+                      aria-label="Zoom in"
+                      className="grid size-8 place-items-center rounded-md border border-slate-200 text-slate-700 hover:bg-slate-50"
+                      onClick={() => setBoundedZoom(zoom + 0.18)}
+                    >
+                      <Plus className="size-4" />
+                    </button>
+                  </div>
+                </div>
+                <label className="flex flex-col gap-2 text-xs text-slate-600">
+                  <span className="flex items-center justify-between gap-3">
+                    <span>Displayed relationships</span>
+                    <span className="font-medium text-slate-900">
+                      {edgeLimit}
+                    </span>
+                  </span>
+                  <input
+                    min={20}
+                    max={MAX_DISPLAYED_EDGES}
+                    step={10}
+                    type="range"
+                    value={displayedEdges}
+                    onChange={(event) =>
+                      setDisplayedEdges(Number(event.target.value))
+                    }
+                    className="w-full accent-slate-900"
+                  />
+                </label>
+              </div>
+
               <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
                 <div className="text-xs font-medium uppercase text-slate-500">
                   Selected node
@@ -684,7 +825,7 @@ export function RxNormKnowledgeGraph({ dossier }: { dossier: DrugDossier }) {
                 <div className="text-xs font-medium uppercase text-slate-500">
                   Node types
                 </div>
-                <div className="mt-3 space-y-2">
+                <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
                   {visibleNodeTypes.map((tty) => {
                     const style = getTtyStyle(tty);
                     return (
@@ -708,6 +849,7 @@ export function RxNormKnowledgeGraph({ dossier }: { dossier: DrugDossier }) {
               <p className="text-xs leading-5 text-slate-500">
                 Showing {visualEdges.length} of {edges.length} returned RxNorm
                 relationships. Hover over a line to see the relationship.
+                Double-click a node to focus it.
               </p>
             </div>
           </div>

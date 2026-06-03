@@ -51,7 +51,6 @@ function primaryValue(values?: string[] | null) {
 
 export function DossierExplorer() {
   const [drug, setDrug] = useState("aspirin");
-  const [maxEdges, setMaxEdges] = useState(150);
   const [openfdaLimit, setOpenfdaLimit] = useState(5);
   const [dossier, setDossier] = useState<DrugDossier | null>(null);
   const [selectedSection, setSelectedSection] = useState<string | null>(null);
@@ -129,7 +128,7 @@ export function DossierExplorer() {
         body: JSON.stringify({
           drug,
           depth: 2,
-          max_edges: maxEdges,
+          max_edges: 400,
           openfda_limit: openfdaLimit,
           include_openfda: true,
         }),
@@ -172,7 +171,7 @@ export function DossierExplorer() {
 
         <form
           onSubmit={handleSubmit}
-          className="grid gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-sm md:grid-cols-[1fr_140px_140px_auto]"
+          className="grid gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-sm md:grid-cols-[1fr_140px_auto]"
         >
           <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
             Drug
@@ -190,16 +189,6 @@ export function DossierExplorer() {
               type="number"
               value={openfdaLimit}
               onChange={(event) => setOpenfdaLimit(Number(event.target.value))}
-            />
-          </label>
-          <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
-            Max edges
-            <Input
-              min={1}
-              max={500}
-              type="number"
-              value={maxEdges}
-              onChange={(event) => setMaxEdges(Number(event.target.value))}
             />
           </label>
           <div className="flex items-end">
