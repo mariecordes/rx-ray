@@ -97,6 +97,26 @@ function getTtyStyle(tty?: string | null) {
   };
 }
 
+function displayTtyCode(tty?: string | null) {
+  const normalizedTty = tty?.toUpperCase();
+  if (!normalizedTty) {
+    return "Type";
+  }
+  if (["BN", "IN", "MIN", "PIN"].includes(normalizedTty)) {
+    return getTtyStyle(normalizedTty).label;
+  }
+  return normalizedTty;
+}
+
+function ttyBadgeTitle(tty?: string | null) {
+  const label = getTtyStyle(tty).label;
+  const code = tty?.toUpperCase();
+  if (!code || displayTtyCode(tty) === label) {
+    return label;
+  }
+  return `${code}: ${label}`;
+}
+
 function humanizeToken(value: string) {
   return value
     .replaceAll("_", " ")
@@ -793,30 +813,48 @@ export function RxNormKnowledgeGraph({ dossier }: { dossier: DrugDossier }) {
                 </label>
               </div>
 
-              <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+              <div className="h-32 rounded-md border border-slate-200 bg-slate-50 p-3">
                 <div className="text-xs font-medium uppercase text-slate-500">
                   Selected node
                 </div>
                 {selectedNode ? (
-                  <div className="mt-2 space-y-2">
-                    <div className="font-semibold text-slate-950">
+                  <div className="mt-2 grid h-[88px] grid-rows-[48px_24px] gap-2">
+                    <div className="line-clamp-2 min-h-12 font-semibold leading-6 text-slate-950">
                       {displayNodeName(selectedNode.name)}
                     </div>
-                    <div className="flex flex-wrap gap-2">
-                      <Badge>RXCUI {selectedNode.rxcui}</Badge>
-                      <Badge>{getTtyStyle(selectedNode.tty).label}</Badge>
+                    <div className="flex min-w-0 gap-2">
+                      <Badge className="max-w-[56%] shrink-0 truncate overflow-hidden">
+                        RXCUI {selectedNode.rxcui}
+                      </Badge>
+                      <span className="group relative inline-flex shrink-0">
+                        <Badge
+                          className="border"
+                          style={{
+                            backgroundColor: getTtyStyle(selectedNode.tty).fill,
+                            borderColor: getTtyStyle(selectedNode.tty).stroke,
+                            color: getTtyStyle(selectedNode.tty).stroke,
+                          }}
+                        >
+                          {displayTtyCode(selectedNode.tty)}
+                        </Badge>
+                        <span className="pointer-events-none absolute bottom-full left-0 z-20 mb-2 hidden w-max max-w-60 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs leading-5 text-slate-700 shadow-lg group-hover:block">
+                          {ttyBadgeTitle(selectedNode.tty)}
+                        </span>
+                      </span>
                     </div>
                   </div>
                 ) : (
-                  <div className="mt-2 space-y-2">
-                    <p className="text-sm text-slate-600">
+                  <div className="mt-2 grid h-[88px] grid-rows-[48px_24px] gap-2">
+                    <p className="line-clamp-2 min-h-12 text-sm leading-6 text-slate-600">
                       Showing a local network around the searched concept.
                     </p>
-                    {searchedNode ? (
-                      <div className="flex flex-wrap gap-2">
-                        <Badge>Search: {displayNodeName(searchedNode.name)}</Badge>
-                      </div>
-                    ) : null}
+                    <div className="flex min-w-0 gap-2 overflow-hidden">
+                      {searchedNode ? (
+                        <Badge className="min-w-0 max-w-full truncate">
+                          Search: {displayNodeName(searchedNode.name)}
+                        </Badge>
+                      ) : null}
+                    </div>
                   </div>
                 )}
               </div>
