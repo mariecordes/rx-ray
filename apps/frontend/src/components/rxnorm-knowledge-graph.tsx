@@ -355,6 +355,7 @@ export function RxNormKnowledgeGraph({ dossier }: { dossier: DrugDossier }) {
     y: number;
   } | null>(null);
   const [displayedEdges, setDisplayedEdges] = useState(DEFAULT_DISPLAYED_EDGES);
+  const [selectedTypes, setSelectedTypes] = useState<Set<string>>(new Set());
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [panDrag, setPanDrag] = useState<{
@@ -394,6 +395,29 @@ export function RxNormKnowledgeGraph({ dossier }: { dossier: DrugDossier }) {
     () => visualNodes.map((node) => node.rxcui),
     [visualNodes]
   );
+  const filteredRxcuis = useMemo(() => {
+    if (selectedTypes.size === 0) {
+      return visualRxcuis;
+    }
+    return visualRxcuis.filter((rxcui) => {
+      if (rxcui === centerRxcui || rxcui === selectedRxcui) {
+        return true;
+      }
+      const tty = positionedNodes.get(rxcui)?.tty;
+      return tty ? selectedTypes.has(tty.toUpperCase()) : false;
+    });
+  }, [centerRxcui, positionedNodes, selectedRxcui, selectedTypes, visualRxcuis]);
+  const filteredRxcuiSet = useMemo(
+    () => new Set(filteredRxcuis),
+    [filteredRxcuis]
+  );
+  const filteredEdges = useMemo(() => {
+    return visualEdges.filter(
+      (edge) =>
+        filteredRxcuiSet.has(edge.source_rxcui) &&
+        filteredRxcuiSet.has(edge.target_rxcui)
+    );
+  }, [filteredRxcuiSet, visualEdges]);
   const selectedNode = selectedRxcui
     ? positionedNodes.get(selectedRxcui) ?? null
     : null;
@@ -405,7 +429,7 @@ export function RxNormKnowledgeGraph({ dossier }: { dossier: DrugDossier }) {
       return new Set<string>();
     }
     const ids = new Set<string>([selectedRxcui]);
-    for (const edge of visualEdges) {
+    for (const edge of filteredEdges) {
       if (edge.source_rxcui === selectedRxcui) {
         ids.add(edge.target_rxcui);
       }
@@ -414,7 +438,7 @@ export function RxNormKnowledgeGraph({ dossier }: { dossier: DrugDossier }) {
       }
     }
     return ids;
-  }, [selectedRxcui, visualEdges]);
+  }, [filteredEdges, selectedRxcui]);
   const visibleNodeTypes = useMemo(() => {
     return Array.from(
       new Set(
@@ -428,6 +452,18 @@ export function RxNormKnowledgeGraph({ dossier }: { dossier: DrugDossier }) {
   }, [positionedNodes, visualRxcuis]);
   const truncated =
     dossier.rxnorm_neighborhood.truncated || edges.length > visualEdges.length;
+
+  function toggleNodeType(tty: string) {
+    setSelectedTypes((current) => {
+      const next = new Set(current);
+      if (next.has(tty)) {
+        next.delete(tty);
+      } else {
+        next.add(tty);
+      }
+      return next;
+    });
+  }
 
   function screenToGraph(clientX: number, clientY: number) {
     const svg = svgRef.current;
@@ -613,7 +649,7 @@ export function RxNormKnowledgeGraph({ dossier }: { dossier: DrugDossier }) {
                   </marker>
                 </defs>
                 <g transform={`translate(${pan.x} ${pan.y}) scale(${zoom})`}>
-                {visualEdges.map((edge) => {
+                {filteredEdges.map((edge) => {
                   const source = positionedNodes.get(edge.target_rxcui);
                   const target = positionedNodes.get(edge.source_rxcui);
                   if (!source || !target) {
@@ -674,7 +710,7 @@ export function RxNormKnowledgeGraph({ dossier }: { dossier: DrugDossier }) {
                     </g>
                   );
                 })}
-                {visualRxcuis.map((rxcui) => {
+                {filteredRxcuis.map((rxcui) => {
                   const point = positionedNodes.get(rxcui);
                   if (!point) {
                     return null;
@@ -860,34 +896,60 @@ export function RxNormKnowledgeGraph({ dossier }: { dossier: DrugDossier }) {
               </div>
 
               <div className="rounded-md border border-slate-200 bg-white p-3">
-                <div className="text-xs font-medium uppercase text-slate-500">
-                  Node types
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-xs font-medium uppercase text-slate-500">
+                    Node types
+                  </div>
+                  <button
+                    type="button"
+                    className={[
+                      "w-10 text-right font-medium transition",
+                      selectedTypes.size > 0
+                        ? "text-slate-600 hover:text-slate-950"
+                        : "pointer-events-none text-transparent",
+                    ].join(" ")}
+                    style={{ fontSize: "12px", lineHeight: "14px" }}
+                    onClick={() => setSelectedTypes(new Set())}
+                  >
+                    Clear
+                  </button>
                 </div>
                 <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
                   {visibleNodeTypes.map((tty) => {
                     const style = getTtyStyle(tty);
+                    const isActive = selectedTypes.has(tty.toUpperCase());
                     return (
-                      <span
+                      <button
                         key={tty}
-                        className="flex items-center gap-2 text-xs text-slate-700"
+                        type="button"
+                        className={[
+                          "flex min-w-0 items-center gap-2 rounded-md border px-2 py-1 text-left transition",
+                          isActive
+                            ? "border-slate-400 bg-slate-100 text-slate-950"
+                            : "border-transparent text-slate-700 hover:border-slate-200 hover:bg-slate-50",
+                        ].join(" ")}
+                        style={{ fontSize: "12px", lineHeight: "13px" }}
+                        onClick={() => toggleNodeType(tty.toUpperCase())}
                       >
                         <span
-                          className="size-3 rounded-full border"
+                          className="size-3 shrink-0 rounded-full border"
                           style={{
                             backgroundColor: style.fill,
                             borderColor: style.stroke,
                           }}
                         />
-                        {style.label}
-                      </span>
+                        <span className="truncate">{style.label}</span>
+                      </button>
                     );
                   })}
                 </div>
               </div>
               <p className="text-xs leading-5 text-slate-500">
-                Showing {visualEdges.length} of {edges.length} returned RxNorm
-                relationships. Hover over a line to see the relationship.
-                Double-click a node to focus it.
+                Showing {filteredEdges.length} of {edges.length} returned RxNorm
+                relationships
+                {selectedTypes.size > 0 ? " after type filtering" : ""}. Hover
+                over a line to see the relationship. Double-click a node to
+                focus it.
               </p>
             </div>
           </div>
