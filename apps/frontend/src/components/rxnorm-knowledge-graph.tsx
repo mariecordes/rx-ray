@@ -148,13 +148,18 @@ function displayNodeName(value: string) {
 
 function nodeTooltip(node: RxNormConcept) {
   const style = getTtyStyle(node.tty);
-  return `${displayNodeName(node.name)}\nType: ${style.label}\nRXCUI: ${node.rxcui}`;
+  return {
+    title: displayNodeName(node.name),
+    body: `Type: ${style.label}\nRXCUI: ${node.rxcui}`,
+  };
 }
 
 function edgeTooltip(edge: RxNormEdge) {
-  return `${displayNodeName(edge.target_name)} ${humanizeRelation(
-    edge.relation
-  )} ${displayNodeName(edge.source_name)}`;
+  return {
+    title: `${displayNodeName(edge.target_name)} ${humanizeRelation(
+      edge.relation
+    )} ${displayNodeName(edge.source_name)}`,
+  };
 }
 
 type VisualNode = RxNormConcept & {
@@ -350,7 +355,8 @@ function trimEdge(
 export function RxNormKnowledgeGraph({ dossier }: { dossier: DrugDossier }) {
   const [selectedRxcui, setSelectedRxcui] = useState<string | null>(null);
   const [tooltip, setTooltip] = useState<{
-    text: string;
+    title: string;
+    body?: string;
     x: number;
     y: number;
   } | null>(null);
@@ -592,7 +598,10 @@ export function RxNormKnowledgeGraph({ dossier }: { dossier: DrugDossier }) {
     );
   }
 
-  function updateTooltip(event: MouseEvent<SVGElement>, text: string) {
+  function updateTooltip(
+    event: MouseEvent<SVGElement>,
+    content: { title: string; body?: string }
+  ) {
     const frame = graphFrameRef.current;
     if (!frame) {
       return;
@@ -601,7 +610,7 @@ export function RxNormKnowledgeGraph({ dossier }: { dossier: DrugDossier }) {
     const rawX = event.clientX - bounds.left + 14;
     const rawY = event.clientY - bounds.top + 14;
     setTooltip({
-      text,
+      ...content,
       x: Math.min(rawX, Math.max(12, bounds.width - 300)),
       y: Math.min(rawY, Math.max(12, bounds.height - 120)),
     });
@@ -703,7 +712,7 @@ export function RxNormKnowledgeGraph({ dossier }: { dossier: DrugDossier }) {
                               ? 0.78
                               : 0.5
                         }
-                        strokeWidth={incident ? 2.5 : touchesCenter ? 1.8 : 1.25}
+                        strokeWidth={incident ? 1.8 : touchesCenter ? 1.5 : 1.15}
                         markerEnd={incident ? "url(#arrow)" : undefined}
                         pointerEvents="none"
                       />
@@ -724,6 +733,15 @@ export function RxNormKnowledgeGraph({ dossier }: { dossier: DrugDossier }) {
                     isCenter ||
                     isSelected ||
                     (selectedRxcui ? isHighlighted : false);
+                  const label = shortLabel(
+                    displayNodeName(point.name),
+                    isCenter ? 28 : 20
+                  );
+                  const labelWidth = Math.min(
+                    isCenter ? 190 : 150,
+                    Math.max(48, label.length * 6.4 + 14)
+                  );
+                  const labelY = point.y + radius + 15;
                   return (
                     <g
                       key={rxcui}
@@ -745,38 +763,62 @@ export function RxNormKnowledgeGraph({ dossier }: { dossier: DrugDossier }) {
                       }
                       onMouseLeave={() => setTooltip(null)}
                     >
+                      {isSelected ? (
+                        <circle
+                          cx={point.x}
+                          cy={point.y}
+                          r={radius + 5}
+                          fill="none"
+                          stroke={style.stroke}
+                          strokeOpacity="0.32"
+                          strokeWidth="3"
+                        />
+                      ) : null}
                       <circle
                         cx={point.x}
                         cy={point.y}
                         r={radius}
-                        fill={style.fill}
+                        fill={isSelected ? style.stroke : style.fill}
+                        fillOpacity={isSelected ? 0.18 : 1}
                         stroke={
                           isSelected || (isCenter && !selectedRxcui)
-                            ? "#0f172a"
+                            ? style.stroke
                             : style.stroke
                         }
                         strokeWidth={
-                          isSelected || (isCenter && !selectedRxcui) ? 4 : 2
+                          isSelected || (isCenter && !selectedRxcui) ? 2.5 : 2
                         }
                         opacity={
                           selectedRxcui && !isHighlighted && !isCenter ? 0.26 : 1
                         }
                       />
                       {showLabel ? (
-                        <text
-                          x={point.x}
-                          y={point.y + radius + 15}
-                          className="pointer-events-none fill-slate-700 text-[11px] font-medium"
+                        <g
+                          className="pointer-events-none"
                           opacity={
                             selectedRxcui && !isHighlighted && !isCenter ? 0.32 : 1
                           }
-                          textAnchor="middle"
                         >
-                          {shortLabel(
-                            displayNodeName(point.name),
-                            isCenter ? 28 : 20
-                          )}
-                        </text>
+                          <rect
+                            x={point.x - labelWidth / 2}
+                            y={labelY - 12}
+                            width={labelWidth}
+                            height="17"
+                            rx="4"
+                            fill="white"
+                            fillOpacity="0.88"
+                            stroke="#e2e8f0"
+                            strokeOpacity="0.8"
+                          />
+                          <text
+                            x={point.x}
+                            y={labelY}
+                            className="fill-slate-800 text-[11px] font-semibold"
+                            textAnchor="middle"
+                          >
+                            {label}
+                          </text>
+                        </g>
                       ) : null}
                     </g>
                   );
@@ -791,7 +833,10 @@ export function RxNormKnowledgeGraph({ dossier }: { dossier: DrugDossier }) {
                     top: tooltip.y,
                   }}
                 >
-                  {tooltip.text}
+                  <div className="font-semibold text-slate-900">
+                    {tooltip.title}
+                  </div>
+                  {tooltip.body ? <div>{tooltip.body}</div> : null}
                 </div>
               ) : null}
             </div>
