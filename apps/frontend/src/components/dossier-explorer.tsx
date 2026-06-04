@@ -85,6 +85,15 @@ type DisplayEvidenceModel = {
   selectedNodeMatchCount: number;
 };
 
+type GroupedLabelSection = {
+  key: string;
+  sourceKey?: string;
+  source?: DisplaySourceRecord;
+  text: string;
+  chunkCount: number;
+  isSelectedNodeEvidence: boolean;
+};
+
 function recordKey(
   record: OpenFDALabelRecord,
   index: number,
@@ -238,6 +247,42 @@ function buildDisplayEvidenceModel(
     selectedNodeOnlyCount: selectedOnlyItems.length,
     selectedNodeMatchCount: matchedBaselineKeys.size,
   };
+}
+
+function groupLabelSectionsBySource(
+  section: string | null,
+  entries: DisplayLabelSection[],
+  displayEvidence: DisplayEvidenceModel
+) {
+  const groups = new Map<string, GroupedLabelSection>();
+
+  entries.forEach((entry, index) => {
+    const sourceKey =
+      entry.displaySourceKey ?? `${entry.source_id ?? "unknown"}-${index}`;
+    const groupKey = `${section ?? "section"}-${sourceKey}`;
+    const existing = groups.get(groupKey);
+
+    if (existing) {
+      existing.text = `${existing.text}\n\n${entry.text}`;
+      existing.chunkCount += 1;
+      existing.isSelectedNodeEvidence =
+        existing.isSelectedNodeEvidence || entry.isSelectedNodeEvidence;
+      return;
+    }
+
+    groups.set(groupKey, {
+      key: groupKey,
+      sourceKey: entry.displaySourceKey,
+      source: entry.displaySourceKey
+        ? displayEvidence.sourceByKey.get(entry.displaySourceKey)
+        : undefined,
+      text: entry.text,
+      chunkCount: 1,
+      isSelectedNodeEvidence: entry.isSelectedNodeEvidence,
+    });
+  });
+
+  return Array.from(groups.values());
 }
 
 export function DossierExplorer() {
@@ -586,6 +631,21 @@ function LabelEvidencePanel({
 }) {
   const records = displayEvidence.records;
   const evidenceCardsRef = useRef<HTMLDivElement>(null);
+  const [expandedEvidenceKeys, setExpandedEvidenceKeys] = useState<Set<string>>(
+    new Set()
+  );
+  const groupedActiveTexts = useMemo(
+    () => groupLabelSectionsBySource(activeSection, activeTexts, displayEvidence),
+    [activeSection, activeTexts, displayEvidence]
+  );
+  const sectionTabEntries = useMemo(
+    () =>
+      sectionEntries.map(([section, texts]) => ({
+        section,
+        count: groupLabelSectionsBySource(section, texts, displayEvidence).length,
+      })),
+    [displayEvidence, sectionEntries]
+  );
 
   function handleSourceStripClick(sourceKey: string) {
     onSelectSourceFromStrip(sourceKey);
@@ -594,6 +654,18 @@ function LabelEvidencePanel({
         behavior: "smooth",
         block: "nearest",
       });
+    });
+  }
+
+  function toggleEvidenceExpansion(key: string) {
+    setExpandedEvidenceKeys((current) => {
+      const next = new Set(current);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
     });
   }
 
@@ -715,7 +787,7 @@ function LabelEvidencePanel({
               ) : (
                 <div className="flex flex-col gap-4">
                   <div className="flex flex-wrap gap-2">
-                    {sectionEntries.map(([section, texts]) => (
+                    {sectionTabEntries.map(({ section, count }) => (
                       <Button
                         key={section}
                         type="button"
@@ -726,18 +798,16 @@ function LabelEvidencePanel({
                       >
                         {displaySectionName(section)}
                         <span className="text-xs opacity-75">
-                          {texts.length}
+                          {count}
                         </span>
                       </Button>
                     ))}
                   </div>
 
                   <div ref={evidenceCardsRef} className="space-y-3">
-                    {activeTexts.map((entry, index) => {
-                      const sourceKey = entry.displaySourceKey;
-                      const source = sourceKey
-                        ? displayEvidence.sourceByKey.get(sourceKey)
-                        : null;
+                    {groupedActiveTexts.map((entry) => {
+                      const sourceKey = entry.sourceKey;
+                      const source = entry.source;
                       const brandName = primaryValue(
                         source?.record.brand_names
                       );
@@ -754,13 +824,22 @@ function LabelEvidencePanel({
                         : source?.isSelectedNodeOnly
                           ? nodeSpecificClasses
                           : "border-slate-200 bg-slate-50 hover:border-slate-300 hover:bg-white";
+                      const isExpanded = expandedEvidenceKeys.has(entry.key);
+                      const canExpand = entry.text.length > 900;
                       return (
-                        <button
-                          key={`${sourceKey ?? entry.source_id}-${index}`}
-                          type="button"
+                        <article
+                          key={entry.key}
+                          role="button"
+                          tabIndex={0}
                           onClick={() => onSelectSource(sourceKey)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+                              onSelectSource(sourceKey);
+                            }
+                          }}
                           className={cn(
-                            "w-full rounded-md border p-3 text-left transition",
+                            "w-full cursor-pointer rounded-md border p-3 text-left transition",
                             evidenceClasses
                           )}
                         >
@@ -786,11 +865,36 @@ function LabelEvidencePanel({
                             {manufacturerName ? (
                               <span>· {manufacturerName}</span>
                             ) : null}
+                            {entry.chunkCount > 1 ? (
+                              <Badge className="border-slate-200 bg-white text-slate-700">
+                                {entry.chunkCount} entries
+                              </Badge>
+                            ) : null}
                           </div>
-                          <p className="whitespace-pre-wrap text-sm leading-6 text-slate-800">
+                          <p
+                            className={cn(
+                              "whitespace-pre-wrap text-sm leading-6 text-slate-800",
+                              canExpand && !isExpanded
+                                ? "max-h-56 overflow-hidden"
+                                : ""
+                            )}
+                          >
                             {entry.text}
                           </p>
-                        </button>
+                          {canExpand ? (
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                toggleEvidenceExpansion(entry.key);
+                              }}
+                              className="mt-3 font-medium uppercase tracking-wide text-slate-500 underline-offset-2 hover:text-cyan-700 hover:underline"
+                              style={{ fontSize: "12px", lineHeight: "14px" }}
+                            >
+                              {isExpanded ? "Show less" : "Show more"}
+                            </button>
+                          ) : null}
+                        </article>
                       );
                     })}
                   </div>
