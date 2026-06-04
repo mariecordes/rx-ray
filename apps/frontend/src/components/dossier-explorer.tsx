@@ -6,6 +6,7 @@ import {
   Database,
   FileText,
   FlaskConical,
+  Info,
   Loader2,
   Search,
 } from "lucide-react";
@@ -53,12 +54,14 @@ const nodeSpecificClasses =
   "border-[#EACB96] bg-[#FAE8CD] hover:border-[#DDBB7E]";
 const searchSourceClasses =
   "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50";
-const selectedSourceBadgeClasses =
-  "border-[#C7B4EF] bg-[#DDCAF7] text-[#4C2C77]";
 const nodeSpecificBadgeClasses =
   "border-[#EACB96] bg-[#FAE8CD] text-[#704A12]";
 const searchSpecificBadgeClasses =
   "border-slate-200 bg-white text-slate-700";
+
+function displayGraphNodeName(name: string) {
+  return name.toUpperCase();
+}
 
 type DisplayLabelSection = LabelSection & {
   displaySourceKey?: string;
@@ -608,9 +611,9 @@ function LabelEvidencePanel({
       <Card>
         <CardHeader className="border-b border-slate-200">
           <div className="flex flex-row items-start justify-between gap-3">
-            <div>
+            <div className="min-w-0 flex-1">
               <CardTitle>Label Evidence</CardTitle>
-              <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-500">
+              <p className="mt-1 text-sm leading-6 text-slate-500">
                 OpenFDA drug-label evidence retrieved for the searched drug,
                 with graph selections used to highlight or add more specific
                 label records.
@@ -636,13 +639,17 @@ function LabelEvidencePanel({
           <div className="grid gap-4 xl:grid-cols-[minmax(240px,0.32fr)_minmax(0,1fr)]">
             <aside className="rounded-md border border-slate-200 bg-slate-50 p-3">
               <div className="mb-3 flex items-center justify-between gap-3">
-                <div>
+                <div className="flex min-w-0 items-center gap-2">
                   <div className="text-xs font-medium uppercase text-slate-500">
                     Sources
                   </div>
-                  <div className="text-xs text-slate-500">
-                    Brand, generic, manufacturer
-                  </div>
+                  <span className="group relative inline-flex">
+                    <Info className="size-3.5 text-slate-400" />
+                    <span className="pointer-events-none absolute left-0 top-full z-20 mt-2 hidden w-64 rounded-md border border-slate-200 bg-white px-3 py-2 text-xs normal-case leading-5 text-slate-700 shadow-lg group-hover:block">
+                      Each source card shows the drug brand name, generic drug
+                      name, and manufacturer name in that order.
+                    </span>
+                  </span>
                 </div>
                 <Badge className="bg-white text-slate-700">
                   {records.length}
@@ -672,9 +679,10 @@ function LabelEvidencePanel({
                         type="button"
                         onClick={() => handleSourceStripClick(source.key)}
                         className={cn(
-                          "w-full rounded-md border p-2 text-left text-xs transition",
+                          "w-full rounded-md border p-2 text-left transition",
                           sourceClasses
                         )}
+                        style={{ fontSize: "14px", lineHeight: "18px" }}
                       >
                         <div className="mb-1 flex flex-wrap items-center gap-1.5">
                           <Badge className="bg-white text-slate-800">
@@ -691,14 +699,9 @@ function LabelEvidencePanel({
                               Node-specific
                             </Badge>
                           ) : null}
-                          {isSelected ? (
-                            <Badge className={selectedSourceBadgeClasses}>
-                              Selected
-                            </Badge>
-                          ) : null}
                         </div>
                         <div className="truncate font-medium text-slate-900">
-                          {brandName ?? genericName ?? "Unnamed label"}
+                          {brandName ?? "Brand unavailable"}
                         </div>
                         <div className="truncate text-slate-600">
                           {genericName ?? "Generic unavailable"}
@@ -842,7 +845,10 @@ function LabelEvidenceContextNote({
       <div className="flex items-center gap-2 text-sm leading-6 text-slate-700">
         <Loader2 className="size-4 animate-spin text-slate-500" />
         Looking up labels for{" "}
-        <span className="font-medium text-slate-900">{node.name}</span>.
+        <span className="font-bold text-slate-950">
+          {displayGraphNodeName(node.name)}
+        </span>
+        .
       </div>
     );
   }
@@ -859,21 +865,32 @@ function LabelEvidenceContextNote({
     return (
       <div className="text-sm leading-6 text-slate-700">
         Selected graph node:{" "}
-        <span className="font-medium text-slate-950">{node.name}</span>. No
-        specific OpenFDA labels were found, so the evidence below remains tied
-        to the original search.
+        <span className="font-bold text-slate-950">
+          {displayGraphNodeName(node.name)}
+        </span>
+        . No specific OpenFDA labels were found, so the evidence below remains
+        tied to the original search.
       </div>
     );
   }
 
   if (displayEvidence.selectedNodeOnlyCount > 0) {
+    const previewLimitReached =
+      nodeLabelEvidence?.label_limit !== null &&
+      nodeLabelEvidence?.label_limit !== undefined &&
+      nodeLabelEvidence.labels_found >= nodeLabelEvidence.label_limit;
     return (
       <div className="text-sm leading-6 text-slate-700">
         Selected graph node:{" "}
-        <span className="font-medium text-slate-950">{node.name}</span>. Found{" "}
-        {displayEvidence.selectedNodeOnlyCount} node-specific source
-        {displayEvidence.selectedNodeOnlyCount === 1 ? "" : "s"} and pinned{" "}
-        {displayEvidence.selectedNodeOnlyCount === 1 ? "it" : "them"} first.
+        <span className="font-bold text-slate-950">
+          {displayGraphNodeName(node.name)}
+        </span>
+        . Displaying {displayEvidence.selectedNodeOnlyCount} node-specific
+        source{displayEvidence.selectedNodeOnlyCount === 1 ? "" : "s"} pinned
+        first.
+        {previewLimitReached
+          ? " This is a compact preview; search this drug directly to retrieve further label evidence."
+          : ""}
       </div>
     );
   }
@@ -882,8 +899,10 @@ function LabelEvidenceContextNote({
     return (
       <div className="text-sm leading-6 text-slate-700">
         Selected graph node:{" "}
-        <span className="font-medium text-slate-950">{node.name}</span>. Its
-        labels match source
+        <span className="font-bold text-slate-950">
+          {displayGraphNodeName(node.name)}
+        </span>
+        . Its labels match source
         {displayEvidence.selectedNodeMatchCount === 1 ? "" : "s"} already
         returned for the original search.
       </div>
@@ -893,7 +912,10 @@ function LabelEvidenceContextNote({
   return (
     <div className="text-sm leading-6 text-slate-700">
       Selected graph node:{" "}
-      <span className="font-medium text-slate-950">{node.name}</span>.
+      <span className="font-bold text-slate-950">
+        {displayGraphNodeName(node.name)}
+      </span>
+      .
     </div>
   );
 }
