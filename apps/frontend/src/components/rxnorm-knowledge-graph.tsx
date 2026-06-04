@@ -352,7 +352,13 @@ function trimEdge(
   };
 }
 
-export function RxNormKnowledgeGraph({ dossier }: { dossier: DrugDossier }) {
+export function RxNormKnowledgeGraph({
+  dossier,
+  onSelectedNodeChange,
+}: {
+  dossier: DrugDossier;
+  onSelectedNodeChange?: (node: RxNormConcept | null) => void;
+}) {
   const [selectedRxcui, setSelectedRxcui] = useState<string | null>(null);
   const [tooltip, setTooltip] = useState<{
     title: string;
@@ -516,6 +522,11 @@ export function RxNormKnowledgeGraph({ dossier }: { dossier: DrugDossier }) {
     setPan({ x: 0, y: 0 });
   }
 
+  function selectGraphNode(rxcui: string | null) {
+    setSelectedRxcui(rxcui);
+    onSelectedNodeChange?.(rxcui ? positionedNodes.get(rxcui) ?? null : null);
+  }
+
   function handleCanvasPointerDown(event: PointerEvent<SVGSVGElement>) {
     setPanDrag({
       x: event.clientX,
@@ -539,7 +550,7 @@ export function RxNormKnowledgeGraph({ dossier }: { dossier: DrugDossier }) {
     if (!node) {
       return;
     }
-    setSelectedRxcui(rxcui);
+    selectGraphNode(rxcui);
     setBoundedZoom(FOCUS_ZOOM);
     setPan({
       x: GRAPH_WIDTH / 2 - node.x * FOCUS_ZOOM,
@@ -583,7 +594,7 @@ export function RxNormKnowledgeGraph({ dossier }: { dossier: DrugDossier }) {
 
   function handlePointerUp() {
     if (panDrag && !panDrag.moved && !nodeDrag) {
-      setSelectedRxcui(null);
+      selectGraphNode(null);
     }
     setPanDrag(null);
     setNodeDrag(null);
@@ -747,9 +758,7 @@ export function RxNormKnowledgeGraph({ dossier }: { dossier: DrugDossier }) {
                       key={rxcui}
                       className="cursor-grab"
                       onClick={() =>
-                        setSelectedRxcui((current) =>
-                          current === rxcui ? null : rxcui
-                        )
+                        selectGraphNode(selectedRxcui === rxcui ? null : rxcui)
                       }
                       onDoubleClick={() => focusNode(rxcui)}
                       onPointerDown={(event) =>

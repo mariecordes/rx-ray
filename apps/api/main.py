@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from src.dossier.builder import DossierBuilder
-from src.dossier.models import DrugDossier
+from src.dossier.models import DrugDossier, OpenFDALabelEvidence
 from src.dossier.openfda_store import OpenFDALabelStore
 from src.dossier.rxnorm_store import RxNormParquetStore
 
@@ -23,6 +23,12 @@ class DossierRequest(BaseModel):
     max_edges: int = Field(default=75, ge=1, le=500)
     openfda_limit: int = Field(default=5, ge=1, le=25)
     include_openfda: bool = True
+
+
+class LabelEvidenceRequest(BaseModel):
+    rxcui: str = Field(..., min_length=1)
+    name: str | None = None
+    limit: int = Field(default=3, ge=1, le=25)
 
 
 @lru_cache(maxsize=1)
@@ -52,6 +58,17 @@ async def build_dossier(
     )
 
 
+async def build_label_evidence(
+    request: LabelEvidenceRequest,
+    builder: DossierBuilder = Depends(get_dossier_builder),
+) -> OpenFDALabelEvidence:
+    return builder.openfda_store.get_label_evidence(
+        request.rxcui.strip(),
+        fallback_name=request.name.strip() if request.name else None,
+        limit=request.limit,
+    )
+
+
 def create_app() -> FastAPI:
     api = FastAPI(
         title="rx-ray",
@@ -77,6 +94,12 @@ def create_app() -> FastAPI:
         build_dossier,
         methods=["POST"],
         response_model=DrugDossier,
+    )
+    api.add_api_route(
+        "/label-evidence",
+        build_label_evidence,
+        methods=["POST"],
+        response_model=OpenFDALabelEvidence,
     )
     return api
 

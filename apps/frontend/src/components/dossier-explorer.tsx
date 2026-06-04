@@ -7,7 +7,6 @@ import {
   FileText,
   FlaskConical,
   Loader2,
-  Network,
   Search,
 } from "lucide-react";
 
@@ -16,7 +15,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { DrugDossier, LabelSection, OpenFDALabelRecord } from "@/lib/types";
+import {
+  DrugDossier,
+  LabelSection,
+  OpenFDALabelEvidence,
+  OpenFDALabelRecord,
+  RxNormConcept,
+} from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const sectionLabels: Record<string, string> = {
@@ -35,13 +40,6 @@ function displaySectionName(section: string) {
   return sectionLabels[section] ?? section.replaceAll("_", " ");
 }
 
-function joinValues(values?: string[] | null) {
-  if (!values || values.length === 0) {
-    return "—";
-  }
-  return values.join(", ");
-}
-
 function primaryValue(values?: string[] | null) {
   if (!values || values.length === 0) {
     return null;
@@ -49,75 +47,251 @@ function primaryValue(values?: string[] | null) {
   return values[0];
 }
 
+type DisplayLabelSection = LabelSection & {
+  displaySourceKey?: string;
+  isSelectedNodeEvidence: boolean;
+};
+
+type DisplaySourceRecord = {
+  key: string;
+  record: OpenFDALabelRecord;
+  sourceNumber: number;
+  isSelectedNodeMatch: boolean;
+  isSelectedNodeOnly: boolean;
+};
+
+type DisplayEvidenceModel = {
+  records: DisplaySourceRecord[];
+  sections: Record<string, DisplayLabelSection[]>;
+  sourceByKey: Map<string, DisplaySourceRecord>;
+  selectedNodeSourceKeys: Set<string>;
+  selectedNodeOnlyCount: number;
+  selectedNodeMatchCount: number;
+};
+
+function recordKey(
+  record: OpenFDALabelRecord,
+  index: number,
+  prefix: "baseline" | "selected"
+) {
+  return [
+    prefix,
+    record.source_id,
+    record.id,
+    record.set_id,
+    record.spl_ids[0],
+    record.spl_set_ids[0],
+    index,
+  ]
+    .filter(Boolean)
+    .join(":");
+}
+
+function hasSharedValue(left: string[], right: string[]) {
+  if (left.length === 0 || right.length === 0) {
+    return false;
+  }
+  const rightValues = new Set(right);
+  return left.some((value) => rightValues.has(value));
+}
+
+function recordsMatch(
+  baseline: OpenFDALabelRecord,
+  selected: OpenFDALabelRecord
+) {
+  if (baseline.source_id && baseline.source_id === selected.source_id) {
+    return true;
+  }
+  if (baseline.id && baseline.id === selected.id) {
+    return true;
+  }
+  if (baseline.set_id && baseline.set_id === selected.set_id) {
+    return true;
+  }
+  if (hasSharedValue(baseline.spl_ids, selected.spl_ids)) {
+    return true;
+  }
+  return hasSharedValue(baseline.spl_set_ids, selected.spl_set_ids);
+}
+
+function buildDisplayEvidenceModel(
+  baselineEvidence: OpenFDALabelEvidence | null,
+  selectedEvidence: OpenFDALabelEvidence | null
+): DisplayEvidenceModel {
+  const baselineRecords = baselineEvidence?.label_records ?? [];
+  const selectedRecords = selectedEvidence?.label_records ?? [];
+  const baselineItems = baselineRecords.map((record, index) => ({
+    key: recordKey(record, index, "baseline"),
+    record,
+    sourceNumber: index + 1,
+    isSelectedNodeMatch: false,
+    isSelectedNodeOnly: false,
+  }));
+  const baselineSectionKeyBySourceId = new Map<string, string>();
+  for (const item of baselineItems) {
+    if (item.record.source_id) {
+      baselineSectionKeyBySourceId.set(item.record.source_id, item.key);
+    }
+  }
+
+  const matchedBaselineKeys = new Set<string>();
+  const selectedOnlyItems: DisplaySourceRecord[] = [];
+  const selectedSectionKeyBySourceId = new Map<string, string>();
+
+  selectedRecords.forEach((selectedRecord, selectedIndex) => {
+    const match = baselineItems.find((item) =>
+      recordsMatch(item.record, selectedRecord)
+    );
+    if (match) {
+      matchedBaselineKeys.add(match.key);
+      if (selectedRecord.source_id) {
+        selectedSectionKeyBySourceId.set(selectedRecord.source_id, match.key);
+      }
+      return;
+    }
+
+    const selectedOnlyItem: DisplaySourceRecord = {
+      key: recordKey(selectedRecord, selectedIndex, "selected"),
+      record: selectedRecord,
+      sourceNumber: 0,
+      isSelectedNodeMatch: false,
+      isSelectedNodeOnly: true,
+    };
+    selectedOnlyItems.push(selectedOnlyItem);
+    if (selectedRecord.source_id) {
+      selectedSectionKeyBySourceId.set(selectedRecord.source_id, selectedOnlyItem.key);
+    }
+  });
+
+  const records = [
+    ...selectedOnlyItems,
+    ...baselineItems.map((item) => ({
+      ...item,
+      isSelectedNodeMatch: matchedBaselineKeys.has(item.key),
+    })),
+  ].map((item, index) => ({
+    ...item,
+    sourceNumber: index + 1,
+  }));
+
+  const selectedNodeSourceKeys = new Set<string>([
+    ...matchedBaselineKeys,
+    ...selectedOnlyItems.map((item) => item.key),
+  ]);
+  const sections: Record<string, DisplayLabelSection[]> = {};
+
+  for (const [section, entries] of Object.entries(
+    baselineEvidence?.sections ?? {}
+  )) {
+    sections[section] = entries.map((entry) => ({
+      ...entry,
+      displaySourceKey: entry.source_id
+        ? baselineSectionKeyBySourceId.get(entry.source_id)
+        : undefined,
+      isSelectedNodeEvidence: false,
+    }));
+  }
+
+  for (const [section, entries] of Object.entries(
+    selectedEvidence?.sections ?? {}
+  )) {
+    const selectedOnlyEntries = entries
+      .map((entry) => ({
+        ...entry,
+        displaySourceKey: entry.source_id
+          ? selectedSectionKeyBySourceId.get(entry.source_id)
+          : undefined,
+        isSelectedNodeEvidence: true,
+      }))
+      .filter(
+        (entry) =>
+          entry.displaySourceKey &&
+          selectedOnlyItems.some((item) => item.key === entry.displaySourceKey)
+      );
+
+    if (selectedOnlyEntries.length > 0) {
+      sections[section] = [...selectedOnlyEntries, ...(sections[section] ?? [])];
+    }
+  }
+
+  return {
+    records,
+    sections,
+    sourceByKey: new Map(records.map((item) => [item.key, item])),
+    selectedNodeSourceKeys,
+    selectedNodeOnlyCount: selectedOnlyItems.length,
+    selectedNodeMatchCount: matchedBaselineKeys.size,
+  };
+}
+
 export function DossierExplorer() {
   const [drug, setDrug] = useState("aspirin");
   const [openfdaLimit, setOpenfdaLimit] = useState(5);
   const [dossier, setDossier] = useState<DrugDossier | null>(null);
   const [selectedSection, setSelectedSection] = useState<string | null>(null);
-  const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
+  const [selectedSourceKey, setSelectedSourceKey] = useState<string | null>(null);
+  const [selectedGraphNode, setSelectedGraphNode] =
+    useState<RxNormConcept | null>(null);
+  const [nodeLabelEvidence, setNodeLabelEvidence] =
+    useState<OpenFDALabelEvidence | null>(null);
+  const [isNodeEvidenceLoading, setIsNodeEvidenceLoading] = useState(false);
+  const [nodeEvidenceError, setNodeEvidenceError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const sourcesPanelRef = useRef<HTMLDivElement>(null);
   const labelEvidencePanelRef = useRef<HTMLDivElement>(null);
+  const nodeEvidenceRequestRef = useRef(0);
 
   const labelEvidence = dossier?.label_evidence ?? null;
+  const displayEvidence = useMemo(
+    () => buildDisplayEvidenceModel(labelEvidence, nodeLabelEvidence),
+    [labelEvidence, nodeLabelEvidence]
+  );
   const sectionEntries = useMemo(() => {
-    return Object.entries(labelEvidence?.sections ?? {});
-  }, [labelEvidence]);
-  const activeSection = selectedSection ?? sectionEntries[0]?.[0] ?? null;
-  const activeTexts: LabelSection[] = activeSection
-    ? labelEvidence?.sections[activeSection] ?? []
+    return Object.entries(displayEvidence.sections);
+  }, [displayEvidence]);
+  const activeSection =
+    selectedSection && displayEvidence.sections[selectedSection]
+      ? selectedSection
+      : sectionEntries[0]?.[0] ?? null;
+  const activeTexts: DisplayLabelSection[] = activeSection
+    ? displayEvidence.sections[activeSection] ?? []
     : [];
-  const sourceById = useMemo(() => {
-    return new Map(
-      (labelEvidence?.label_records ?? []).map((record) => [
-        record.source_id,
-        record,
-      ])
-    );
-  }, [labelEvidence]);
-  const sourceNumberById = useMemo(() => {
-    return new Map(
-      (labelEvidence?.label_records ?? []).map((record, index) => [
-        record.source_id,
-        index + 1,
-      ])
-    );
-  }, [labelEvidence]);
-  function selectSourceFromEvidence(sourceId?: string | null) {
-    if (!sourceId) {
+
+  function toggleSourceSelection(sourceKey?: string | null) {
+    if (!sourceKey) {
       return;
     }
-    const nextSourceId = selectedSourceId === sourceId ? null : sourceId;
-    setSelectedSourceId(nextSourceId);
-    if (!nextSourceId) {
-      return;
-    }
-    sourcesPanelRef.current?.scrollIntoView({
-      behavior: "smooth",
-      block: "nearest",
-    });
+    setSelectedSourceKey((current) =>
+      current === sourceKey ? null : sourceKey
+    );
   }
 
-  function selectSourceFromSourcePanel(sourceId?: string | null) {
-    if (!sourceId) {
+  function selectSourceFromStrip(sourceKey?: string | null) {
+    if (!sourceKey) {
       return;
     }
-    const nextSourceId = selectedSourceId === sourceId ? null : sourceId;
-    setSelectedSourceId(nextSourceId);
-    if (!nextSourceId) {
+    const nextSourceKey = selectedSourceKey === sourceKey ? null : sourceKey;
+    setSelectedSourceKey(nextSourceKey);
+    if (!nextSourceKey) {
       return;
     }
-    labelEvidencePanelRef.current?.scrollIntoView({
-      behavior: "smooth",
-      block: "nearest",
-    });
+    const sectionWithSource = sectionEntries.find(([, entries]) =>
+      entries.some((entry) => entry.displaySourceKey === sourceKey)
+    );
+    if (sectionWithSource) {
+      setSelectedSection(sectionWithSource[0]);
+    }
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setIsLoading(true);
     setError(null);
+    setSelectedGraphNode(null);
+    setNodeLabelEvidence(null);
+    setNodeEvidenceError(null);
+    setIsNodeEvidenceLoading(false);
+    nodeEvidenceRequestRef.current += 1;
 
     try {
       const response = await fetch("/api/dossier", {
@@ -142,11 +316,61 @@ export function DossierExplorer() {
       setDossier(payload);
       const firstSection = Object.keys(payload.label_evidence?.sections ?? {})[0];
       setSelectedSection(firstSection ?? null);
-      setSelectedSourceId(null);
+      setSelectedSourceKey(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to build dossier");
     } finally {
       setIsLoading(false);
+    }
+  }
+
+  async function handleSelectedGraphNodeChange(node: RxNormConcept | null) {
+    const requestId = nodeEvidenceRequestRef.current + 1;
+    nodeEvidenceRequestRef.current = requestId;
+    setSelectedGraphNode(node);
+    setNodeLabelEvidence(null);
+    setNodeEvidenceError(null);
+    setSelectedSourceKey(null);
+
+    if (!node) {
+      setIsNodeEvidenceLoading(false);
+      return;
+    }
+
+    setIsNodeEvidenceLoading(true);
+    try {
+      const response = await fetch("/api/label-evidence", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          rxcui: node.rxcui,
+          name: node.name,
+          limit: 3,
+        }),
+      });
+      const payload = await response.json();
+
+      if (!response.ok) {
+        throw new Error(payload.detail ?? "Failed to fetch label evidence");
+      }
+
+      if (nodeEvidenceRequestRef.current === requestId) {
+        setNodeLabelEvidence(payload);
+      }
+    } catch (err) {
+      if (nodeEvidenceRequestRef.current === requestId) {
+        setNodeEvidenceError(
+          err instanceof Error
+            ? err.message
+            : "Failed to fetch selected-node label evidence"
+        );
+      }
+    } finally {
+      if (nodeEvidenceRequestRef.current === requestId) {
+        setIsNodeEvidenceLoading(false);
+      }
     }
   }
 
@@ -218,27 +442,24 @@ export function DossierExplorer() {
             <RxNormKnowledgeGraph
               key={dossier.resolved_drug?.rxcui ?? dossier.query}
               dossier={dossier}
+              onSelectedNodeChange={handleSelectedGraphNodeChange}
             />
-            <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
-              <LabelEvidencePanel
-                ref={labelEvidencePanelRef}
-                activeSection={activeSection}
-                activeTexts={activeTexts}
-                sectionEntries={sectionEntries}
-                sourceById={sourceById}
-                sourceNumberById={sourceNumberById}
-                selectedSourceId={selectedSourceId}
-                onSelectSection={setSelectedSection}
-                onSelectSource={selectSourceFromEvidence}
-              />
-              <SourcesPanel
-                ref={sourcesPanelRef}
-                labelEvidence={labelEvidence}
-                selectedSourceId={selectedSourceId}
-                sourceNumberById={sourceNumberById}
-                onSelectSource={selectSourceFromSourcePanel}
-              />
-            </div>
+            <LabelEvidencePanel
+              ref={labelEvidencePanelRef}
+              activeSection={activeSection}
+              activeTexts={activeTexts}
+              displayEvidence={displayEvidence}
+              labelEvidence={labelEvidence}
+              nodeEvidenceError={nodeEvidenceError}
+              nodeLabelEvidence={nodeLabelEvidence}
+              isNodeEvidenceLoading={isNodeEvidenceLoading}
+              sectionEntries={sectionEntries}
+              selectedGraphNode={selectedGraphNode}
+              selectedSourceKey={selectedSourceKey}
+              onSelectSection={setSelectedSection}
+              onSelectSource={toggleSourceSelection}
+              onSelectSourceFromStrip={selectSourceFromStrip}
+            />
           </div>
         )}
       </div>
@@ -329,167 +550,200 @@ function LabelEvidencePanel({
   ref,
   activeSection,
   activeTexts,
+  displayEvidence,
+  labelEvidence,
+  nodeEvidenceError,
+  nodeLabelEvidence,
+  isNodeEvidenceLoading,
   sectionEntries,
-  sourceById,
-  sourceNumberById,
-  selectedSourceId,
+  selectedGraphNode,
+  selectedSourceKey,
   onSelectSection,
   onSelectSource,
+  onSelectSourceFromStrip,
 }: {
   ref: React.RefObject<HTMLDivElement | null>;
   activeSection: string | null;
-  activeTexts: LabelSection[];
-  sectionEntries: [string, LabelSection[]][];
-  sourceById: Map<string | null | undefined, OpenFDALabelRecord>;
-  sourceNumberById: Map<string | null | undefined, number>;
-  selectedSourceId: string | null;
+  activeTexts: DisplayLabelSection[];
+  displayEvidence: DisplayEvidenceModel;
+  labelEvidence: OpenFDALabelEvidence | null;
+  nodeEvidenceError: string | null;
+  nodeLabelEvidence: OpenFDALabelEvidence | null;
+  isNodeEvidenceLoading: boolean;
+  sectionEntries: [string, DisplayLabelSection[]][];
+  selectedGraphNode: RxNormConcept | null;
+  selectedSourceKey: string | null;
   onSelectSection: (section: string) => void;
-  onSelectSource: (sourceId?: string | null) => void;
+  onSelectSource: (sourceKey?: string | null) => void;
+  onSelectSourceFromStrip: (sourceKey?: string | null) => void;
 }) {
+  const records = displayEvidence.records;
+  const evidenceCardsRef = useRef<HTMLDivElement>(null);
+
+  function handleSourceStripClick(sourceKey: string) {
+    onSelectSourceFromStrip(sourceKey);
+    window.requestAnimationFrame(() => {
+      evidenceCardsRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "nearest",
+      });
+    });
+  }
+
   return (
     <div ref={ref}>
       <Card>
-      <CardHeader className="flex flex-row items-center justify-between gap-3">
-        <CardTitle>Label Evidence</CardTitle>
-        <FileText className="size-4 text-slate-400" />
-      </CardHeader>
-      <CardContent>
-        {sectionEntries.length === 0 ? (
-          <p className="text-sm text-slate-600">No OpenFDA sections returned.</p>
-        ) : (
-          <div className="flex flex-col gap-4">
-            <div className="flex flex-wrap gap-2">
-              {sectionEntries.map(([section, texts]) => (
-                <Button
-                  key={section}
-                  type="button"
-                  variant={activeSection === section ? "primary" : "secondary"}
-                  onClick={() => onSelectSection(section)}
-                >
-                  {displaySectionName(section)}
-                  <span className="text-xs opacity-75">{texts.length}</span>
-                </Button>
-              ))}
-            </div>
-
-            <div className="space-y-3">
-              {activeTexts.map((entry, index) => {
-                const source = sourceById.get(entry.source_id);
-                const sourceNumber = sourceNumberById.get(entry.source_id);
-                const brandName = primaryValue(source?.brand_names);
-                const manufacturerName = primaryValue(source?.manufacturer_names);
-                const isSelected = entry.source_id === selectedSourceId;
-                return (
-                  <button
-                    key={`${entry.source_id}-${index}`}
-                    type="button"
-                    onClick={() => onSelectSource(entry.source_id)}
-                    className={cn(
-                      "w-full rounded-md border p-3 text-left transition",
-                      isSelected
-                        ? "border-cyan-400 bg-cyan-50 shadow-sm"
-                        : "border-slate-200 bg-slate-50 hover:border-slate-300 hover:bg-white"
-                    )}
-                  >
-                    <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
-                      {sourceNumber ? (
-                        <span className="inline-flex items-center rounded-md border border-cyan-200 bg-cyan-50 px-2 py-0.5 font-medium text-cyan-800">
-                          Source {sourceNumber}
-                        </span>
-                      ) : (
-                        <Badge>Source unknown</Badge>
-                      )}
-                      {brandName ? <span>{brandName}</span> : null}
-                      {manufacturerName ? <span>· {manufacturerName}</span> : null}
-                    </div>
-                    <p className="whitespace-pre-wrap text-sm leading-6 text-slate-800">
-                      {entry.text}
-                    </p>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
-      </CardContent>
-      </Card>
-    </div>
-  );
-}
-
-const SourcesPanel = function SourcesPanel({
-  labelEvidence,
-  selectedSourceId,
-  sourceNumberById,
-  onSelectSource,
-  ref,
-}: {
-  labelEvidence: DrugDossier["label_evidence"];
-  selectedSourceId: string | null;
-  sourceNumberById: Map<string | null | undefined, number>;
-  onSelectSource: (sourceId?: string | null) => void;
-  ref: React.RefObject<HTMLDivElement | null>;
-}) {
-  const records = labelEvidence?.label_records ?? [];
-
-  return (
-    <aside ref={ref} className="flex flex-col gap-5">
-      <Card className="xl:sticky xl:top-5">
         <CardHeader className="flex flex-row items-center justify-between gap-3">
-          <CardTitle>Sources</CardTitle>
-          <Network className="size-4 text-slate-400" />
+          <div>
+            <CardTitle>Label Evidence</CardTitle>
+            {selectedGraphNode ? (
+              <div className="mt-1 text-sm text-slate-500">
+                Context from selected graph node:{" "}
+                <span className="font-medium text-slate-700">
+                  {selectedGraphNode.name}
+                </span>
+              </div>
+            ) : null}
+          </div>
+          <FileText className="size-4 text-slate-400" />
         </CardHeader>
-        <CardContent>
-          {labelEvidence ? (
-            <div className="mb-4 grid grid-cols-2 gap-2">
-              <Metric label="Retrieval" value={labelEvidence.retrieval_mode} />
-              <Metric
-                label="Records"
-                value={`${labelEvidence.labels_found}/${labelEvidence.label_limit ?? "—"}`}
-              />
-            </div>
-          ) : null}
+        <CardContent className="space-y-4">
+          <LabelEvidenceContextNote
+            displayEvidence={displayEvidence}
+            error={nodeEvidenceError}
+            isLoading={isNodeEvidenceLoading}
+            node={selectedGraphNode}
+            nodeLabelEvidence={nodeLabelEvidence}
+          />
+
           {records.length === 0 ? (
             <p className="text-sm text-slate-600">No label records returned.</p>
           ) : (
-            <div className="space-y-3">
-              {records.map((record) => {
-                const sourceNumber = sourceNumberById.get(record.source_id);
-                const isSelected = record.source_id === selectedSourceId;
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              {records.map((source) => {
+                const brandName = primaryValue(source.record.brand_names);
+                const genericName = primaryValue(source.record.generic_names);
+                const manufacturerName = primaryValue(
+                  source.record.manufacturer_names
+                );
+                const isSelected = source.key === selectedSourceKey;
+                const isContextual =
+                  source.isSelectedNodeMatch || source.isSelectedNodeOnly;
                 return (
                   <button
-                    key={record.source_id ?? record.id ?? record.set_id}
+                    key={source.key}
                     type="button"
-                    onClick={() => onSelectSource(record.source_id)}
+                    onClick={() => handleSourceStripClick(source.key)}
                     className={cn(
-                      "w-full rounded-md border p-3 text-left text-sm transition",
+                      "min-w-56 max-w-72 shrink-0 rounded-md border p-2 text-left text-xs transition",
                       isSelected
-                        ? "border-cyan-400 bg-cyan-50 shadow-sm"
-                        : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
+                        ? "border-cyan-500 bg-cyan-50 shadow-sm"
+                        : isContextual
+                          ? "border-cyan-200 bg-cyan-50/70 hover:border-cyan-300"
+                          : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
                     )}
                   >
-                    <div className="mb-3 flex flex-wrap items-center gap-2">
-                      <Badge className="bg-cyan-50 text-cyan-800">
-                        Source {sourceNumber ?? "?"}
+                    <div className="mb-1 flex flex-wrap items-center gap-1.5">
+                      <Badge className="bg-white text-cyan-800">
+                        Source {source.sourceNumber}
                       </Badge>
+                      {source.isSelectedNodeOnly ? (
+                        <Badge className="bg-cyan-100 text-cyan-900">
+                          Added
+                        </Badge>
+                      ) : source.isSelectedNodeMatch ? (
+                        <Badge className="bg-cyan-100 text-cyan-900">
+                          Match
+                        </Badge>
+                      ) : null}
                     </div>
-                    <dl className="space-y-2 text-slate-700">
-                      <SourceRow
-                        label="Brand"
-                        value={joinValues(record.brand_names)}
-                      />
-                      <SourceRow
-                        label="Generic"
-                        value={joinValues(record.generic_names)}
-                      />
-                      <SourceRow
-                        label="Manufacturer"
-                        value={joinValues(record.manufacturer_names)}
-                      />
-                    </dl>
+                    <div className="truncate font-medium text-slate-900">
+                      {brandName ?? genericName ?? "Unnamed label"}
+                    </div>
+                    <div className="truncate text-slate-600">
+                      {genericName ?? "Generic unavailable"}
+                    </div>
+                    <div className="truncate text-slate-500">
+                      {manufacturerName ?? "Manufacturer unavailable"}
+                    </div>
                   </button>
                 );
               })}
+            </div>
+          )}
+
+          {sectionEntries.length === 0 ? (
+            <p className="text-sm text-slate-600">No OpenFDA sections returned.</p>
+          ) : (
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-wrap gap-2">
+                {sectionEntries.map(([section, texts]) => (
+                  <Button
+                    key={section}
+                    type="button"
+                    variant={activeSection === section ? "primary" : "secondary"}
+                    onClick={() => onSelectSection(section)}
+                  >
+                    {displaySectionName(section)}
+                    <span className="text-xs opacity-75">{texts.length}</span>
+                  </Button>
+                ))}
+              </div>
+
+              <div ref={evidenceCardsRef} className="space-y-3">
+                {activeTexts.map((entry, index) => {
+                  const sourceKey = entry.displaySourceKey;
+                  const source = sourceKey
+                    ? displayEvidence.sourceByKey.get(sourceKey)
+                    : null;
+                  const brandName = primaryValue(source?.record.brand_names);
+                  const manufacturerName = primaryValue(
+                    source?.record.manufacturer_names
+                  );
+                  const isSelected =
+                    Boolean(sourceKey) && sourceKey === selectedSourceKey;
+                  const isContextual = sourceKey
+                    ? displayEvidence.selectedNodeSourceKeys.has(sourceKey)
+                    : false;
+                  return (
+                    <button
+                      key={`${sourceKey ?? entry.source_id}-${index}`}
+                      type="button"
+                      onClick={() => onSelectSource(sourceKey)}
+                      className={cn(
+                        "w-full rounded-md border p-3 text-left transition",
+                        isSelected
+                          ? "border-cyan-500 bg-cyan-50 shadow-sm"
+                          : isContextual
+                            ? "border-cyan-200 bg-cyan-50/70 hover:border-cyan-300"
+                            : "border-slate-200 bg-slate-50 hover:border-slate-300 hover:bg-white"
+                      )}
+                    >
+                      <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                        {source ? (
+                          <span className="inline-flex items-center rounded-md border border-cyan-200 bg-white px-2 py-0.5 font-medium text-cyan-800">
+                            Source {source.sourceNumber}
+                          </span>
+                        ) : (
+                          <Badge>Source unknown</Badge>
+                        )}
+                        {entry.isSelectedNodeEvidence ? (
+                          <Badge className="bg-cyan-100 text-cyan-900">
+                            Added from selected node
+                          </Badge>
+                        ) : null}
+                        {brandName ? <span>{brandName}</span> : null}
+                        {manufacturerName ? (
+                          <span>· {manufacturerName}</span>
+                        ) : null}
+                      </div>
+                      <p className="whitespace-pre-wrap text-sm leading-6 text-slate-800">
+                        {entry.text}
+                      </p>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           )}
           {labelEvidence?.errors.length ? (
@@ -499,15 +753,71 @@ const SourcesPanel = function SourcesPanel({
           ) : null}
         </CardContent>
       </Card>
-    </aside>
-  );
-};
-
-function SourceRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <dt className="text-xs font-medium uppercase text-slate-500">{label}</dt>
-      <dd className="mt-0.5 break-words">{value}</dd>
     </div>
   );
+}
+
+function LabelEvidenceContextNote({
+  displayEvidence,
+  error,
+  isLoading,
+  node,
+  nodeLabelEvidence,
+}: {
+  displayEvidence: DisplayEvidenceModel;
+  error: string | null;
+  isLoading: boolean;
+  node: RxNormConcept | null;
+  nodeLabelEvidence: OpenFDALabelEvidence | null;
+}) {
+  if (!node) {
+    return null;
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center gap-2 rounded-md border border-cyan-200 bg-cyan-50 px-3 py-2 text-sm text-cyan-900">
+        <Loader2 className="size-4 animate-spin" />
+        Checking OpenFDA labels for the selected graph node.
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+        {error}
+      </div>
+    );
+  }
+
+  if (nodeLabelEvidence && nodeLabelEvidence.labels_found === 0) {
+    return (
+      <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+        No specific OpenFDA labels were found for the selected node. The evidence
+        below remains tied to the original search.
+      </div>
+    );
+  }
+
+  if (displayEvidence.selectedNodeOnlyCount > 0) {
+    return (
+      <div className="rounded-md border border-cyan-200 bg-cyan-50 px-3 py-2 text-sm text-cyan-900">
+        The selected node added {displayEvidence.selectedNodeOnlyCount} source
+        {displayEvidence.selectedNodeOnlyCount === 1 ? "" : "s"}, pinned first
+        below.
+      </div>
+    );
+  }
+
+  if (displayEvidence.selectedNodeMatchCount > 0) {
+    return (
+      <div className="rounded-md border border-cyan-200 bg-cyan-50 px-3 py-2 text-sm text-cyan-900">
+        The selected node matches highlighted sources already returned for the
+        original search.
+      </div>
+    );
+  }
+
+  return null;
 }
