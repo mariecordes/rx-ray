@@ -47,6 +47,19 @@ function primaryValue(values?: string[] | null) {
   return values[0];
 }
 
+const sourceSelectionClasses =
+  "border-[#C7B4EF] bg-[#E8DDF9] shadow-sm hover:border-[#C7B4EF]";
+const nodeSpecificClasses =
+  "border-[#EACB96] bg-[#FAE8CD] hover:border-[#DDBB7E]";
+const searchSourceClasses =
+  "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50";
+const selectedSourceBadgeClasses =
+  "border-[#C7B4EF] bg-[#DDCAF7] text-[#4C2C77]";
+const nodeSpecificBadgeClasses =
+  "border-[#EACB96] bg-[#FAE8CD] text-[#704A12]";
+const searchSpecificBadgeClasses =
+  "border-slate-200 bg-white text-slate-700";
+
 type DisplayLabelSection = LabelSection & {
   displaySourceKey?: string;
   isSelectedNodeEvidence: boolean;
@@ -593,161 +606,206 @@ function LabelEvidencePanel({
   return (
     <div ref={ref}>
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between gap-3">
-          <div>
-            <CardTitle>Label Evidence</CardTitle>
-            {selectedGraphNode ? (
-              <div className="mt-1 text-sm text-slate-500">
-                Context from selected graph node:{" "}
-                <span className="font-medium text-slate-700">
-                  {selectedGraphNode.name}
-                </span>
-              </div>
-            ) : null}
+        <CardHeader className="border-b border-slate-200">
+          <div className="flex flex-row items-start justify-between gap-3">
+            <div>
+              <CardTitle>Label Evidence</CardTitle>
+              <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-500">
+                OpenFDA drug-label evidence retrieved for the searched drug,
+                with graph selections used to highlight or add more specific
+                label records.
+              </p>
+            </div>
+            <FileText className="mt-1 size-4 text-slate-400" />
           </div>
-          <FileText className="size-4 text-slate-400" />
         </CardHeader>
-        <CardContent className="space-y-4">
-          <LabelEvidenceContextNote
-            displayEvidence={displayEvidence}
-            error={nodeEvidenceError}
-            isLoading={isNodeEvidenceLoading}
-            node={selectedGraphNode}
-            nodeLabelEvidence={nodeLabelEvidence}
-          />
-
-          {records.length === 0 ? (
-            <p className="text-sm text-slate-600">No label records returned.</p>
-          ) : (
-            <div className="flex gap-2 overflow-x-auto pb-1">
-              {records.map((source) => {
-                const brandName = primaryValue(source.record.brand_names);
-                const genericName = primaryValue(source.record.generic_names);
-                const manufacturerName = primaryValue(
-                  source.record.manufacturer_names
-                );
-                const isSelected = source.key === selectedSourceKey;
-                const isContextual =
-                  source.isSelectedNodeMatch || source.isSelectedNodeOnly;
-                return (
-                  <button
-                    key={source.key}
-                    type="button"
-                    onClick={() => handleSourceStripClick(source.key)}
-                    className={cn(
-                      "min-w-56 max-w-72 shrink-0 rounded-md border p-2 text-left text-xs transition",
-                      isSelected
-                        ? "border-cyan-500 bg-cyan-50 shadow-sm"
-                        : isContextual
-                          ? "border-cyan-200 bg-cyan-50/70 hover:border-cyan-300"
-                          : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
-                    )}
-                  >
-                    <div className="mb-1 flex flex-wrap items-center gap-1.5">
-                      <Badge className="bg-white text-cyan-800">
-                        Source {source.sourceNumber}
-                      </Badge>
-                      {source.isSelectedNodeOnly ? (
-                        <Badge className="bg-cyan-100 text-cyan-900">
-                          Added
-                        </Badge>
-                      ) : source.isSelectedNodeMatch ? (
-                        <Badge className="bg-cyan-100 text-cyan-900">
-                          Match
-                        </Badge>
-                      ) : null}
-                    </div>
-                    <div className="truncate font-medium text-slate-900">
-                      {brandName ?? genericName ?? "Unnamed label"}
-                    </div>
-                    <div className="truncate text-slate-600">
-                      {genericName ?? "Generic unavailable"}
-                    </div>
-                    <div className="truncate text-slate-500">
-                      {manufacturerName ?? "Manufacturer unavailable"}
-                    </div>
-                  </button>
-                );
-              })}
+        <CardContent className="space-y-5 pt-5">
+          <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+            <div className="mb-2 text-xs font-medium uppercase text-slate-500">
+              Graph selection context
             </div>
-          )}
+            <LabelEvidenceContextNote
+              displayEvidence={displayEvidence}
+              error={nodeEvidenceError}
+              isLoading={isNodeEvidenceLoading}
+              node={selectedGraphNode}
+              nodeLabelEvidence={nodeLabelEvidence}
+            />
+          </div>
 
-          {sectionEntries.length === 0 ? (
-            <p className="text-sm text-slate-600">No OpenFDA sections returned.</p>
-          ) : (
-            <div className="flex flex-col gap-4">
-              <div className="flex flex-wrap gap-2">
-                {sectionEntries.map(([section, texts]) => (
-                  <Button
-                    key={section}
-                    type="button"
-                    variant={activeSection === section ? "primary" : "secondary"}
-                    onClick={() => onSelectSection(section)}
-                  >
-                    {displaySectionName(section)}
-                    <span className="text-xs opacity-75">{texts.length}</span>
-                  </Button>
-                ))}
+          <div className="grid gap-4 xl:grid-cols-[minmax(240px,0.32fr)_minmax(0,1fr)]">
+            <aside className="rounded-md border border-slate-200 bg-slate-50 p-3">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-xs font-medium uppercase text-slate-500">
+                    Sources
+                  </div>
+                  <div className="text-xs text-slate-500">
+                    Brand, generic, manufacturer
+                  </div>
+                </div>
+                <Badge className="bg-white text-slate-700">
+                  {records.length}
+                </Badge>
               </div>
-
-              <div ref={evidenceCardsRef} className="space-y-3">
-                {activeTexts.map((entry, index) => {
-                  const sourceKey = entry.displaySourceKey;
-                  const source = sourceKey
-                    ? displayEvidence.sourceByKey.get(sourceKey)
-                    : null;
-                  const brandName = primaryValue(source?.record.brand_names);
-                  const manufacturerName = primaryValue(
-                    source?.record.manufacturer_names
-                  );
-                  const isSelected =
-                    Boolean(sourceKey) && sourceKey === selectedSourceKey;
-                  const isContextual = sourceKey
-                    ? displayEvidence.selectedNodeSourceKeys.has(sourceKey)
-                    : false;
-                  return (
-                    <button
-                      key={`${sourceKey ?? entry.source_id}-${index}`}
-                      type="button"
-                      onClick={() => onSelectSource(sourceKey)}
-                      className={cn(
-                        "w-full rounded-md border p-3 text-left transition",
-                        isSelected
-                          ? "border-cyan-500 bg-cyan-50 shadow-sm"
-                          : isContextual
-                            ? "border-cyan-200 bg-cyan-50/70 hover:border-cyan-300"
-                            : "border-slate-200 bg-slate-50 hover:border-slate-300 hover:bg-white"
-                      )}
-                    >
-                      <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
-                        {source ? (
-                          <span className="inline-flex items-center rounded-md border border-cyan-200 bg-white px-2 py-0.5 font-medium text-cyan-800">
-                            Source {source.sourceNumber}
-                          </span>
-                        ) : (
-                          <Badge>Source unknown</Badge>
+              {records.length === 0 ? (
+                <p className="text-sm text-slate-600">
+                  No label records returned.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {records.map((source) => {
+                    const brandName = primaryValue(source.record.brand_names);
+                    const genericName = primaryValue(source.record.generic_names);
+                    const manufacturerName = primaryValue(
+                      source.record.manufacturer_names
+                    );
+                    const isSelected = source.key === selectedSourceKey;
+                    const sourceClasses = isSelected
+                      ? sourceSelectionClasses
+                      : source.isSelectedNodeOnly
+                        ? nodeSpecificClasses
+                        : searchSourceClasses;
+                    return (
+                      <button
+                        key={source.key}
+                        type="button"
+                        onClick={() => handleSourceStripClick(source.key)}
+                        className={cn(
+                          "w-full rounded-md border p-2 text-left text-xs transition",
+                          sourceClasses
                         )}
-                        {entry.isSelectedNodeEvidence ? (
-                          <Badge className="bg-cyan-100 text-cyan-900">
-                            Added from selected node
+                      >
+                        <div className="mb-1 flex flex-wrap items-center gap-1.5">
+                          <Badge className="bg-white text-slate-800">
+                            Source {source.sourceNumber}
                           </Badge>
-                        ) : null}
-                        {brandName ? <span>{brandName}</span> : null}
-                        {manufacturerName ? (
-                          <span>· {manufacturerName}</span>
-                        ) : null}
-                      </div>
-                      <p className="whitespace-pre-wrap text-sm leading-6 text-slate-800">
-                        {entry.text}
-                      </p>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
+                          {!source.isSelectedNodeOnly ? (
+                            <Badge className={searchSpecificBadgeClasses}>
+                              Search-specific
+                            </Badge>
+                          ) : null}
+                          {source.isSelectedNodeOnly ||
+                          source.isSelectedNodeMatch ? (
+                            <Badge className={nodeSpecificBadgeClasses}>
+                              Node-specific
+                            </Badge>
+                          ) : null}
+                          {isSelected ? (
+                            <Badge className={selectedSourceBadgeClasses}>
+                              Selected
+                            </Badge>
+                          ) : null}
+                        </div>
+                        <div className="truncate font-medium text-slate-900">
+                          {brandName ?? genericName ?? "Unnamed label"}
+                        </div>
+                        <div className="truncate text-slate-600">
+                          {genericName ?? "Generic unavailable"}
+                        </div>
+                        <div className="truncate text-slate-500">
+                          {manufacturerName ?? "Manufacturer unavailable"}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </aside>
+
+            <section className="min-w-0">
+              {sectionEntries.length === 0 ? (
+                <p className="text-sm text-slate-600">
+                  No OpenFDA sections returned.
+                </p>
+              ) : (
+                <div className="flex flex-col gap-4">
+                  <div className="flex flex-wrap gap-2">
+                    {sectionEntries.map(([section, texts]) => (
+                      <Button
+                        key={section}
+                        type="button"
+                        variant={
+                          activeSection === section ? "primary" : "secondary"
+                        }
+                        onClick={() => onSelectSection(section)}
+                      >
+                        {displaySectionName(section)}
+                        <span className="text-xs opacity-75">
+                          {texts.length}
+                        </span>
+                      </Button>
+                    ))}
+                  </div>
+
+                  <div ref={evidenceCardsRef} className="space-y-3">
+                    {activeTexts.map((entry, index) => {
+                      const sourceKey = entry.displaySourceKey;
+                      const source = sourceKey
+                        ? displayEvidence.sourceByKey.get(sourceKey)
+                        : null;
+                      const brandName = primaryValue(
+                        source?.record.brand_names
+                      );
+                      const manufacturerName = primaryValue(
+                        source?.record.manufacturer_names
+                      );
+                      const isSelected =
+                        Boolean(sourceKey) && sourceKey === selectedSourceKey;
+                      const isNodeSpecific = sourceKey
+                        ? displayEvidence.selectedNodeSourceKeys.has(sourceKey)
+                        : false;
+                      const evidenceClasses = isSelected
+                        ? sourceSelectionClasses
+                        : source?.isSelectedNodeOnly
+                          ? nodeSpecificClasses
+                          : "border-slate-200 bg-slate-50 hover:border-slate-300 hover:bg-white";
+                      return (
+                        <button
+                          key={`${sourceKey ?? entry.source_id}-${index}`}
+                          type="button"
+                          onClick={() => onSelectSource(sourceKey)}
+                          className={cn(
+                            "w-full rounded-md border p-3 text-left transition",
+                            evidenceClasses
+                          )}
+                        >
+                          <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                            {source ? (
+                              <span className="inline-flex items-center rounded-md border border-slate-200 bg-white px-2 py-0.5 font-medium text-slate-800">
+                                Source {source.sourceNumber}
+                              </span>
+                            ) : (
+                              <Badge>Source unknown</Badge>
+                            )}
+                            {!source?.isSelectedNodeOnly ? (
+                              <Badge className={searchSpecificBadgeClasses}>
+                                Search-specific
+                              </Badge>
+                            ) : null}
+                            {isNodeSpecific ? (
+                              <Badge className={nodeSpecificBadgeClasses}>
+                                Node-specific
+                              </Badge>
+                            ) : null}
+                            {brandName ? <span>{brandName}</span> : null}
+                            {manufacturerName ? (
+                              <span>· {manufacturerName}</span>
+                            ) : null}
+                          </div>
+                          <p className="whitespace-pre-wrap text-sm leading-6 text-slate-800">
+                            {entry.text}
+                          </p>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </section>
+          </div>
           {labelEvidence?.errors.length ? (
-            <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+            <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
               {labelEvidence.errors.join(" ")}
             </div>
           ) : null}
@@ -771,14 +829,20 @@ function LabelEvidenceContextNote({
   nodeLabelEvidence: OpenFDALabelEvidence | null;
 }) {
   if (!node) {
-    return null;
+    return (
+      <div className="text-sm leading-6 text-slate-600">
+        Select a node in the RxNorm graph above to check whether OpenFDA has
+        labels for that specific concept.
+      </div>
+    );
   }
 
   if (isLoading) {
     return (
-      <div className="flex items-center gap-2 rounded-md border border-cyan-200 bg-cyan-50 px-3 py-2 text-sm text-cyan-900">
-        <Loader2 className="size-4 animate-spin" />
-        Checking OpenFDA labels for the selected graph node.
+      <div className="flex items-center gap-2 text-sm leading-6 text-slate-700">
+        <Loader2 className="size-4 animate-spin text-slate-500" />
+        Looking up labels for{" "}
+        <span className="font-medium text-slate-900">{node.name}</span>.
       </div>
     );
   }
@@ -793,31 +857,43 @@ function LabelEvidenceContextNote({
 
   if (nodeLabelEvidence && nodeLabelEvidence.labels_found === 0) {
     return (
-      <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
-        No specific OpenFDA labels were found for the selected node. The evidence
-        below remains tied to the original search.
+      <div className="text-sm leading-6 text-slate-700">
+        Selected graph node:{" "}
+        <span className="font-medium text-slate-950">{node.name}</span>. No
+        specific OpenFDA labels were found, so the evidence below remains tied
+        to the original search.
       </div>
     );
   }
 
   if (displayEvidence.selectedNodeOnlyCount > 0) {
     return (
-      <div className="rounded-md border border-cyan-200 bg-cyan-50 px-3 py-2 text-sm text-cyan-900">
-        The selected node added {displayEvidence.selectedNodeOnlyCount} source
-        {displayEvidence.selectedNodeOnlyCount === 1 ? "" : "s"}, pinned first
-        below.
+      <div className="text-sm leading-6 text-slate-700">
+        Selected graph node:{" "}
+        <span className="font-medium text-slate-950">{node.name}</span>. Found{" "}
+        {displayEvidence.selectedNodeOnlyCount} node-specific source
+        {displayEvidence.selectedNodeOnlyCount === 1 ? "" : "s"} and pinned{" "}
+        {displayEvidence.selectedNodeOnlyCount === 1 ? "it" : "them"} first.
       </div>
     );
   }
 
   if (displayEvidence.selectedNodeMatchCount > 0) {
     return (
-      <div className="rounded-md border border-cyan-200 bg-cyan-50 px-3 py-2 text-sm text-cyan-900">
-        The selected node matches highlighted sources already returned for the
-        original search.
+      <div className="text-sm leading-6 text-slate-700">
+        Selected graph node:{" "}
+        <span className="font-medium text-slate-950">{node.name}</span>. Its
+        labels match source
+        {displayEvidence.selectedNodeMatchCount === 1 ? "" : "s"} already
+        returned for the original search.
       </div>
     );
   }
 
-  return null;
+  return (
+    <div className="text-sm leading-6 text-slate-700">
+      Selected graph node:{" "}
+      <span className="font-medium text-slate-950">{node.name}</span>.
+    </div>
+  );
 }
