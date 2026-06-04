@@ -55,12 +55,20 @@ const nodeSpecificClasses =
 const searchSourceClasses =
   "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50";
 const nodeSpecificBadgeClasses =
-  "border-[#EACB96] bg-[#FAE8CD] text-[#704A12]";
+  "border-slate-300 bg-slate-100 text-slate-700";
 const searchSpecificBadgeClasses =
-  "border-slate-200 bg-white text-slate-700";
+  "border-slate-300 bg-slate-100 text-slate-700";
+const sourceNumberBadgeClasses =
+  "border-slate-200 bg-white text-slate-800";
 
 function displayGraphNodeName(name: string) {
   return name.toUpperCase();
+}
+
+function sentenceCase(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/\b\w/g, (character) => character.toUpperCase());
 }
 
 type DisplayLabelSection = LabelSection & {
@@ -710,7 +718,8 @@ function LabelEvidencePanel({
                     <Info className="size-3.5 text-slate-400" />
                     <span className="pointer-events-none absolute left-0 top-full z-20 mt-2 hidden w-64 rounded-md border border-slate-200 bg-white px-3 py-2 text-xs normal-case leading-5 text-slate-700 shadow-lg group-hover:block">
                       Each source card shows the drug brand name, generic drug
-                      name, and manufacturer name in that order.
+                      name, manufacturer name, route of administration, 
+                      and product type in that order.
                     </span>
                   </span>
                 </div>
@@ -730,6 +739,8 @@ function LabelEvidencePanel({
                     const manufacturerName = primaryValue(
                       source.record.manufacturer_names
                     );
+                    const route = primaryValue(source.record.routes);
+                    const productType = primaryValue(source.record.product_types);
                     const isSelected = source.key === selectedSourceKey;
                     const sourceClasses = isSelected
                       ? sourceSelectionClasses
@@ -745,10 +756,10 @@ function LabelEvidencePanel({
                           "w-full rounded-md border p-2 text-left transition",
                           sourceClasses
                         )}
-                        style={{ fontSize: "14px", lineHeight: "18px" }}
+                        style={{ fontSize: "14px", lineHeight: "20px" }}
                       >
                         <div className="mb-1 flex flex-wrap items-center gap-1.5">
-                          <Badge className="bg-white text-slate-800">
+                          <Badge className={sourceNumberBadgeClasses}>
                             Source {source.sourceNumber}
                           </Badge>
                           {!source.isSelectedNodeOnly ? (
@@ -763,15 +774,26 @@ function LabelEvidencePanel({
                             </Badge>
                           ) : null}
                         </div>
-                        <div className="truncate font-medium text-slate-900">
+                        <div className="mt-1.5 truncate font-medium text-slate-900">
                           {brandName ?? "Brand unavailable"}
                         </div>
-                        <div className="truncate text-slate-600">
+                        <div className="mt-0.5 truncate text-slate-600">
                           {genericName ?? "Generic unavailable"}
                         </div>
-                        <div className="truncate text-slate-500">
+                        <div className="mt-0.5 truncate text-slate-500">
                           {manufacturerName ?? "Manufacturer unavailable"}
                         </div>
+                        {route || productType ? (
+                          <div className="mt-1.5 text-slate-500">
+                            {route ? (
+                              <span>{sentenceCase(route)}</span>
+                            ) : null}
+                            {route && productType ? <span> · </span> : null}
+                            {productType ? (
+                              <span>{sentenceCase(productType)}</span>
+                            ) : null}
+                          </div>
+                        ) : null}
                       </button>
                     );
                   })}
@@ -816,9 +838,6 @@ function LabelEvidencePanel({
                       );
                       const isSelected =
                         Boolean(sourceKey) && sourceKey === selectedSourceKey;
-                      const isNodeSpecific = sourceKey
-                        ? displayEvidence.selectedNodeSourceKeys.has(sourceKey)
-                        : false;
                       const evidenceClasses = isSelected
                         ? sourceSelectionClasses
                         : source?.isSelectedNodeOnly
@@ -845,22 +864,17 @@ function LabelEvidencePanel({
                         >
                           <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
                             {source ? (
-                              <span className="inline-flex items-center rounded-md border border-slate-200 bg-white px-2 py-0.5 font-medium text-slate-800">
+                              <span
+                                className={cn(
+                                  "inline-flex items-center rounded-md border px-2 py-0.5 font-medium",
+                                  sourceNumberBadgeClasses
+                                )}
+                              >
                                 Source {source.sourceNumber}
                               </span>
                             ) : (
                               <Badge>Source unknown</Badge>
                             )}
-                            {!source?.isSelectedNodeOnly ? (
-                              <Badge className={searchSpecificBadgeClasses}>
-                                Search-specific
-                              </Badge>
-                            ) : null}
-                            {isNodeSpecific ? (
-                              <Badge className={nodeSpecificBadgeClasses}>
-                                Node-specific
-                              </Badge>
-                            ) : null}
                             {brandName ? <span>{brandName}</span> : null}
                             {manufacturerName ? (
                               <span>· {manufacturerName}</span>
