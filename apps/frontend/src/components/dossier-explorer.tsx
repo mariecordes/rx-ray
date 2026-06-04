@@ -288,15 +288,6 @@ export function DossierExplorer() {
     }
     const nextSourceKey = selectedSourceKey === sourceKey ? null : sourceKey;
     setSelectedSourceKey(nextSourceKey);
-    if (!nextSourceKey) {
-      return;
-    }
-    const sectionWithSource = sectionEntries.find(([, entries]) =>
-      entries.some((entry) => entry.displaySourceKey === sourceKey)
-    );
-    if (sectionWithSource) {
-      setSelectedSection(sectionWithSource[0]);
-    }
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
