@@ -13,7 +13,9 @@ from src.dossier.builder import DossierBuilder
 from src.dossier.models import OpenFDALabelEvidence
 from src.dossier.openfda_store import OpenFDALabelStore
 from src.dossier.rxnorm_store import RxNormParquetStore
-from src.query_understanding.extractor import HybridQueryExtractor
+from src.query_understanding.extractor import ExtractionResult, HybridQueryExtractor
+from src.query_understanding.models import ExtractedDrugMention, QueryState
+from src.query_understanding.service import QueryUnderstandingService
 
 
 pytestmark = pytest.mark.skipif(
@@ -207,7 +209,65 @@ async def test_query_understanding_hypothetical_drug_is_not_current_medication(
     assert response.state.primary_drug == "aspirin"
     assert response.state.current_medications == []
     assert response.state.allergies == ["ibuprofen"]
+    assert not any("ibuprofen against" in warning for warning in response.warnings)
 
+
+@pytest.mark.asyncio
+async def test_query_understanding_repairs_unresolved_mentions_with_llm_feedback(
+) -> None:
+    class FakeRepairingExtractor:
+        def __init__(self) -> None:
+            self.feedback: dict | None = None
+
+        def extract(self, query: str) -> ExtractionResult:
+            return ExtractionResult(
+                state=QueryState(primary_drug="aspirin"),
+                mentions=[
+                    ExtractedDrugMention(text="aspirin", role="primary_drug"),
+                    ExtractedDrugMention(
+                        text="ibuprofen against",
+                        role="mentioned_drug",
+                    ),
+                ],
+            )
+
+        def revise_with_resolution_feedback(
+            self,
+            query: str,
+            extraction: ExtractionResult,
+            resolution_feedback: dict,
+        ) -> ExtractionResult:
+            self.feedback = resolution_feedback
+            return ExtractionResult(
+                state=QueryState(
+                    primary_drug="aspirin",
+                    allergies=["ibuprofen"],
+                ),
+                mentions=[
+                    ExtractedDrugMention(text="aspirin", role="primary_drug"),
+                    ExtractedDrugMention(text="ibuprofen", role="allergy"),
+                ],
+                mode="hybrid",
+            )
+
+    fake_extractor = FakeRepairingExtractor()
+    service = QueryUnderstandingService(
+        builder=offline_builder(),
+        extractor=fake_extractor,  # type: ignore[arg-type]
+    )
+
+    response = service.understand(
+        "Can I take aspirin if I have an allergy against ibuprofen?"
+    )
+
+    assert response.extraction_mode == "hybrid"
+    assert response.state.primary_drug == "aspirin"
+    assert response.state.allergies == ["ibuprofen"]
+    assert not any("ibuprofen against" in warning for warning in response.warnings)
+    assert fake_extractor.feedback is not None
+    assert fake_extractor.feedback["unresolved_drug_like_mentions"] == [
+        "ibuprofen against"
+    ]
 
 @pytest.mark.asyncio
 async def test_query_understanding_unresolved_query_returns_warning(
@@ -244,6 +304,6 @@ def test_query_extraction_prompt_template_loads() -> None:
 
     assert prompt_config["response_format"] == {"type": "json_object"}
     assert messages[0]["role"] == "system"
-    assert "patient_context, not drugs" in messages[0]["content"]
+    assert "create the corrected extraction from scratch" in messages[0]["content"]
     assert "Can a child take aspirin?" in messages[1]["content"]
     assert '{"state": {}}' in messages[1]["content"]

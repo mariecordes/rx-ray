@@ -10,7 +10,7 @@ from src.dossier.rxnorm_store import (
     compact_drug_search_text,
     normalize_drug_search_text,
 )
-from src.query_understanding.extractor import HybridQueryExtractor
+from src.query_understanding.extractor import ExtractionResult, HybridQueryExtractor
 from src.query_understanding.models import (
     ExtractedDrugMention,
     QueryUnderstandingResponse,
@@ -40,8 +40,27 @@ class QueryUnderstandingService:
         openfda_limit: int = 5,
     ) -> QueryUnderstandingResponse:
         extraction = self.extractor.extract(query)
-        mentions = self._complete_mentions(query, extraction.mentions)
-        resolved_drugs = [self._resolve_mention(mention) for mention in mentions]
+        resolved_drugs = self._resolve_extraction(query, extraction)
+        unresolved_mentions = self._unresolved_mention_texts(resolved_drugs)
+
+        if unresolved_mentions:
+            repaired = self.extractor.revise_with_resolution_feedback(
+                query,
+                extraction,
+                {
+                    "unresolved_drug_like_mentions": unresolved_mentions,
+                    "instruction": (
+                        "Remove or correct unresolved drug-like spans. If the "
+                        "rule-based extraction is unreliable, create the state "
+                        "and drug_mentions from scratch from the original query."
+                    ),
+                },
+            )
+            if repaired is not None:
+                extraction = repaired
+                resolved_drugs = self._resolve_extraction(query, extraction)
+                unresolved_mentions = self._unresolved_mention_texts(resolved_drugs)
+
         warnings = [*extraction.warnings]
         errors = [*extraction.errors]
         extraction.state.all_drugs_mentioned = self._resolved_drug_texts(
@@ -89,11 +108,6 @@ class QueryUnderstandingService:
                 )
             )
 
-        unresolved_mentions = [
-            mention.text
-            for mention in resolved_drugs
-            if mention.selected_concept is None
-        ]
         if unresolved_mentions:
             warnings.append(
                 "Some drug-like mentions could not be resolved: "
@@ -111,6 +125,24 @@ class QueryUnderstandingService:
             warnings=warnings,
             errors=errors,
         )
+
+    def _resolve_extraction(
+        self,
+        query: str,
+        extraction: ExtractionResult,
+    ) -> list[ResolvedDrugMention]:
+        mentions = self._complete_mentions(query, extraction.mentions)
+        return [self._resolve_mention(mention) for mention in mentions]
+
+    @staticmethod
+    def _unresolved_mention_texts(
+        resolved_drugs: list[ResolvedDrugMention],
+    ) -> list[str]:
+        return [
+            mention.text
+            for mention in resolved_drugs
+            if mention.selected_concept is None
+        ]
 
     def _complete_mentions(
         self,
@@ -158,9 +190,12 @@ class QueryUnderstandingService:
             "try",
             "for",
             "with",
+            "against",
             "and",
             "or",
             "if",
+            "have",
+            "has",
             "should",
             "could",
             "want",
@@ -183,7 +218,13 @@ class QueryUnderstandingService:
             "pain",
             "fever",
             "headache",
+            "allergy",
+            "allergies",
+            "allergic",
         }
+        phrase_tokens = normalized.split()
+        if any(token in stop_phrases for token in phrase_tokens):
+            return False
         return normalized not in stop_phrases and len(normalized) >= 3
 
     @staticmethod

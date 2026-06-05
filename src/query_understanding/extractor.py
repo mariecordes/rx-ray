@@ -173,6 +173,7 @@ class HybridQueryExtractor:
         self,
         query: str,
         deterministic: ExtractionResult,
+        resolution_feedback: dict[str, Any] | None = None,
     ) -> ExtractionResult | None:
         try:
             from openai import OpenAI  # type: ignore[import-not-found]
@@ -191,6 +192,7 @@ class HybridQueryExtractor:
                 "drug_mentions": [
                     mention.model_dump() for mention in deterministic.mentions
                 ],
+                "resolution_feedback": resolution_feedback or {},
             },
             indent=2,
         )
@@ -225,6 +227,29 @@ class HybridQueryExtractor:
             mentions=self._parse_llm_mentions(data.get("drug_mentions")),
             warnings=self._string_list(data.get("warnings")),
             mode="llm",
+        )
+
+    def revise_with_resolution_feedback(
+        self,
+        query: str,
+        extraction: ExtractionResult,
+        resolution_feedback: dict[str, Any],
+    ) -> ExtractionResult | None:
+        if not self._llm_configured():
+            return None
+        revised = self._revise_with_llm(
+            query,
+            extraction,
+            resolution_feedback=resolution_feedback,
+        )
+        if revised is None:
+            return None
+        return ExtractionResult(
+            state=revised.state,
+            mentions=revised.mentions,
+            mode="hybrid",
+            warnings=[*extraction.warnings, *revised.warnings],
+            errors=[*extraction.errors, *revised.errors],
         )
 
     @staticmethod
