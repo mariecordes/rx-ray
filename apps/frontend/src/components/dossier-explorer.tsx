@@ -1,9 +1,11 @@
 "use client";
 
-import { FormEvent, useMemo, useRef, useState } from "react";
+import { FormEvent, type ReactNode, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   Brain,
+  ChevronDown,
+  ChevronRight,
   Database,
   FileText,
   FlaskConical,
@@ -748,56 +750,81 @@ function QueryUnderstandingResult({
 }: {
   result: QueryUnderstandingResponse;
 }) {
-  const stateItems = [
-    {
-      label: "Primary drug",
-      values: result.state.primary_drug ? [result.state.primary_drug] : [],
-    },
-    {
-      label: "All drugs mentioned",
-      values: result.state.all_drugs_mentioned,
-    },
-    {
-      label: "Current medications",
-      values: result.state.current_medications,
-    },
-    {
-      label: "Allergies",
-      values: result.state.allergies,
-    },
-    {
-      label: "Conditions",
-      values: result.state.conditions,
-    },
-    {
-      label: "Patient context",
-      values: result.state.patient_context,
-    },
-    {
-      label: "Intent",
-      values: result.state.intent ? [displayStateLabel(result.state.intent)] : [],
-    },
-  ];
+  const [isExpanded, setIsExpanded] = useState(false);
 
   return (
-    <div className="space-y-4 rounded-md border border-slate-200 bg-slate-50 p-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="text-xs font-medium uppercase text-slate-500">
-          What the system understood
+    <div className="rounded-md border border-slate-200 bg-slate-50">
+      <button
+        type="button"
+        onClick={() => setIsExpanded((current) => !current)}
+        className="flex w-full items-center justify-between gap-3 px-3 py-3 text-left"
+      >
+        <div className="flex min-w-0 items-center gap-2">
+          {isExpanded ? (
+            <ChevronDown className="size-4 shrink-0 text-slate-500" />
+          ) : (
+            <ChevronRight className="size-4 shrink-0 text-slate-500" />
+          )}
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <div className="text-xs font-medium uppercase text-slate-500">
+                Find out what the system understood
+              </div>
+              <InfoTooltip text="The app first extracts medication concepts and context with deterministic rules, then asks an LLM to revise the extracted parameters before using it to retrieve evidence." />
+            </div>
+            {/* {!isExpanded ? (
+              <p className="mt-1 text-sm text-slate-600">
+                Extracted medication, patient context, and intent parameters.
+              </p>
+            ) : null} */}
+          </div>
         </div>
-        <Badge className="border-slate-200 bg-white text-slate-700">
-          {displayStateLabel(result.extraction_mode)}
-        </Badge>
-      </div>
+      </button>
 
-      <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
-        {stateItems.map((item) => (
-          <StateCard key={item.label} label={item.label} values={item.values} />
-        ))}
-      </div>
+      {isExpanded ? (
+        <div className="space-y-3 border-t border-slate-200 p-3">
+          {/* <div className="text-xs font-medium uppercase text-slate-500">
+            Parameters
+          </div> */}
+
+          <ParameterGroup title="Medication concepts">
+            <ParameterRow
+              // emphasize
+              label="Primary drug"
+              values={result.state.primary_drug ? [result.state.primary_drug] : []}
+            />
+            <ParameterRow
+              label="Current medications"
+              values={result.state.current_medications}
+            />
+            <ParameterRow
+              label="All drugs mentioned"
+              values={result.state.all_drugs_mentioned}
+            />
+          </ParameterGroup>
+
+          <ParameterGroup title="Patient context">
+            <ParameterRow label="Allergies" values={result.state.allergies} />
+            <ParameterRow label="Conditions" values={result.state.conditions} />
+            <ParameterRow
+              label="Patient details"
+              values={result.state.patient_context}
+            />
+          </ParameterGroup>
+
+          <ParameterGroup title="Intent">
+            <ParameterRow
+              label="User intent"
+              values={
+                result.state.intent ? [displayStateLabel(result.state.intent)] : []
+              }
+            />
+          </ParameterGroup>
+        </div>
+      ) : null}
 
       {result.warnings.length || result.errors.length ? (
-        <div className="space-y-2">
+        <div className="space-y-2 border-t border-slate-200 p-3">
           {result.warnings.map((warning) => (
             <div
               key={warning}
@@ -820,20 +847,67 @@ function QueryUnderstandingResult({
   );
 }
 
-function StateCard({ label, values }: { label: string; values: string[] }) {
+function ParameterGroup({
+  children,
+  defaultOpen = false,
+  title,
+}: {
+  children: ReactNode;
+  defaultOpen?: boolean;
+  title: string;
+}) {
+  const [isOpen, setIsOpen] = useState(defaultOpen);
+
   return (
-    <div className="rounded-md border border-slate-200 bg-white p-3">
-      <div className="text-xs font-medium uppercase text-slate-500">{label}</div>
+    <div className="rounded-md border border-slate-200 bg-white">
+      <button
+        type="button"
+        onClick={() => setIsOpen((current) => !current)}
+        className="flex w-full items-center gap-2 px-3 py-2 text-left"
+      >
+        {isOpen ? (
+          <ChevronDown className="size-4 shrink-0 text-slate-500" />
+        ) : (
+          <ChevronRight className="size-4 shrink-0 text-slate-500" />
+        )}
+        <span className="text-xs font-medium uppercase text-slate-500">
+          {title}
+        </span>
+      </button>
+      {isOpen ? (
+        <div className="space-y-3 border-t border-slate-100 px-3 py-3">
+          {children}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function ParameterRow({
+  emphasize = false,
+  label,
+  values,
+}: {
+  emphasize?: boolean;
+  label: string;
+  values: string[];
+}) {
+  return (
+    <div className="grid gap-2 sm:grid-cols-[160px_minmax(0,1fr)]">
+      <div className="text-sm font-medium text-slate-600">{label}</div>
       {values.length ? (
-        <div className="mt-2 flex flex-wrap gap-1.5">
+        <div className="flex flex-wrap gap-1.5">
           {values.map((value) => (
-            <Badge key={value} className="border-slate-200 bg-slate-50 text-slate-800">
-              {label === "Primary drug" ? displayGraphNodeName(value) : value}
+            <Badge
+              key={value}
+              className="border-slate-200 bg-slate-50 text-slate-800"
+            >
+              {emphasize ? displayGraphNodeName(value) : value}
             </Badge>
           ))}
         </div>
       ) : (
-        <div className="mt-2 text-sm text-slate-500">Not detected</div>
+        <div className="text-sm text-slate-400 italic">Not detected</div>
       )}
     </div>
   );
