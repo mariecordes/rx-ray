@@ -10,6 +10,8 @@ from src.dossier.builder import DossierBuilder
 from src.dossier.models import DrugDossier, OpenFDALabelEvidence
 from src.dossier.openfda_store import OpenFDALabelStore
 from src.dossier.rxnorm_store import RxNormParquetStore
+from src.query_understanding.models import QueryUnderstandingResponse
+from src.query_understanding.service import QueryUnderstandingService
 
 
 class HealthResponse(BaseModel):
@@ -29,6 +31,11 @@ class LabelEvidenceRequest(BaseModel):
     rxcui: str = Field(..., min_length=1)
     name: str | None = None
     limit: int = Field(default=3, ge=1, le=25)
+
+
+class QueryUnderstandingRequest(BaseModel):
+    query: str = Field(..., min_length=1)
+    openfda_limit: int = Field(default=5, ge=1, le=25)
 
 
 @lru_cache(maxsize=1)
@@ -69,6 +76,17 @@ async def build_label_evidence(
     )
 
 
+async def understand_query(
+    request: QueryUnderstandingRequest,
+    builder: DossierBuilder = Depends(get_dossier_builder),
+) -> QueryUnderstandingResponse:
+    service = QueryUnderstandingService(builder=builder)
+    return service.understand(
+        request.query.strip(),
+        openfda_limit=request.openfda_limit,
+    )
+
+
 def create_app() -> FastAPI:
     api = FastAPI(
         title="rx-ray",
@@ -100,6 +118,12 @@ def create_app() -> FastAPI:
         build_label_evidence,
         methods=["POST"],
         response_model=OpenFDALabelEvidence,
+    )
+    api.add_api_route(
+        "/query-understanding",
+        understand_query,
+        methods=["POST"],
+        response_model=QueryUnderstandingResponse,
     )
     return api
 
