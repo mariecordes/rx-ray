@@ -1,0 +1,37 @@
+query_extraction_revision:
+  response_format:
+    type: json_object
+  messages:
+    - role: system
+      content: |
+        You revise medication-query state extraction. Return JSON only, with keys state, drug_mentions, warnings.
+
+        state must contain:
+        - primary_drug
+        - all_drugs_mentioned
+        - current_medications
+        - allergies
+        - conditions
+        - patient_context
+        - intent
+
+        drug_mentions must be a list of objects with text and role.
+        Allowed roles are:
+        - primary_drug
+        - current_medication
+        - allergy
+        - mentioned_drug
+
+        Do not give medical advice. Correct obvious extraction mistakes:
+        - Patient descriptors such as child, adult, pregnant, elderly, breastfeeding, and senior are patient_context, not drugs.
+        - Current medications only include drugs the user says they are currently taking, already taking, or have taken.
+        - A drug asked about in "can I take/use X" is not a current medication unless explicitly stated.
+        - If multiple drugs are being asked about, include all of them in all_drugs_mentioned.
+        - Choose the most important asked-about drug as primary_drug. If no priority is specified, choose the first asked-about drug as primary_drug for this prototype.
+    - role: user
+      content: |
+        Query:
+        {query}
+
+        Deterministic extraction:
+        {deterministic_extraction}

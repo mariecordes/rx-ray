@@ -7,6 +7,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import Any
 
+from src.utils import load_prompts
 from src.query_understanding.models import ExtractedDrugMention, QueryState
 
 
@@ -65,6 +66,12 @@ MENTION_PATTERNS: tuple[tuple[str, str], ...] = (
     ),
     (
         "primary_drug",
+        rf"\b(?:can|should|could)\s+(?:a\s+)?(?:child|kid|infant|baby|"
+        rf"senior|older\s+adult|pregnant\s+person)\s+(?:take|use|try)\s+"
+        rf"{DRUG_FRAGMENT_PATTERN}",
+    ),
+    (
+        "primary_drug",
         rf"\b(?:is|are)\s+{DRUG_FRAGMENT_PATTERN}\s+(?:safe|okay|ok)\b",
     ),
 )
@@ -74,6 +81,10 @@ FRAGMENT_STOP_PATTERN = re.compile(
     r"can|should|could|is|are|i|i'm|im|i’ve|ive|i have|have)\b",
     re.IGNORECASE,
 )
+
+QUERY_EXTRACTION_API_KEY_ENV = "QUERY_EXTRACTION_OPENAI_API_KEY"
+QUERY_EXTRACTION_MODEL_ENV = "QUERY_EXTRACTION_OPENAI_MODEL"
+QUERY_EXTRACTION_PROMPT_KEY = "query_extraction_revision"
 
 
 @dataclass
@@ -93,21 +104,18 @@ class HybridQueryExtractor:
         if not self._llm_configured():
             return deterministic
 
-        llm_result = self._extract_with_llm(query)
+        llm_result = self._revise_with_llm(query, deterministic)
         if llm_result is None:
             deterministic.warnings.append(
-                "OPENAI_API_KEY/OPENAI_MODEL are configured, but LLM extraction "
-                "was unavailable; deterministic extraction was used."
+                f"{QUERY_EXTRACTION_API_KEY_ENV}/{QUERY_EXTRACTION_MODEL_ENV} "
+                "are configured, but LLM extraction was unavailable; "
+                "deterministic extraction was used."
             )
             return deterministic
 
-        merged_state = self._merge_states(deterministic.state, llm_result.state)
-        merged_mentions = self._dedupe_mentions(
-            [*deterministic.mentions, *llm_result.mentions]
-        )
         return ExtractionResult(
-            state=merged_state,
-            mentions=merged_mentions,
+            state=llm_result.state,
+            mentions=llm_result.mentions,
             mode="hybrid",
             warnings=[*deterministic.warnings, *llm_result.warnings],
             errors=llm_result.errors,
@@ -127,11 +135,17 @@ class HybridQueryExtractor:
 
         for role, pattern in MENTION_PATTERNS:
             for match in re.finditer(pattern, query, flags=re.IGNORECASE):
+                if role == "current_medication" and self._is_hypothetical_use(
+                    query,
+                    match.start(),
+                ):
+                    continue
                 fragment = self._clean_drug_fragment(match.group(1))
                 if fragment:
                     mentions.append(ExtractedDrugMention(text=fragment, role=role))
 
         mentions = self._dedupe_mentions(mentions)
+        state.all_drugs_mentioned = self._mention_texts(mentions)
         state.current_medications = [
             mention.text for mention in mentions if mention.role == "current_medication"
         ]
@@ -155,34 +169,46 @@ class HybridQueryExtractor:
 
         return ExtractionResult(state=state, mentions=mentions)
 
-    def _extract_with_llm(self, query: str) -> ExtractionResult | None:
+    def _revise_with_llm(
+        self,
+        query: str,
+        deterministic: ExtractionResult,
+    ) -> ExtractionResult | None:
         try:
             from openai import OpenAI  # type: ignore[import-not-found]
         except ImportError:
             return None
 
-        model = os.getenv("OPENAI_MODEL")
-        if not model:
+        api_key = os.getenv(QUERY_EXTRACTION_API_KEY_ENV)
+        model = os.getenv(QUERY_EXTRACTION_MODEL_ENV)
+        if not api_key or not model:
             return None
 
-        client = OpenAI()
+        prompt_config = self._load_revision_prompt()
+        deterministic_payload = json.dumps(
+            {
+                "state": deterministic.state.model_dump(),
+                "drug_mentions": [
+                    mention.model_dump() for mention in deterministic.mentions
+                ],
+            },
+            indent=2,
+        )
+        messages = self._format_messages(
+            prompt_config.get("messages", []),
+            query=query,
+            deterministic_extraction=deterministic_payload,
+        )
+
+        client = OpenAI(api_key=api_key)
         try:
             response = client.chat.completions.create(
                 model=model,
-                response_format={"type": "json_object"},
-                messages=[
-                    {
-                        "role": "system",
-                        "content": (
-                            "Extract medication-query state as JSON only. "
-                            "Use keys primary_drug, current_medications, allergies, "
-                            "conditions, patient_context, intent, and drug_mentions. "
-                            "drug_mentions must be a list of objects with text "
-                            "and role."
-                        ),
-                    },
-                    {"role": "user", "content": query},
-                ],
+                response_format=prompt_config.get(
+                    "response_format",
+                    {"type": "json_object"},
+                ),
+                messages=messages,
                 temperature=0,
             )
             content = response.choices[0].message.content or "{}"
@@ -195,23 +221,59 @@ class HybridQueryExtractor:
             )
 
         return ExtractionResult(
-            state=QueryState(
-                primary_drug=self._optional_string(data.get("primary_drug")),
-                current_medications=self._string_list(
-                    data.get("current_medications")
-                ),
-                allergies=self._string_list(data.get("allergies")),
-                conditions=self._string_list(data.get("conditions")),
-                patient_context=self._string_list(data.get("patient_context")),
-                intent=self._optional_string(data.get("intent")),
-            ),
+            state=self._parse_llm_state(data.get("state")),
             mentions=self._parse_llm_mentions(data.get("drug_mentions")),
+            warnings=self._string_list(data.get("warnings")),
             mode="llm",
         )
 
     @staticmethod
     def _llm_configured() -> bool:
-        return bool(os.getenv("OPENAI_API_KEY") and os.getenv("OPENAI_MODEL"))
+        return bool(
+            os.getenv(QUERY_EXTRACTION_API_KEY_ENV)
+            and os.getenv(QUERY_EXTRACTION_MODEL_ENV)
+        )
+
+    @staticmethod
+    def _load_revision_prompt() -> dict[str, Any]:
+        prompt_library = load_prompts()
+        prompt_config = prompt_library.get(QUERY_EXTRACTION_PROMPT_KEY)
+        if not isinstance(prompt_config, dict):
+            raise ValueError(
+                f"Missing prompt configuration: {QUERY_EXTRACTION_PROMPT_KEY}"
+            )
+        return prompt_config
+
+    @staticmethod
+    def _format_messages(
+        messages: list[dict[str, str]],
+        **values: str,
+    ) -> list[dict[str, str]]:
+        formatted: list[dict[str, str]] = []
+        for message in messages:
+            role = message.get("role")
+            content = message.get("content")
+            if not role or content is None:
+                continue
+            formatted.append(
+                {
+                    "role": role,
+                    "content": HybridQueryExtractor._replace_prompt_placeholders(
+                        content,
+                        values,
+                    ),
+                }
+            )
+        return formatted
+
+    @staticmethod
+    def _replace_prompt_placeholders(
+        content: str,
+        values: dict[str, str],
+    ) -> str:
+        for key, value in values.items():
+            content = content.replace("{" + key + "}", value)
+        return content
 
     @staticmethod
     def _extract_terms(
@@ -246,6 +308,11 @@ class HybridQueryExtractor:
         return fragment
 
     @staticmethod
+    def _is_hypothetical_use(query: str, match_start: int) -> bool:
+        prefix = query[max(0, match_start - 16) : match_start].casefold()
+        return bool(re.search(r"\b(?:can|should|could)\s+$", prefix))
+
+    @staticmethod
     def _dedupe_mentions(
         mentions: Iterable[ExtractedDrugMention],
     ) -> list[ExtractedDrugMention]:
@@ -259,21 +326,17 @@ class HybridQueryExtractor:
             deduped.append(mention)
         return deduped
 
-    def _merge_states(self, deterministic: QueryState, llm: QueryState) -> QueryState:
-        return QueryState(
-            primary_drug=llm.primary_drug or deterministic.primary_drug,
-            current_medications=self._merge_lists(
-                deterministic.current_medications,
-                llm.current_medications,
-            ),
-            allergies=self._merge_lists(deterministic.allergies, llm.allergies),
-            conditions=self._merge_lists(deterministic.conditions, llm.conditions),
-            patient_context=self._merge_lists(
-                deterministic.patient_context,
-                llm.patient_context,
-            ),
-            intent=llm.intent or deterministic.intent,
-        )
+    @staticmethod
+    def _mention_texts(mentions: list[ExtractedDrugMention]) -> list[str]:
+        values: list[str] = []
+        seen: set[str] = set()
+        for mention in mentions:
+            key = mention.text.casefold()
+            if key in seen:
+                continue
+            seen.add(key)
+            values.append(mention.text)
+        return values
 
     @staticmethod
     def _merge_lists(first: list[str], second: list[str]) -> list[str]:
@@ -292,6 +355,20 @@ class HybridQueryExtractor:
         if isinstance(value, str) and value.strip():
             return value.strip()
         return None
+
+    def _parse_llm_state(self, value: Any) -> QueryState:
+        if not isinstance(value, dict):
+            return QueryState()
+
+        return QueryState(
+            primary_drug=self._optional_string(value.get("primary_drug")),
+            all_drugs_mentioned=self._string_list(value.get("all_drugs_mentioned")),
+            current_medications=self._string_list(value.get("current_medications")),
+            allergies=self._string_list(value.get("allergies")),
+            conditions=self._string_list(value.get("conditions")),
+            patient_context=self._string_list(value.get("patient_context")),
+            intent=self._optional_string(value.get("intent")),
+        )
 
     @classmethod
     def _string_list(cls, value: Any) -> list[str]:

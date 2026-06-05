@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 
+from dotenv import load_dotenv
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -12,6 +13,8 @@ from src.dossier.openfda_store import OpenFDALabelStore
 from src.dossier.rxnorm_store import RxNormParquetStore
 from src.query_understanding.models import QueryUnderstandingResponse
 from src.query_understanding.service import QueryUnderstandingService
+
+load_dotenv()
 
 
 class HealthResponse(BaseModel):

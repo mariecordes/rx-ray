@@ -117,17 +117,6 @@ function displayStateLabel(value: string) {
   return value.replaceAll("_", " ");
 }
 
-const roleLabels: Record<string, string> = {
-  primary_drug: "Primary drug",
-  current_medication: "Current medication",
-  allergy: "Allergy",
-  mentioned_drug: "Mentioned drug",
-};
-
-function displayRole(role: string) {
-  return roleLabels[role] ?? displayStateLabel(role);
-}
-
 function InfoTooltip({ text }: { text: string }) {
   return (
     <span className="group relative inline-flex">
@@ -764,7 +753,10 @@ function QueryUnderstandingResult({
       label: "Primary drug",
       values: result.state.primary_drug ? [result.state.primary_drug] : [],
     },
+    {
       label: "All drugs mentioned",
+      values: result.state.all_drugs_mentioned,
+    },
     {
       label: "Current medications",
       values: result.state.current_medications,

@@ -13,6 +13,7 @@ from src.dossier.builder import DossierBuilder
 from src.dossier.models import OpenFDALabelEvidence
 from src.dossier.openfda_store import OpenFDALabelStore
 from src.dossier.rxnorm_store import RxNormParquetStore
+from src.query_understanding.extractor import HybridQueryExtractor
 
 
 pytestmark = pytest.mark.skipif(
@@ -113,7 +114,12 @@ async def test_label_evidence_endpoint_offline_no_results() -> None:
 
 
 @pytest.mark.asyncio
-async def test_query_understanding_extracts_state_and_primary_dossier() -> None:
+async def test_query_understanding_extracts_state_and_primary_dossier(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("QUERY_EXTRACTION_OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("QUERY_EXTRACTION_OPENAI_MODEL", raising=False)
+
     response = await understand_query(
         QueryUnderstandingRequest(
             query=(
@@ -127,6 +133,7 @@ async def test_query_understanding_extracts_state_and_primary_dossier() -> None:
 
     assert response.extraction_mode == "deterministic"
     assert response.state.primary_drug == "tretinoin"
+    assert response.state.all_drugs_mentioned == ["ibuprofen", "tretinoin"]
     assert response.state.current_medications == ["ibuprofen"]
     assert "migraine" in response.state.conditions
     assert "acne" in response.state.conditions
@@ -142,7 +149,12 @@ async def test_query_understanding_extracts_state_and_primary_dossier() -> None:
 
 
 @pytest.mark.asyncio
-async def test_query_understanding_allergy_state() -> None:
+async def test_query_understanding_allergy_state(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("QUERY_EXTRACTION_OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("QUERY_EXTRACTION_OPENAI_MODEL", raising=False)
+
     response = await understand_query(
         QueryUnderstandingRequest(
             query="I am allergic to aspirin and currently taking ibuprofen.",
@@ -159,7 +171,51 @@ async def test_query_understanding_allergy_state() -> None:
 
 
 @pytest.mark.asyncio
-async def test_query_understanding_unresolved_query_returns_warning() -> None:
+async def test_query_understanding_child_question_uses_drug_not_patient_context(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("QUERY_EXTRACTION_OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("QUERY_EXTRACTION_OPENAI_MODEL", raising=False)
+
+    response = await understand_query(
+        QueryUnderstandingRequest(query="Can a child take aspirin?"),
+        builder=offline_builder(),
+    )
+
+    assert response.state.primary_drug == "aspirin"
+    assert response.state.all_drugs_mentioned == ["aspirin"]
+    assert "pediatric" in response.state.patient_context
+    assert response.primary_dossier is not None
+    assert response.primary_dossier.resolved_drug is not None
+    assert response.primary_dossier.resolved_drug.name == "aspirin"
+
+
+@pytest.mark.asyncio
+async def test_query_understanding_hypothetical_drug_is_not_current_medication(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("QUERY_EXTRACTION_OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("QUERY_EXTRACTION_OPENAI_MODEL", raising=False)
+
+    response = await understand_query(
+        QueryUnderstandingRequest(
+            query="Can I take aspirin if I have an allergy against ibuprofen?"
+        ),
+        builder=offline_builder(),
+    )
+
+    assert response.state.primary_drug == "aspirin"
+    assert response.state.current_medications == []
+    assert response.state.allergies == ["ibuprofen"]
+
+
+@pytest.mark.asyncio
+async def test_query_understanding_unresolved_query_returns_warning(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("QUERY_EXTRACTION_OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("QUERY_EXTRACTION_OPENAI_MODEL", raising=False)
+
     response = await understand_query(
         QueryUnderstandingRequest(query="Can I take notarealdrugzzzz?"),
         builder=offline_builder(),
@@ -176,3 +232,18 @@ def test_rxnorm_resolver_handles_punctuation_variation() -> None:
     assert candidates
     assert candidates[0].concept.name == "ibuprofen"
     assert candidates[0].match_type in {"compact_exact", "normalized_exact"}
+
+
+def test_query_extraction_prompt_template_loads() -> None:
+    prompt_config = HybridQueryExtractor._load_revision_prompt()
+    messages = HybridQueryExtractor._format_messages(
+        prompt_config["messages"],
+        query="Can a child take aspirin?",
+        deterministic_extraction='{"state": {}}',
+    )
+
+    assert prompt_config["response_format"] == {"type": "json_object"}
+    assert messages[0]["role"] == "system"
+    assert "patient_context, not drugs" in messages[0]["content"]
+    assert "Can a child take aspirin?" in messages[1]["content"]
+    assert '{"state": {}}' in messages[1]["content"]
