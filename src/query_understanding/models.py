@@ -23,6 +23,7 @@ class QueryState(BaseModel):
     """Inspectable symbolic state extracted from a user question."""
 
     primary_drug: str | None = None
+    all_drugs_mentioned: list[str] = Field(default_factory=list)
     current_medications: list[str] = Field(default_factory=list)
     allergies: list[str] = Field(default_factory=list)
     conditions: list[str] = Field(default_factory=list)
@@ -66,4 +67,3 @@ class QueryUnderstandingResponse(BaseModel):
     secondary_label_evidence: list[SecondaryLabelEvidence] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     errors: list[str] = Field(default_factory=list)
-

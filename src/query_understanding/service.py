@@ -44,6 +44,9 @@ class QueryUnderstandingService:
         resolved_drugs = [self._resolve_mention(mention) for mention in mentions]
         warnings = [*extraction.warnings]
         errors = [*extraction.errors]
+        extraction.state.all_drugs_mentioned = self._resolved_drug_texts(
+            resolved_drugs
+        )
 
         primary = self._select_primary(resolved_drugs, extraction.state.primary_drug)
         if primary:
@@ -167,6 +170,14 @@ class QueryUnderstandingService:
             "ok",
             "pregnant",
             "pregnancy",
+            "child",
+            "children",
+            "kid",
+            "infant",
+            "baby",
+            "adult",
+            "senior",
+            "elderly",
             "migraine",
             "acne",
             "pain",
@@ -174,6 +185,22 @@ class QueryUnderstandingService:
             "headache",
         }
         return normalized not in stop_phrases and len(normalized) >= 3
+
+    @staticmethod
+    def _resolved_drug_texts(
+        mentions: list[ResolvedDrugMention],
+    ) -> list[str]:
+        values: list[str] = []
+        seen: set[str] = set()
+        for mention in mentions:
+            if mention.selected_concept is None:
+                continue
+            key = mention.selected_concept.rxcui
+            if key in seen:
+                continue
+            seen.add(key)
+            values.append(mention.text)
+        return values
 
     def _resolve_mention(self, mention: ExtractedDrugMention) -> ResolvedDrugMention:
         candidates = self._resolve_text(mention.text)

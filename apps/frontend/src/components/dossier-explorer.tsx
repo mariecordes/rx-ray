@@ -764,6 +764,7 @@ function QueryUnderstandingResult({
       label: "Primary drug",
       values: result.state.primary_drug ? [result.state.primary_drug] : [],
     },
+      label: "All drugs mentioned",
     {
       label: "Current medications",
       values: result.state.current_medications,
