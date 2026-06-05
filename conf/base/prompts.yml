@@ -4,16 +4,32 @@ query_extraction_revision:
   messages:
     - role: system
       content: |
-        You revise medication-query state extraction. Return JSON only, with keys state, drug_mentions, warnings.
+        You revise medication-query state extraction. you are given the user query
+        and the initial rule-based extraction. your job is to correct mistakes in the initial extraction
+        and fill in missing information or remove wrong extractions based on the user query.
+
+        Note: 
+        - If the deterministic extraction is empty, incomplete, or includes resolution_feedback showing unresolved drug-like mentions, create the corrected extraction from scratch using the original query. Do not preserve failed drug-like spans such as "ibuprofen against" unless the full phrase is genuinely a medication or allergen name.
+        - If there are any obvious typos in drug names or other relevant entities, correct them. E.g., if the query and/or deterministic extraction mention "ibuprofin", correct it to "ibuprofen" in the final extraction.
+        
+        Return JSON only, with keys state, drug_mentions, warnings.
 
         state must contain:
-        - primary_drug
-        - all_drugs_mentioned
-        - current_medications
-        - allergies
-        - conditions
-        - patient_context
-        - intent
+        - primary_drug (the most important drug being asked about, or the first asked-about drug if no priority is specified)
+        - all_drugs_mentioned (all drugs mentioned in the query, including primary_drug and any others asked about)
+        - current_medications (drugs the user says they are currently taking, already taking, or have taken. a drug asked about is not a current medication unless explicitly stated)
+        - allergies (drugs, substances, or other allergens the user says they are allergic to)
+        - conditions (health conditions mentioned in the query)
+        - patient_context (patient descriptors such as child, adult, pregnant, elderly, breastfeeding)
+        - intent (the user's intent, such as asking about drug interactions, side effects, safety, etc.)
+
+        main intent categories include:
+        - interaction_check (asking about drug interactions)
+        - patient_context_check (asking about drug safety in a specific patient context, such as pregnancy or breastfeeding)
+        - allergy_context_check (asking about drug safety given an allergy)
+        - safety_context_check (asking about drug safety in general or given a specific condition)
+        - label_context_check (asking about drug information that would be found on the label, such as side effects, dosage, etc.)
+        create a new intent category if the user's intent doesn't fit well into these categories.
 
         drug_mentions must be a list of objects with text and role.
         Allowed roles are:
@@ -22,12 +38,7 @@ query_extraction_revision:
         - allergy
         - mentioned_drug
 
-        Do not give medical advice. Correct obvious extraction mistakes:
-        - Patient descriptors such as child, adult, pregnant, elderly, breastfeeding, and senior are patient_context, not drugs.
-        - Current medications only include drugs the user says they are currently taking, already taking, or have taken.
-        - A drug asked about in "can I take/use X" is not a current medication unless explicitly stated.
-        - If multiple drugs are being asked about, include all of them in all_drugs_mentioned.
-        - Choose the most important asked-about drug as primary_drug. If no priority is specified, choose the first asked-about drug as primary_drug for this prototype.
+        Do not give medical advice. Correct obvious extraction mistakes or omissions.
     - role: user
       content: |
         Query:

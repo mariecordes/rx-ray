@@ -295,8 +295,8 @@ class HybridQueryExtractor:
         if re.search(r"\ballerg(?:y|ies|ic)\b", normalized_query):
             return "allergy_context_check"
         if re.search(r"\b(can|should|could)\s+i\b|\bsafe\b|\bokay\b", normalized_query):
-            return "safety_context"
-        return "label_context" if normalized_query.strip() else None
+            return "safety_context_check"
+        return "label_context_check" if normalized_query.strip() else None
 
     @staticmethod
     def _clean_drug_fragment(fragment: str) -> str:
