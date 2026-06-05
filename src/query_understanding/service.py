@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import re
 from difflib import SequenceMatcher
 
@@ -17,6 +18,8 @@ from src.query_understanding.models import (
     ResolvedDrugMention,
     SecondaryLabelEvidence,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class QueryUnderstandingService:
@@ -114,6 +117,15 @@ class QueryUnderstandingService:
                 + ", ".join(unresolved_mentions)
                 + "."
             )
+
+        logger.info(
+            "Query understanding completed: mode=%s primary_drug=%s "
+            "resolved_mentions=%s unresolved_mentions=%s",
+            extraction.mode,
+            extraction.state.primary_drug,
+            len([mention for mention in resolved_drugs if mention.selected_concept]),
+            unresolved_mentions,
+        )
 
         return QueryUnderstandingResponse(
             query=query,
