@@ -24,7 +24,6 @@ import {
   OpenFDALabelRecord,
   QueryUnderstandingResponse,
   RxNormConcept,
-  SecondaryLabelEvidence,
 } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -804,10 +803,6 @@ function QueryUnderstandingResult({
         ))}
       </div>
 
-      {/* <div className="grid gap-3">
-        <SecondaryPreviewCards previews={result.secondary_label_evidence} />
-      </div> */}
-
       {result.warnings.length || result.errors.length ? (
         <div className="space-y-2">
           {result.warnings.map((warning) => (
@@ -850,74 +845,6 @@ function StateCard({ label, values }: { label: string; values: string[] }) {
     </div>
   );
 }
-
-// function SecondaryPreviewCards({
-//   previews,
-// }: {
-//   previews: SecondaryLabelEvidence[];
-// }) {
-//   return (
-//     <section className="rounded-md border border-slate-200 bg-white p-3">
-//       <div className="mb-3 flex items-center justify-between gap-2">
-//         <div className="text-xs font-medium uppercase text-slate-500">
-//           Supporting label previews
-//         </div>
-//         <Badge className="border-slate-200 bg-slate-50 text-slate-700">
-//           {previews.length}
-//         </Badge>
-//       </div>
-//       {previews.length === 0 ? (
-//         <p className="text-sm text-slate-600">
-//           Secondary resolved drugs will appear here with compact label previews.
-//         </p>
-//       ) : (
-//         <div className="space-y-2">
-//           {previews.map((preview) => (
-//             <SecondaryPreviewCard
-//               key={`${preview.role}-${preview.mention}-${preview.resolved_concept?.rxcui ?? "unresolved"}`}
-//               preview={preview}
-//             />
-//           ))}
-//         </div>
-//       )}
-//     </section>
-//   );
-// }
-
-// function SecondaryPreviewCard({
-//   preview,
-// }: {
-//   preview: SecondaryLabelEvidence;
-// }) {
-//   const evidence = preview.label_evidence;
-//   const firstRecord = evidence?.label_records[0];
-//   const brand = primaryValue(firstRecord?.brand_names);
-//   const manufacturer = primaryValue(firstRecord?.manufacturer_names);
-//   return (
-//     <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm">
-//       <div className="flex flex-wrap items-center gap-1.5">
-//         <Badge className="border-slate-200 bg-white text-slate-800">
-//           {displayRole(preview.role)}
-//         </Badge>
-//         <Badge className="border-slate-200 bg-white text-slate-700">
-//           {evidence?.labels_found ?? 0} label
-//           {(evidence?.labels_found ?? 0) === 1 ? "" : "s"}
-//         </Badge>
-//       </div>
-//       <div className="mt-2 font-medium text-slate-950">
-//         {displayGraphNodeName(preview.resolved_concept?.name ?? preview.mention)}
-//       </div>
-//       {brand || manufacturer ? (
-//         <div className="mt-1 text-slate-600">
-//           {brand ? displayBrandName(brand) : "Brand unavailable"}
-//           {manufacturer ? ` · ${manufacturer}` : ""}
-//         </div>
-//       ) : (
-//         <div className="mt-1 text-slate-500">No label source preview found</div>
-//       )}
-//     </div>
-//   );
-// }
 
 function EmptyState() {
   return (
