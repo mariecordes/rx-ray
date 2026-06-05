@@ -65,10 +65,61 @@ function displayGraphNodeName(name: string) {
   return name.toUpperCase();
 }
 
+function displayBrandName(name: string) {
+  return name.toUpperCase();
+}
+
+function displayGenericName(name: string) {
+  return sentenceCase(name);
+}
+
 function sentenceCase(value: string) {
   return value
     .toLowerCase()
     .replace(/\b\w/g, (character) => character.toUpperCase());
+}
+
+const rxNormTypeLabels: Record<string, string> = {
+  BN: "Brand",
+  BPCK: "Brand Name Pack",
+  DF: "Dose Form",
+  DFG: "Dose Form Group",
+  GPCK: "Generic Pack",
+  IN: "Ingredient",
+  MIN: "Multiple Ingredients",
+  PIN: "Precise Ingredient",
+  PSN: "Prescribable Name",
+  SBD: "Semantic Branded Drug",
+  SBDC: "Semantic Branded Drug Component",
+  SBDF: "Semantic Branded Drug Form",
+  SBDFP: "Semantic Branded Drug Form Precise",
+  SBDG: "Semantic Branded Drug Group",
+  SCD: "Semantic Clinical Drug",
+  SCDC: "Semantic Clinical Drug Component",
+  SCDF: "Semantic Clinical Drug Form",
+  SCDFP: "Semantic Clinical Drug Form Precise",
+  SCDG: "Semantic Clinical Drug Group",
+  SCDGP: "Semantic Clinical Drug Form Group Precise",
+  SY: "Synonym",
+  TMSY: "Tall Man Lettering Synonym",
+};
+
+function displayRxNormType(tty?: string | null) {
+  if (!tty) {
+    return "Type unknown";
+  }
+  return rxNormTypeLabels[tty.toUpperCase()] ?? sentenceCase(tty);
+}
+
+function InfoTooltip({ text }: { text: string }) {
+  return (
+    <span className="group relative inline-flex">
+      <Info className="size-3.5 text-slate-400" />
+      <span className="pointer-events-none absolute left-0 top-full z-20 mt-2 hidden w-72 rounded-md border border-slate-200 bg-white px-3 py-2 text-xs normal-case leading-5 text-slate-700 shadow-lg group-hover:block">
+        {text}
+      </span>
+    </span>
+  );
 }
 
 type DisplayLabelSection = LabelSection & {
@@ -307,6 +358,7 @@ export function DossierExplorer() {
   const [nodeEvidenceError, setNodeEvidenceError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const drugNetworkPanelRef = useRef<HTMLDivElement>(null);
   const labelEvidencePanelRef = useRef<HTMLDivElement>(null);
   const nodeEvidenceRequestRef = useRef(0);
 
@@ -341,6 +393,13 @@ export function DossierExplorer() {
     }
     const nextSourceKey = selectedSourceKey === sourceKey ? null : sourceKey;
     setSelectedSourceKey(nextSourceKey);
+  }
+
+  function scrollToSection(ref: React.RefObject<HTMLDivElement | null>) {
+    ref.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -447,16 +506,24 @@ export function DossierExplorer() {
               Drug Dossier Explorer
             </h1>
           </div>
-          <div className="max-w-xl rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-            Educational prototype. Summarizes public RxNorm and OpenFDA data;
-            not medical advice.
-          </div>
         </header>
+
+        <div className="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm leading-5 text-amber-900">
+          <Info className="size-4 shrink-0" />
+          <span>
+            Educational prototype using public drug terminology and FDA label
+            data. Not medical advice.
+          </span>
+        </div>
 
         <form
           onSubmit={handleSubmit}
           className="grid gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-sm md:grid-cols-[1fr_140px_auto]"
         >
+          <p className="text-sm leading-5 text-slate-600 md:col-span-3">
+            Search for a drug to explore related medication concepts and public
+            label information.
+          </p>
           <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
             Drug
             <Input
@@ -466,7 +533,10 @@ export function DossierExplorer() {
             />
           </label>
           <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
-            Label limit
+            <span className="flex items-center gap-1.5">
+              Label limit
+              <InfoTooltip text="Controls how many FDA drug-label records are retrieved for the searched drug. Higher limits may show more sources, but can make the page denser." />
+            </span>
             <Input
               min={1}
               max={25}
@@ -498,12 +568,18 @@ export function DossierExplorer() {
           <EmptyState />
         ) : (
           <div className="flex flex-col gap-5">
-            <Overview dossier={dossier} />
-            <RxNormKnowledgeGraph
-              key={dossier.resolved_drug?.rxcui ?? dossier.query}
+            <Overview
               dossier={dossier}
-              onSelectedNodeChange={handleSelectedGraphNodeChange}
+              onJumpToLabels={() => scrollToSection(labelEvidencePanelRef)}
+              onJumpToNetwork={() => scrollToSection(drugNetworkPanelRef)}
             />
+            <div ref={drugNetworkPanelRef}>
+              <RxNormKnowledgeGraph
+                key={dossier.resolved_drug?.rxcui ?? dossier.query}
+                dossier={dossier}
+                onSelectedNodeChange={handleSelectedGraphNodeChange}
+              />
+            </div>
             <LabelEvidencePanel
               ref={labelEvidencePanelRef}
               activeSection={activeSection}
@@ -538,71 +614,104 @@ function EmptyState() {
   );
 }
 
-function Overview({ dossier }: { dossier: DrugDossier }) {
+function Overview({
+  dossier,
+  onJumpToLabels,
+  onJumpToNetwork,
+}: {
+  dossier: DrugDossier;
+  onJumpToLabels: () => void;
+  onJumpToNetwork: () => void;
+}) {
+  const networkCount = dossier.rxnorm_neighborhood.edges.length;
+  const labelCount = dossier.label_evidence?.labels_found ?? 0;
+  const hasNetwork = networkCount > 0;
+  const hasLabels = labelCount > 0;
+
   return (
     <Card>
       <CardHeader>
         <CardTitle>Overview</CardTitle>
       </CardHeader>
-      <CardContent className="grid gap-4 md:grid-cols-[1fr_1.4fr]">
+      <CardContent className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
         <div>
-          <div className="text-sm text-slate-500">Resolved drug</div>
+          <div className="text-sm text-slate-500">Matched drug</div>
           {dossier.resolved_drug ? (
             <div className="mt-2 space-y-2">
               <div className="text-xl font-semibold text-slate-950">
-                {dossier.resolved_drug.name}
+                {displayGraphNodeName(dossier.resolved_drug.name)}
               </div>
               <div className="flex flex-wrap gap-2">
                 <Badge>RXCUI {dossier.resolved_drug.rxcui}</Badge>
-                <Badge>{dossier.resolved_drug.tty ?? "TTY unknown"}</Badge>
-                <Badge>{dossier.resolved_drug.sab ?? "Source unknown"}</Badge>
+                <Badge>{displayRxNormType(dossier.resolved_drug.tty)}</Badge>
               </div>
             </div>
           ) : (
-            <div className="mt-2 text-sm text-slate-600">No RxNorm match.</div>
+            <div className="mt-2 text-sm text-slate-600">
+              No matching drug concept was found for this search.
+            </div>
           )}
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
-          <Metric
-            label="Candidates"
-            value={dossier.resolution_candidates.length.toString()}
+          <OverviewJumpCard
+            description={
+              hasNetwork
+                ? `${networkCount} relationship${
+                    networkCount === 1 ? "" : "s"
+                  } available`
+                : "No relationship data returned"
+            }
+            isAvailable={hasNetwork}
+            label="Drug Network"
+            onClick={onJumpToNetwork}
           />
-          <Metric
-            label="RxNorm edges"
-            value={dossier.rxnorm_neighborhood.edges.length.toString()}
-          />
-          <Metric
-            label="Labels found"
-            value={(dossier.label_evidence?.labels_found ?? 0).toString()}
-          />
-          <Metric
-            label="Label limit"
-            value={(dossier.label_evidence?.label_limit ?? "—").toString()}
+          <OverviewJumpCard
+            description={
+              hasLabels
+                ? `${labelCount} label source${labelCount === 1 ? "" : "s"} available`
+                : "No public label sources returned"
+            }
+            isAvailable={hasLabels}
+            label="Drug Labels"
+            onClick={onJumpToLabels}
           />
         </div>
-        {dossier.notes.length > 0 ? (
-          <div className="md:col-span-2">
-            <div className="mb-2 text-sm font-medium text-slate-700">Notes</div>
-            <div className="flex flex-wrap gap-2">
-              {dossier.notes.map((note) => (
-                <Badge key={note} className="bg-cyan-50 text-cyan-800">
-                  {note}
-                </Badge>
-              ))}
-            </div>
-          </div>
-        ) : null}
       </CardContent>
     </Card>
   );
 }
 
-function Metric({ label, value }: { label: string; value: string }) {
+function OverviewJumpCard({
+  description,
+  isAvailable,
+  label,
+  onClick,
+}: {
+  description: string;
+  isAvailable: boolean;
+  label: string;
+  onClick: () => void;
+}) {
   return (
-    <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
-      <div className="text-xs font-medium uppercase text-slate-500">{label}</div>
-      <div className="mt-1 text-lg font-semibold text-slate-950">{value}</div>
-    </div>
+    <button
+      type="button"
+      onClick={onClick}
+      className="rounded-md border border-slate-200 bg-slate-50 p-3 text-left transition hover:border-slate-300 hover:bg-white"
+    >
+      <div className="flex items-center justify-between gap-3">
+        <div className="text-sm font-semibold text-slate-950">{label}</div>
+        <Badge
+          style={{
+            backgroundColor: isAvailable ? "#ecfdf5" : "#fffbeb",
+            borderColor: isAvailable ? "#a7f3d0" : "#fde68a",
+            color: isAvailable ? "#065f46" : "#92400e",
+          }}
+        >
+          {isAvailable ? "Available" : "Not found"}
+        </Badge>
+      </div>
+      <div className="mt-2 text-sm leading-5 text-slate-600">{description}</div>
+    </button>
   );
 }
 
@@ -683,11 +792,14 @@ function LabelEvidencePanel({
         <CardHeader className="border-b border-slate-200">
           <div className="flex flex-row items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
-              <CardTitle>Label Evidence</CardTitle>
+              <div className="flex items-center gap-2">
+                <CardTitle>Drug Labels</CardTitle>
+                <InfoTooltip text="Drug labels come from public FDA label data. They can include warnings, uses, interactions, pregnancy or lactation information, and other text from medication labels." />
+              </div>
               <p className="mt-1 text-sm leading-6 text-slate-500">
-                OpenFDA drug-label evidence retrieved for the searched drug,
-                with graph selections used to highlight or add more specific
-                label records.
+                Public drug-label text retrieved for the searched drug, with
+                graph selections used to highlight or add more specific label
+                records.
               </p>
             </div>
             <FileText className="mt-1 size-4 text-slate-400" />
@@ -775,10 +887,14 @@ function LabelEvidencePanel({
                           ) : null}
                         </div>
                         <div className="mt-1.5 truncate font-medium text-slate-900">
-                          {brandName ?? "Brand unavailable"}
+                          {brandName
+                            ? displayBrandName(brandName)
+                            : "Brand unavailable"}
                         </div>
                         <div className="mt-0.5 truncate text-slate-600">
-                          {genericName ?? "Generic unavailable"}
+                          {genericName
+                            ? displayGenericName(genericName)
+                            : "Generic unavailable"}
                         </div>
                         <div className="mt-0.5 truncate text-slate-500">
                           {manufacturerName ?? "Manufacturer unavailable"}
@@ -804,7 +920,7 @@ function LabelEvidencePanel({
             <section className="min-w-0">
               {sectionEntries.length === 0 ? (
                 <p className="text-sm text-slate-600">
-                  No OpenFDA sections returned.
+                  No public label sections returned.
                 </p>
               ) : (
                 <div className="flex flex-col gap-4">
@@ -875,7 +991,9 @@ function LabelEvidencePanel({
                             ) : (
                               <Badge>Source unknown</Badge>
                             )}
-                            {brandName ? <span>{brandName}</span> : null}
+                            {brandName ? (
+                              <span>{displayBrandName(brandName)}</span>
+                            ) : null}
                             {manufacturerName ? (
                               <span>· {manufacturerName}</span>
                             ) : null}
@@ -938,8 +1056,8 @@ function LabelEvidenceContextNote({
   if (!node) {
     return (
       <div className="text-sm leading-6 text-slate-600">
-        Select a node in the RxNorm graph above to check whether OpenFDA has
-        labels for that specific concept.
+        Select a node in the drug network above to check whether public labels
+        are available for that specific concept.
       </div>
     );
   }
@@ -972,7 +1090,7 @@ function LabelEvidenceContextNote({
         <span className="font-bold text-slate-950">
           {displayGraphNodeName(node.name)}
         </span>
-        . No specific OpenFDA labels were found, so the evidence below remains
+        . No specific public labels were found, so the evidence below remains
         tied to the original search.
       </div>
     );

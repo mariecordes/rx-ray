@@ -7,7 +7,7 @@ import {
   forceManyBody,
   forceSimulation,
 } from "d3-force";
-import { Maximize2, Minus, Plus } from "lucide-react";
+import { Info, Maximize2, Minus, Plus } from "lucide-react";
 import type { MouseEvent, PointerEvent, WheelEvent } from "react";
 import { useMemo, useRef, useState } from "react";
 
@@ -160,6 +160,17 @@ function edgeTooltip(edge: RxNormEdge) {
       edge.relation
     )} ${displayNodeName(edge.source_name)}`,
   };
+}
+
+function InfoTooltip({ text }: { text: string }) {
+  return (
+    <span className="group relative inline-flex">
+      <Info className="size-3.5 text-slate-400" />
+      <span className="pointer-events-none absolute left-0 top-full z-20 mt-2 hidden w-72 rounded-md border border-slate-200 bg-white px-3 py-2 text-xs normal-case leading-5 text-slate-700 shadow-lg group-hover:block">
+        {text}
+      </span>
+    </span>
+  );
 }
 
 type VisualNode = RxNormConcept & {
@@ -630,14 +641,25 @@ export function RxNormKnowledgeGraph({
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between gap-3">
-        <CardTitle>RxNorm Knowledge Graph</CardTitle>
+        <div>
+          <div className="flex items-center gap-2">
+            <CardTitle>Drug Network</CardTitle>
+            <InfoTooltip text="The drug network uses RxNorm, a public medication terminology, to show relationships between medication concepts such as ingredients, brands, dose forms, and related products." />
+          </div>
+          <p className="mt-1 text-sm leading-6 text-slate-500">
+            Explore how the matched drug connects to related medication
+            concepts.
+          </p>
+        </div>
         {truncated ? (
           <Badge className="bg-amber-50 text-amber-800">Truncated</Badge>
         ) : null}
       </CardHeader>
-      <CardContent className="space-y-4">
+        <CardContent className="space-y-4">
         {edges.length === 0 ? (
-          <p className="text-sm text-slate-600">No RxNorm edges returned.</p>
+          <p className="text-sm text-slate-600">
+            No relationship data returned.
+          </p>
         ) : (
           <div className="grid items-stretch gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
             <div
@@ -649,7 +671,7 @@ export function RxNormKnowledgeGraph({
                 viewBox={`0 0 ${GRAPH_WIDTH} ${GRAPH_HEIGHT}`}
                 className="h-full min-h-[520px] w-full cursor-grab touch-none"
                 role="img"
-                aria-label="RxNorm local knowledge graph"
+                aria-label="Local drug relationship network"
                 onPointerDown={handleCanvasPointerDown}
                 onPointerMove={handlePointerMove}
                 onPointerUp={handlePointerUp}
@@ -999,7 +1021,7 @@ export function RxNormKnowledgeGraph({
                 </div>
               </div>
               <p className="text-xs leading-5 text-slate-500">
-                Showing {filteredEdges.length} of {edges.length} returned RxNorm
+                Showing {filteredEdges.length} of {edges.length} returned
                 relationships
                 {selectedTypes.size > 0 ? " after type filtering" : ""}. Hover
                 over a line to see the relationship. Double-click a node to
