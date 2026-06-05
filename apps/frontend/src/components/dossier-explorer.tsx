@@ -3,6 +3,7 @@
 import { FormEvent, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
+  Brain,
   Database,
   FileText,
   FlaskConical,
@@ -21,7 +22,9 @@ import {
   LabelSection,
   OpenFDALabelEvidence,
   OpenFDALabelRecord,
+  QueryUnderstandingResponse,
   RxNormConcept,
+  SecondaryLabelEvidence,
 } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -109,6 +112,21 @@ function displayRxNormType(tty?: string | null) {
     return "Type unknown";
   }
   return rxNormTypeLabels[tty.toUpperCase()] ?? sentenceCase(tty);
+}
+
+function displayStateLabel(value: string) {
+  return value.replaceAll("_", " ");
+}
+
+const roleLabels: Record<string, string> = {
+  primary_drug: "Primary drug",
+  current_medication: "Current medication",
+  allergy: "Allergy",
+  mentioned_drug: "Mentioned drug",
+};
+
+function displayRole(role: string) {
+  return roleLabels[role] ?? displayStateLabel(role);
 }
 
 function InfoTooltip({ text }: { text: string }) {
@@ -346,6 +364,13 @@ function groupLabelSectionsBySource(
 
 export function DossierExplorer() {
   const [drug, setDrug] = useState("aspirin");
+  const [question, setQuestion] = useState(
+    "I take ibuprofen for migraine and want to use tretinoin for acne. I am pregnant."
+  );
+  const [queryUnderstanding, setQueryUnderstanding] =
+    useState<QueryUnderstandingResponse | null>(null);
+  const [isQueryLoading, setIsQueryLoading] = useState(false);
+  const [queryError, setQueryError] = useState<string | null>(null);
   const [openfdaLimit, setOpenfdaLimit] = useState(5);
   const [dossier, setDossier] = useState<DrugDossier | null>(null);
   const [selectedSection, setSelectedSection] = useState<string | null>(null);
@@ -402,15 +427,67 @@ export function DossierExplorer() {
     });
   }
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setIsLoading(true);
-    setError(null);
+  function resetEvidenceSelection() {
     setSelectedGraphNode(null);
     setNodeLabelEvidence(null);
     setNodeEvidenceError(null);
     setIsNodeEvidenceLoading(false);
+    setSelectedSourceKey(null);
     nodeEvidenceRequestRef.current += 1;
+  }
+
+  function loadDossier(nextDossier: DrugDossier) {
+    setDossier(nextDossier);
+    const firstSection = Object.keys(nextDossier.label_evidence?.sections ?? {})[0];
+    setSelectedSection(firstSection ?? null);
+    resetEvidenceSelection();
+  }
+
+  async function handleQuestionSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setIsQueryLoading(true);
+    setQueryError(null);
+
+    try {
+      const response = await fetch("/api/query-understanding", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          query: question,
+          openfda_limit: openfdaLimit,
+        }),
+      });
+      const payload = await response.json();
+
+      if (!response.ok) {
+        throw new Error(payload.detail ?? "Failed to understand query");
+      }
+
+      const understanding = payload as QueryUnderstandingResponse;
+      setQueryUnderstanding(understanding);
+      if (understanding.primary_dossier) {
+        loadDossier(understanding.primary_dossier);
+        const matchedName = understanding.primary_dossier.resolved_drug?.name;
+        if (matchedName) {
+          setDrug(matchedName);
+        }
+      }
+    } catch (err) {
+      setQueryError(
+        err instanceof Error ? err.message : "Failed to understand query"
+      );
+    } finally {
+      setIsQueryLoading(false);
+    }
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setIsLoading(true);
+    setError(null);
+    resetEvidenceSelection();
 
     try {
       const response = await fetch("/api/dossier", {
@@ -432,10 +509,7 @@ export function DossierExplorer() {
         throw new Error(payload.detail ?? "Failed to build dossier");
       }
 
-      setDossier(payload);
-      const firstSection = Object.keys(payload.label_evidence?.sections ?? {})[0];
-      setSelectedSection(firstSection ?? null);
-      setSelectedSourceKey(null);
+      loadDossier(payload);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to build dossier");
     } finally {
@@ -515,6 +589,15 @@ export function DossierExplorer() {
             data. Not medical advice.
           </span>
         </div>
+
+        <QueryUnderstandingPanel
+          error={queryError}
+          isLoading={isQueryLoading}
+          onQuestionChange={setQuestion}
+          onSubmit={handleQuestionSubmit}
+          question={question}
+          result={queryUnderstanding}
+        />
 
         <form
           onSubmit={handleSubmit}
@@ -602,6 +685,239 @@ export function DossierExplorer() {
     </main>
   );
 }
+
+function QueryUnderstandingPanel({
+  error,
+  isLoading,
+  onQuestionChange,
+  onSubmit,
+  question,
+  result,
+}: {
+  error: string | null;
+  isLoading: boolean;
+  onQuestionChange: (value: string) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  question: string;
+  result: QueryUnderstandingResponse | null;
+}) {
+  return (
+    <Card>
+      <CardHeader className="border-b border-slate-200">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <CardTitle>Ask a Question</CardTitle>
+              <InfoTooltip text="This extracts a structured medication state from your question, resolves drug mentions through RxNorm, and loads the primary drug into the explorer below. It does not generate medical advice." />
+            </div>
+            <p className="mt-1 text-sm leading-6 text-slate-500">
+              What can we help you explore? Ask in plain language, then inspect
+              what the system understood.
+            </p>
+          </div>
+          <Brain className="mt-1 size-4 text-slate-400" />
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4 pt-5">
+        <form onSubmit={onSubmit} className="grid gap-3 lg:grid-cols-[1fr_auto]">
+          <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
+            Question
+            <textarea
+              value={question}
+              onChange={(event) => onQuestionChange(event.target.value)}
+              placeholder="Can I use tretinoin if I am pregnant and already take ibuprofen?"
+              rows={1}
+              className="min-h-10 w-full resize-y rounded-md border border-slate-200 bg-white px-3 py-2 text-sm leading-6 text-slate-950 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100"
+            />
+          </label>
+          <div className="flex items-end">
+            <Button className="w-full lg:w-auto" disabled={isLoading || !question.trim()}>
+              {isLoading ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Search className="size-4" />
+              )}
+              Explore
+            </Button>
+          </div>
+        </form>
+
+        {error ? (
+          <div className="flex items-center gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+            <AlertTriangle className="size-4" />
+            {error}
+          </div>
+        ) : null}
+
+        {result ? <QueryUnderstandingResult result={result} /> : null}
+      </CardContent>
+    </Card>
+  );
+}
+
+function QueryUnderstandingResult({
+  result,
+}: {
+  result: QueryUnderstandingResponse;
+}) {
+  const stateItems = [
+    {
+      label: "Primary drug",
+      values: result.state.primary_drug ? [result.state.primary_drug] : [],
+    },
+    {
+      label: "Current medications",
+      values: result.state.current_medications,
+    },
+    {
+      label: "Allergies",
+      values: result.state.allergies,
+    },
+    {
+      label: "Conditions",
+      values: result.state.conditions,
+    },
+    {
+      label: "Patient context",
+      values: result.state.patient_context,
+    },
+    {
+      label: "Intent",
+      values: result.state.intent ? [displayStateLabel(result.state.intent)] : [],
+    },
+  ];
+
+  return (
+    <div className="space-y-4 rounded-md border border-slate-200 bg-slate-50 p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="text-xs font-medium uppercase text-slate-500">
+          What the system understood
+        </div>
+        <Badge className="border-slate-200 bg-white text-slate-700">
+          {displayStateLabel(result.extraction_mode)}
+        </Badge>
+      </div>
+
+      <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+        {stateItems.map((item) => (
+          <StateCard key={item.label} label={item.label} values={item.values} />
+        ))}
+      </div>
+
+      {/* <div className="grid gap-3">
+        <SecondaryPreviewCards previews={result.secondary_label_evidence} />
+      </div> */}
+
+      {result.warnings.length || result.errors.length ? (
+        <div className="space-y-2">
+          {result.warnings.map((warning) => (
+            <div
+              key={warning}
+              className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm leading-5 text-amber-900"
+            >
+              {warning}
+            </div>
+          ))}
+          {result.errors.map((error) => (
+            <div
+              key={error}
+              className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm leading-5 text-red-800"
+            >
+              {error}
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function StateCard({ label, values }: { label: string; values: string[] }) {
+  return (
+    <div className="rounded-md border border-slate-200 bg-white p-3">
+      <div className="text-xs font-medium uppercase text-slate-500">{label}</div>
+      {values.length ? (
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {values.map((value) => (
+            <Badge key={value} className="border-slate-200 bg-slate-50 text-slate-800">
+              {label === "Primary drug" ? displayGraphNodeName(value) : value}
+            </Badge>
+          ))}
+        </div>
+      ) : (
+        <div className="mt-2 text-sm text-slate-500">Not detected</div>
+      )}
+    </div>
+  );
+}
+
+// function SecondaryPreviewCards({
+//   previews,
+// }: {
+//   previews: SecondaryLabelEvidence[];
+// }) {
+//   return (
+//     <section className="rounded-md border border-slate-200 bg-white p-3">
+//       <div className="mb-3 flex items-center justify-between gap-2">
+//         <div className="text-xs font-medium uppercase text-slate-500">
+//           Supporting label previews
+//         </div>
+//         <Badge className="border-slate-200 bg-slate-50 text-slate-700">
+//           {previews.length}
+//         </Badge>
+//       </div>
+//       {previews.length === 0 ? (
+//         <p className="text-sm text-slate-600">
+//           Secondary resolved drugs will appear here with compact label previews.
+//         </p>
+//       ) : (
+//         <div className="space-y-2">
+//           {previews.map((preview) => (
+//             <SecondaryPreviewCard
+//               key={`${preview.role}-${preview.mention}-${preview.resolved_concept?.rxcui ?? "unresolved"}`}
+//               preview={preview}
+//             />
+//           ))}
+//         </div>
+//       )}
+//     </section>
+//   );
+// }
+
+// function SecondaryPreviewCard({
+//   preview,
+// }: {
+//   preview: SecondaryLabelEvidence;
+// }) {
+//   const evidence = preview.label_evidence;
+//   const firstRecord = evidence?.label_records[0];
+//   const brand = primaryValue(firstRecord?.brand_names);
+//   const manufacturer = primaryValue(firstRecord?.manufacturer_names);
+//   return (
+//     <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm">
+//       <div className="flex flex-wrap items-center gap-1.5">
+//         <Badge className="border-slate-200 bg-white text-slate-800">
+//           {displayRole(preview.role)}
+//         </Badge>
+//         <Badge className="border-slate-200 bg-white text-slate-700">
+//           {evidence?.labels_found ?? 0} label
+//           {(evidence?.labels_found ?? 0) === 1 ? "" : "s"}
+//         </Badge>
+//       </div>
+//       <div className="mt-2 font-medium text-slate-950">
+//         {displayGraphNodeName(preview.resolved_concept?.name ?? preview.mention)}
+//       </div>
+//       {brand || manufacturer ? (
+//         <div className="mt-1 text-slate-600">
+//           {brand ? displayBrandName(brand) : "Brand unavailable"}
+//           {manufacturer ? ` · ${manufacturer}` : ""}
+//         </div>
+//       ) : (
+//         <div className="mt-1 text-slate-500">No label source preview found</div>
+//       )}
+//     </div>
+//   );
+// }
 
 function EmptyState() {
   return (
