@@ -879,11 +879,6 @@ function LabelEvidencePanel({
                             {manufacturerName ? (
                               <span>· {manufacturerName}</span>
                             ) : null}
-                            {entry.chunkCount > 1 ? (
-                              <Badge className="border-slate-200 bg-white text-slate-700">
-                                {entry.chunkCount} entries
-                              </Badge>
-                            ) : null}
                           </div>
                           <p
                             className={cn(
