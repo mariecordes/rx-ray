@@ -240,7 +240,8 @@ async def test_query_understanding_repairs_unresolved_mentions_with_llm_feedback
             self.feedback = resolution_feedback
             return ExtractionResult(
                 state=QueryState(
-                    primary_drug="aspirin",
+                    primary_drug="ASA",
+                    all_drugs_mentioned=["ASA", "ibuprofen"],
                     allergies=["ibuprofen"],
                 ),
                 mentions=[
@@ -261,13 +262,102 @@ async def test_query_understanding_repairs_unresolved_mentions_with_llm_feedback
     )
 
     assert response.extraction_mode == "hybrid"
-    assert response.state.primary_drug == "aspirin"
+    assert response.state.primary_drug == "ASA"
+    assert response.state.all_drugs_mentioned == ["ASA", "ibuprofen"]
     assert response.state.allergies == ["ibuprofen"]
+    assert response.primary_dossier is not None
+    assert response.primary_dossier.resolved_drug is not None
+    assert response.primary_dossier.resolved_drug.name == "aspirin"
     assert not any("ibuprofen against" in warning for warning in response.warnings)
     assert fake_extractor.feedback is not None
     assert fake_extractor.feedback["unresolved_drug_like_mentions"] == [
         "ibuprofen against"
     ]
+
+
+def test_query_understanding_preserves_llm_cleaned_drug_list() -> None:
+    class FakeCleanExtractor:
+        def extract(self, query: str) -> ExtractionResult:
+            return ExtractionResult(
+                state=QueryState(
+                    primary_drug="aspirin",
+                    all_drugs_mentioned=["aspirin", "ibuprofen"],
+                    conditions=["asthma", "migraine"],
+                ),
+                mentions=[
+                    ExtractedDrugMention(text="aspirin", role="primary_drug"),
+                    ExtractedDrugMention(text="ibuprofen", role="mentioned_drug"),
+                ],
+                mode="hybrid",
+            )
+
+        def revise_with_resolution_feedback(
+            self,
+            query: str,
+            extraction: ExtractionResult,
+            resolution_feedback: dict,
+        ) -> ExtractionResult | None:
+            return None
+
+    service = QueryUnderstandingService(
+        builder=offline_builder(),
+        extractor=FakeCleanExtractor(),  # type: ignore[arg-type]
+    )
+
+    response = service.understand(
+        "i have asthma but a migraine. can i take aspirin or ibuprofin?"
+    )
+
+    assert response.extraction_mode == "hybrid"
+    assert response.state.all_drugs_mentioned == ["aspirin", "ibuprofen"]
+    assert "asthma" not in response.state.all_drugs_mentioned
+    assert "but" not in response.state.all_drugs_mentioned
+
+
+def test_query_understanding_does_not_rewrite_hybrid_state_parameters() -> None:
+    class FakeHybridExtractor:
+        def extract(self, query: str) -> ExtractionResult:
+            return ExtractionResult(
+                state=QueryState(
+                    primary_drug="ASA",
+                    all_drugs_mentioned=["ASA"],
+                    current_medications=["home aspirin phrase"],
+                    allergies=["ibuprofen allergy phrase"],
+                    conditions=["custom condition"],
+                    patient_context=["custom patient context"],
+                    intent="custom intent",
+                ),
+                mentions=[
+                    ExtractedDrugMention(text="aspirin", role="primary_drug"),
+                    ExtractedDrugMention(text="ibuprofen", role="allergy"),
+                ],
+                mode="hybrid",
+            )
+
+        def revise_with_resolution_feedback(
+            self,
+            query: str,
+            extraction: ExtractionResult,
+            resolution_feedback: dict,
+        ) -> ExtractionResult | None:
+            return None
+
+    service = QueryUnderstandingService(
+        builder=offline_builder(),
+        extractor=FakeHybridExtractor(),  # type: ignore[arg-type]
+    )
+
+    response = service.understand("Can I take aspirin with an ibuprofen allergy?")
+
+    assert response.state.primary_drug == "ASA"
+    assert response.state.all_drugs_mentioned == ["ASA"]
+    assert response.state.current_medications == ["home aspirin phrase"]
+    assert response.state.allergies == ["ibuprofen allergy phrase"]
+    assert response.state.conditions == ["custom condition"]
+    assert response.state.patient_context == ["custom patient context"]
+    assert response.state.intent == "custom intent"
+    assert response.primary_dossier is not None
+
 
 @pytest.mark.asyncio
 async def test_query_understanding_unresolved_query_returns_warning(

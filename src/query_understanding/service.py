@@ -66,14 +66,9 @@ class QueryUnderstandingService:
 
         warnings = [*extraction.warnings]
         errors = [*extraction.errors]
-        extraction.state.all_drugs_mentioned = self._resolved_drug_texts(
-            resolved_drugs
-        )
 
         primary = self._select_primary(resolved_drugs, extraction.state.primary_drug)
-        if primary:
-            extraction.state.primary_drug = primary.text
-        else:
+        if primary is None:
             warnings.append(
                 "No primary drug could be resolved. Try naming the drug more directly."
             )
@@ -238,22 +233,6 @@ class QueryUnderstandingService:
         if any(token in stop_phrases for token in phrase_tokens):
             return False
         return normalized not in stop_phrases and len(normalized) >= 3
-
-    @staticmethod
-    def _resolved_drug_texts(
-        mentions: list[ResolvedDrugMention],
-    ) -> list[str]:
-        values: list[str] = []
-        seen: set[str] = set()
-        for mention in mentions:
-            if mention.selected_concept is None:
-                continue
-            key = mention.selected_concept.rxcui
-            if key in seen:
-                continue
-            seen.add(key)
-            values.append(mention.text)
-        return values
 
     def _resolve_mention(self, mention: ExtractedDrugMention) -> ResolvedDrugMention:
         candidates = self._resolve_text(mention.text)
