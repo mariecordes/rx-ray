@@ -20,7 +20,7 @@ query_extraction_revision:
         - current_medications (drugs the user says they are currently taking, already taking, or have taken. a drug asked about is not a current medication unless explicitly stated)
         - allergies (drugs, substances, or other allergens the user says they are allergic to)
         - conditions (health conditions mentioned in the query)
-        - patient_context (patient descriptors such as child, adult, pregnant, elderly, breastfeeding)
+        - patient_context (patient descriptors such as age group, pregnant, breastfeeding; age groups should be assigned if age is mentioned or can be inferred: infant (0-1), child (2-11), adolescent (12-17), adult (18-64), senior (65+))
         - intent (the user's intent, such as asking about drug interactions, side effects, safety, etc.)
 
         main intent categories include:
