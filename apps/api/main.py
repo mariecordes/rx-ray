@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+import sys
 from functools import lru_cache
 
 from dotenv import load_dotenv
@@ -15,6 +17,33 @@ from src.query_understanding.models import QueryUnderstandingResponse
 from src.query_understanding.service import QueryUnderstandingService
 
 load_dotenv()
+
+
+def configure_api_logging() -> None:
+    """Ensure rx-ray API diagnostics are visible in the uvicorn console."""
+
+    logger = logging.getLogger("src.query_understanding")
+    logger.setLevel(logging.INFO)
+
+    has_handler = any(
+        getattr(handler, "_rx_ray_api_handler", False)
+        for handler in logger.handlers
+    )
+    if not has_handler:
+        handler = logging.StreamHandler(sys.stdout)
+        handler.setLevel(logging.INFO)
+        handler.setFormatter(
+            logging.Formatter(
+                "%(asctime)s - %(levelname)s - %(name)s - %(message)s"
+            )
+        )
+        handler._rx_ray_api_handler = True  # type: ignore[attr-defined]
+        logger.addHandler(handler)
+
+    logger.propagate = False
+
+
+configure_api_logging()
 
 
 class HealthResponse(BaseModel):

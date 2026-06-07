@@ -6,6 +6,7 @@ from apps.api.main import (
     QueryUnderstandingRequest,
     build_dossier,
     build_label_evidence,
+    configure_api_logging,
     health_check,
     understand_query,
 )
@@ -38,6 +39,23 @@ async def test_health_check() -> None:
 
     assert response.status == "ok"
     assert response.version == "0.1.0"
+
+
+def test_api_logging_setup_is_idempotent() -> None:
+    configure_api_logging()
+    configure_api_logging()
+
+    import logging
+
+    logger = logging.getLogger("src.query_understanding")
+    rx_ray_handlers = [
+        handler
+        for handler in logger.handlers
+        if getattr(handler, "_rx_ray_api_handler", False)
+    ]
+
+    assert logger.level == logging.INFO
+    assert len(rx_ray_handlers) == 1
 
 
 @pytest.mark.asyncio
