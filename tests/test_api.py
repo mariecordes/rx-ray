@@ -204,7 +204,7 @@ async def test_query_understanding_child_question_uses_drug_not_patient_context(
 
     assert response.state.primary_drug == "aspirin"
     assert response.state.all_drugs_mentioned == ["aspirin"]
-    assert "pediatric" in response.state.patient_context
+    assert "child" in response.state.patient_context
     assert response.primary_dossier is not None
     assert response.primary_dossier.resolved_drug is not None
     assert response.primary_dossier.resolved_drug.name == "aspirin"
@@ -415,3 +415,19 @@ def test_query_extraction_prompt_template_loads() -> None:
     assert "create the corrected extraction from scratch" in messages[0]["content"]
     assert "Can a child take aspirin?" in messages[1]["content"]
     assert '{"state": {}}' in messages[1]["content"]
+
+
+def test_query_extraction_splits_packed_list_items() -> None:
+    parsed = HybridQueryExtractor._string_list(
+        ["adult, breastfeeding", "penicillin; latex", "adult"]
+    )
+
+    assert parsed == ["adult", "breastfeeding", "penicillin", "latex"]
+
+
+def test_query_extraction_extracts_multiple_patient_context_items() -> None:
+    result = HybridQueryExtractor()._extract_deterministic(
+        "Can a breastfeeding 30-year-old woman take aspirin?"
+    )
+
+    assert result.state.patient_context == ["breastfeeding", "female", "adult"]

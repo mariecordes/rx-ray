@@ -31,9 +31,14 @@ PATIENT_CONTEXT_PATTERNS: dict[str, tuple[str, ...]] = {
         r"\btrying to conceive\b",
         r"\bexpecting\b",
     ),
-    "lactation": (r"\bbreastfeeding\b", r"\blactating\b", r"\bnursing\b"),
-    "pediatric": (r"\bchild\b", r"\bkid\b", r"\binfant\b", r"\bbaby\b"),
-    "older adult": (r"\belderly\b", r"\bolder adult\b", r"\bsenior\b"),
+    "breastfeeding": (r"\bbreastfeeding\b", r"\blactating\b", r"\bnursing\b"),
+    "female": (r"\bfemale\b", r"\bwoman\b", r"\bwomen\b", r"\bgirl\b"),
+    "male": (r"\bmale\b", r"\bman\b", r"\bmen\b", r"\bboy\b"),
+    "infant": (r"\binfant\b", r"\bbaby\b"),
+    "child": (r"\bchild\b", r"\bchildren\b", r"\bkid\b"),
+    "adolescent": (r"\badolescent\b", r"\bteen(?:ager)?\b"),
+    "adult": (r"\badult\b", r"\bolder adult\b"),
+    "senior": (r"\belderly\b", r"\bsenior\b"),
 }
 
 DRUG_FRAGMENT_PATTERN = r"([a-zA-Z0-9][a-zA-Z0-9 /\-]+)"
@@ -125,10 +130,7 @@ class HybridQueryExtractor:
         normalized = query.casefold()
         state = QueryState(
             conditions=self._extract_terms(normalized, CONDITION_PATTERNS),
-            patient_context=self._extract_terms(
-                normalized,
-                PATIENT_CONTEXT_PATTERNS,
-            ),
+            patient_context=self._extract_patient_context(query),
             intent=self._infer_intent(normalized),
         )
         mentions: list[ExtractedDrugMention] = []
@@ -310,6 +312,49 @@ class HybridQueryExtractor:
             if any(re.search(pattern, normalized_query) for pattern in term_patterns):
                 terms.append(term)
         return terms
+
+    @classmethod
+    def _extract_patient_context(cls, query: str) -> list[str]:
+        normalized = query.casefold()
+        terms = cls._extract_terms(normalized, PATIENT_CONTEXT_PATTERNS)
+        age_group = cls._infer_age_group(normalized)
+        if age_group:
+            terms.append(age_group)
+        return cls._dedupe_strings(terms)
+
+    @staticmethod
+    def _infer_age_group(normalized_query: str) -> str | None:
+        match = re.search(
+            r"\b(\d{1,3})\s*(?:-| )?(?:years?|yrs?)\s*(?:-| )?old\b",
+            normalized_query,
+        )
+        if not match:
+            match = re.search(r"\b(\d{1,3})\s*(?:yo|y/o)\b", normalized_query)
+        if not match:
+            return None
+
+        age = int(match.group(1))
+        if age <= 1:
+            return "infant"
+        if 2 <= age <= 11:
+            return "child"
+        if 12 <= age <= 17:
+            return "adolescent"
+        if 18 <= age <= 64:
+            return "adult"
+        return "senior"
+
+    @staticmethod
+    def _dedupe_strings(values: list[str]) -> list[str]:
+        deduped: list[str] = []
+        seen: set[str] = set()
+        for value in values:
+            key = value.casefold()
+            if key in seen:
+                continue
+            seen.add(key)
+            deduped.append(value)
+        return deduped
 
     @staticmethod
     def _infer_intent(normalized_query: str) -> str | None:

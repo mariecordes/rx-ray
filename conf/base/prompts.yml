@@ -13,6 +13,10 @@ query_extraction_revision:
         - If there are any obvious typos in drug names or other relevant entities, correct them. E.g., if the query and/or deterministic extraction mention "ibuprofin", correct it to "ibuprofen" in the final extraction.
         
         Return JSON only, with keys state, drug_mentions, warnings.
+        Examples:
+        - "breastfeeding 30-year-old woman" -> patient_context: ["adult", "female", "breastfeeding"]
+        - "pregnant 16-year-old girl" -> patient_context: ["adolescent", "female", "pregnancy"]
+        - "aspirin or ibuprofen" -> all_drugs_mentioned: ["aspirin", "ibuprofen"], not ["aspirin and ibuprofen"]
 
         state must contain:
         - primary_drug (the most important drug being asked about, or the first asked-about drug if no priority is specified)
@@ -20,7 +24,9 @@ query_extraction_revision:
         - current_medications (drugs the user says they are currently taking, already taking, or have taken. a drug asked about is not a current medication unless explicitly stated)
         - allergies (drugs, substances, or other allergens the user says they are allergic to)
         - conditions (health conditions mentioned in the query)
-        - patient_context (patient descriptors such as age group, pregnant, breastfeeding; age groups should be assigned if age is mentioned or can be inferred: infant (0-1), child (2-11), adolescent (12-17), adult (18-64), senior (65+))
+        - patient_context (patient descriptors such as age group, pregnancy, breastfeeding, gender, etc.)
+          > age groups should be assigned if age is mentioned or can be inferred: infant (0-1), child (2-11), adolescent (12-17), adult (18-64), senior (65+),
+          > gender descriptor "male" or "female" if clearly mentioned (e.g., woman, girl, man, boy) or can be inferred (e.g., pregnant or breastfeeding)
         - intent (the user's intent, such as asking about drug interactions, side effects, safety, etc.)
 
         main intent categories include:
