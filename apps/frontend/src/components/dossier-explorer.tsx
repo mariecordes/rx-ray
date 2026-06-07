@@ -437,6 +437,7 @@ export function DossierExplorer() {
     event.preventDefault();
     setIsQueryLoading(true);
     setQueryError(null);
+    setQueryUnderstanding(null);
 
     try {
       const response = await fetch("/api/query-understanding", {
@@ -739,9 +740,19 @@ function QueryUnderstandingPanel({
           </div>
         ) : null}
 
-        {result ? <QueryUnderstandingResult result={result} /> : null}
+        {isLoading ? <QueryUnderstandingLoadingState /> : null}
+        {!isLoading && result ? <QueryUnderstandingResult result={result} /> : null}
       </CardContent>
     </Card>
+  );
+}
+
+function QueryUnderstandingLoadingState() {
+  return (
+    <div className="flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-600">
+      <Loader2 className="size-4 animate-spin text-slate-500" />
+      Understanding your query and extracting relevant information...
+    </div>
   );
 }
 
