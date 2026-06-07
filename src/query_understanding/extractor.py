@@ -442,15 +442,23 @@ class HybridQueryExtractor:
 
     @classmethod
     def _string_list(cls, value: Any) -> list[str]:
+        values: list[str] = []
         if isinstance(value, str):
-            return [value.strip()] if value.strip() else []
-        if isinstance(value, list):
-            return [
-                item.strip()
-                for item in value
-                if isinstance(item, str) and item.strip()
-            ]
-        return []
+            values = [value]
+        elif isinstance(value, list):
+            values = [item for item in value if isinstance(item, str)]
+
+        parsed: list[str] = []
+        seen: set[str] = set()
+        for item in values:
+            for part in re.split(r"[;,]", item):
+                cleaned = re.sub(r"\s+", " ", part).strip()
+                key = cleaned.casefold()
+                if not cleaned or key in seen:
+                    continue
+                seen.add(key)
+                parsed.append(cleaned)
+        return parsed
 
     def _parse_llm_mentions(self, value: Any) -> list[ExtractedDrugMention]:
         if not isinstance(value, list):

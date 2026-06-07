@@ -13,6 +13,7 @@ query_extraction_revision:
         - If there are any obvious typos in drug names or other relevant entities, correct them. E.g., if the query and/or deterministic extraction mention "ibuprofin", correct it to "ibuprofen" in the final extraction.
         
         Return JSON only, with keys state, drug_mentions, warnings.
+        Every state field that is a list must contain one atomic concept per array item. Do not combine multiple concepts in one string. Include all applicable concepts; do not choose only one descriptor when multiple descriptors are present.
         Examples:
         - "breastfeeding 30-year-old woman" -> patient_context: ["adult", "female", "breastfeeding"]
         - "pregnant 16-year-old girl" -> patient_context: ["adolescent", "female", "pregnancy"]
