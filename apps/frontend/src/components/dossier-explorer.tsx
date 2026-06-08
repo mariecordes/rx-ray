@@ -559,7 +559,7 @@ export function DossierExplorer() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-50">
+    <main className="min-h-screen bg-[#F8F4FC]">
       <div className="w-full bg-[#05021D] px-4 py-5 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-3xl">
           <Image
