@@ -792,6 +792,8 @@ function QueryUnderstandingResult({
         </div>
       </button>
 
+      <QueryUnderstandingStatus result={result} />
+
       {isExpanded ? (
         <div className="space-y-3 border-t border-slate-200 p-3">
           {/* <div className="text-xs font-medium uppercase text-slate-500">
@@ -834,24 +836,51 @@ function QueryUnderstandingResult({
         </div>
       ) : null}
 
-      {result.warnings.length || result.errors.length ? (
-        <div className="space-y-2 border-t border-slate-200 p-3">
-          {result.warnings.map((warning) => (
-            <div
-              key={warning}
-              className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm leading-5 text-amber-900"
-            >
-              {warning}
+    </div>
+  );
+}
+
+function QueryUnderstandingStatus({
+  result,
+}: {
+  result: QueryUnderstandingResponse;
+}) {
+  const hasNoPrimaryDossier = !result.primary_dossier;
+  const visibleWarnings = result.warnings.filter(
+    (warning) => !warning.startsWith("No primary drug could be resolved")
+  );
+
+  if (!hasNoPrimaryDossier && visibleWarnings.length === 0 && result.errors.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="space-y-2 border-t border-slate-200 p-3">
+      {hasNoPrimaryDossier || visibleWarnings.length ? (
+        <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm leading-5 text-amber-900">
+          {hasNoPrimaryDossier ? (
+            <p>
+              No primary medication could be linked to RxNorm, so the dossier
+              below was not updated.
+            </p>
+          ) : null}
+          {visibleWarnings.length ? (
+            <div className={cn("space-y-1", hasNoPrimaryDossier ? "mt-2" : "")}>
+              {visibleWarnings.map((warning) => (
+                <p key={warning}>{warning}</p>
+              ))}
             </div>
-          ))}
-          {result.errors.map((error) => (
-            <div
-              key={error}
-              className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm leading-5 text-red-800"
-            >
-              {error}
-            </div>
-          ))}
+          ) : null}
+        </div>
+      ) : null}
+
+      {result.errors.length ? (
+        <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm leading-5 text-red-800">
+          <ul className="list-disc space-y-1 pl-4">
+            {result.errors.map((error) => (
+              <li key={error}>{error}</li>
+            ))}
+          </ul>
         </div>
       ) : null}
     </div>
