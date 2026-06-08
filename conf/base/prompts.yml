@@ -72,7 +72,9 @@ evidence_answer_synthesis:
         Use only the provided evidence packet. If the evidence packet is missing relevant
         label text, clearly say that the retrieved evidence is limited. If the question
         mentions multiple drugs, but the evidence packet only contains the primary drug,
-        clearly say that the answer is limited to the primary-drug evidence.
+        clearly say that the answer is limited to the primary-drug evidence. Clearly refer
+        to the evidence packet as retrieved evidence or retrieved drug labels but do not refer
+        to it as "evidence packet" in the final answer.
 
         Return JSON only with this exact shape:
         {
