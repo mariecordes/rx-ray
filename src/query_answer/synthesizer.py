@@ -4,9 +4,10 @@ import json
 import os
 from collections import Counter
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Protocol
 
 from src.dossier.models import DrugDossier, LabelSection, OpenFDALabelRecord, RxNormEdge
+from src.query_answer.config import QueryAnswerParameters, load_query_answer_parameters
 from src.query_answer.models import (
     EvidenceAnswer,
     EvidenceBullet,
@@ -18,8 +19,12 @@ from src.utils import load_prompts
 ANSWER_SYNTHESIS_API_KEY_ENV = "ANSWER_SYNTHESIS_OPENAI_API_KEY"
 ANSWER_SYNTHESIS_MODEL_ENV = "ANSWER_SYNTHESIS_OPENAI_MODEL"
 ANSWER_SYNTHESIS_PROMPT_KEY = "evidence_answer_synthesis"
+ANSWER_CITATION_RETRY_PROMPT_KEY = "evidence_answer_citation_retry"
 STANDARD_SAFETY_NOTE = (
     "This is an educational summary of retrieved public evidence, not medical advice."
+)
+SOURCE_LINK_LIMITATION = (
+    "The generated response could not be linked to specific retrieved label sources."
 )
 
 PRIORITIZED_SECTIONS = (
@@ -46,8 +51,26 @@ class AnswerSynthesisResult:
     errors: list[str] = field(default_factory=list)
 
 
+class AnswerJsonRequester(Protocol):
+    def __call__(
+        self,
+        *,
+        messages: list[dict[str, str]],
+        prompt_config: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Return parsed JSON from an answer-synthesis model call."""
+
+
 class EvidenceAnswerSynthesizer:
     """Generate a compact grounded answer from query understanding evidence."""
+
+    def __init__(
+        self,
+        parameters: QueryAnswerParameters | None = None,
+        json_requester: AnswerJsonRequester | None = None,
+    ) -> None:
+        self.parameters = parameters or load_query_answer_parameters()
+        self.json_requester = json_requester
 
     def synthesize(
         self,
@@ -69,16 +92,6 @@ class EvidenceAnswerSynthesizer:
                 ]
             )
 
-        try:
-            from openai import OpenAI  # type: ignore[import-not-found]
-        except ImportError:
-            return AnswerSynthesisResult(
-                warnings=[
-                    "The OpenAI package is not installed; no evidence summary "
-                    "was generated."
-                ]
-            )
-
         prompt_config = self._load_prompt()
         evidence_packet = self.build_evidence_packet(understanding)
         messages = self._format_messages(
@@ -87,25 +100,118 @@ class EvidenceAnswerSynthesizer:
             evidence_packet=json.dumps(evidence_packet, indent=2),
         )
 
-        client = OpenAI(api_key=os.getenv(ANSWER_SYNTHESIS_API_KEY_ENV))
         try:
-            response = client.chat.completions.create(
-                model=os.getenv(ANSWER_SYNTHESIS_MODEL_ENV),
-                response_format=prompt_config.get(
-                    "response_format",
-                    {"type": "json_object"},
-                ),
+            data = self._request_answer_json(
                 messages=messages,
-                temperature=0,
+                prompt_config=prompt_config,
             )
-            content = response.choices[0].message.content or "{}"
-            data = json.loads(content)
+        except ImportError:
+            return AnswerSynthesisResult(
+                warnings=[
+                    "The OpenAI package is not installed; no evidence summary "
+                    "was generated."
+                ]
+            )
         except Exception as exc:  # pragma: no cover - requires live LLM config
             return AnswerSynthesisResult(errors=[f"Answer synthesis failed: {exc}"])
 
         allowed_citations = self.allowed_citations(evidence_packet)
-        return AnswerSynthesisResult(
-            answer=self.parse_answer_data(data, allowed_citations)
+        answer = self.parse_answer_data(data, allowed_citations)
+        if self._needs_source_retry(answer, allowed_citations):
+            try:
+                retry_answer = self._retry_with_citation_feedback(
+                    query=query,
+                    data=data,
+                    evidence_packet=evidence_packet,
+                    prompt_config=prompt_config,
+                    allowed_citations=allowed_citations,
+                )
+            except Exception as exc:  # pragma: no cover - requires live LLM failure
+                return AnswerSynthesisResult(
+                    answer=self._with_source_link_limitation(answer),
+                    errors=[f"Answer citation repair failed: {exc}"],
+                )
+            answer = retry_answer or self._with_source_link_limitation(answer)
+
+        return AnswerSynthesisResult(answer=answer)
+
+    def _request_answer_json(
+        self,
+        *,
+        messages: list[dict[str, str]],
+        prompt_config: dict[str, Any],
+    ) -> dict[str, Any]:
+        if self.json_requester is not None:
+            return self.json_requester(
+                messages=messages,
+                prompt_config=prompt_config,
+            )
+
+        from openai import OpenAI  # type: ignore[import-not-found]
+
+        client = OpenAI(api_key=os.getenv(ANSWER_SYNTHESIS_API_KEY_ENV))
+        response = client.chat.completions.create(
+            model=os.getenv(ANSWER_SYNTHESIS_MODEL_ENV),
+            response_format=prompt_config.get(
+                "response_format",
+                {"type": "json_object"},
+            ),
+            messages=messages,
+            temperature=0,
+        )
+        content = response.choices[0].message.content or "{}"
+        data = json.loads(content)
+        if not isinstance(data, dict):
+            return {}
+        return data
+
+    def _retry_with_citation_feedback(
+        self,
+        *,
+        query: str,
+        data: dict[str, Any],
+        evidence_packet: dict[str, Any],
+        prompt_config: dict[str, Any],
+        allowed_citations: set[tuple[str, str]],
+    ) -> EvidenceAnswer | None:
+        for _ in range(self.parameters.max_synthesis_retries):
+            messages = self._format_messages(
+                prompt_config.get("messages", []),
+                query=query,
+                evidence_packet=json.dumps(evidence_packet, indent=2),
+            )
+            messages.append(
+                self._format_retry_message(data, allowed_citations)
+            )
+            retry_data = self._request_answer_json(
+                messages=messages,
+                prompt_config=prompt_config,
+            )
+            retry_answer = self.parse_answer_data(retry_data, allowed_citations)
+            if not self._needs_source_retry(retry_answer, allowed_citations):
+                return retry_answer
+            data = retry_data
+        return None
+
+    def _needs_source_retry(
+        self,
+        answer: EvidenceAnswer,
+        allowed_citations: set[tuple[str, str]],
+    ) -> bool:
+        if not self.parameters.require_citations_when_evidence_exists:
+            return False
+        if not allowed_citations:
+            return False
+        return not any(bullet.citations for bullet in answer.bullets)
+
+    @staticmethod
+    def _with_source_link_limitation(answer: EvidenceAnswer) -> EvidenceAnswer:
+        if SOURCE_LINK_LIMITATION in answer.limitations:
+            return answer
+        return answer.model_copy(
+            update={
+                "limitations": [*answer.limitations, SOURCE_LINK_LIMITATION],
+            }
         )
 
     @staticmethod
@@ -175,13 +281,47 @@ class EvidenceAnswerSynthesizer:
 
     @staticmethod
     def _load_prompt() -> dict[str, Any]:
+        return EvidenceAnswerSynthesizer._load_prompt_config(
+            ANSWER_SYNTHESIS_PROMPT_KEY
+        )
+
+    @staticmethod
+    def _load_prompt_config(prompt_key: str) -> dict[str, Any]:
         prompt_library = load_prompts()
-        prompt_config = prompt_library.get(ANSWER_SYNTHESIS_PROMPT_KEY)
+        prompt_config = prompt_library.get(prompt_key)
         if not isinstance(prompt_config, dict):
-            raise ValueError(
-                f"Missing prompt configuration: {ANSWER_SYNTHESIS_PROMPT_KEY}"
-            )
+            raise ValueError(f"Missing prompt configuration: {prompt_key}")
         return prompt_config
+
+    @staticmethod
+    def _format_retry_message(
+        previous_response: dict[str, Any],
+        allowed_citations: set[tuple[str, str]],
+    ) -> dict[str, str]:
+        prompt_config = EvidenceAnswerSynthesizer._load_prompt_config(
+            ANSWER_CITATION_RETRY_PROMPT_KEY
+        )
+        message = prompt_config.get("message")
+        if not isinstance(message, dict):
+            raise ValueError(
+                f"Missing prompt message: {ANSWER_CITATION_RETRY_PROMPT_KEY}"
+            )
+        role = str(message.get("role", "user"))
+        content = str(message.get("content", ""))
+        allowed = [
+            {"source_id": source_id, "section": section}
+            for source_id, section in sorted(allowed_citations)
+        ]
+        return {
+            "role": role,
+            "content": EvidenceAnswerSynthesizer._replace_prompt_placeholders(
+                content,
+                {
+                    "allowed_citations": json.dumps(allowed, indent=2),
+                    "previous_response": json.dumps(previous_response, indent=2),
+                },
+            ),
+        }
 
     @staticmethod
     def _format_messages(
@@ -194,10 +334,25 @@ class EvidenceAnswerSynthesizer:
             content = message.get("content")
             if not role or content is None:
                 continue
-            for key, value in values.items():
-                content = content.replace("{" + key + "}", value)
-            formatted.append({"role": role, "content": content})
+            formatted.append(
+                {
+                    "role": role,
+                    "content": EvidenceAnswerSynthesizer._replace_prompt_placeholders(
+                        content,
+                        values,
+                    ),
+                }
+            )
         return formatted
+
+    @staticmethod
+    def _replace_prompt_placeholders(
+        content: str,
+        values: dict[str, str],
+    ) -> str:
+        for key, value in values.items():
+            content = content.replace("{" + key + "}", value)
+        return content
 
 
 def rxnorm_relationship_summary(dossier: DrugDossier) -> dict[str, Any]:

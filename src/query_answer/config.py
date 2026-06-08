@@ -26,6 +26,15 @@ def load_query_answer_parameters() -> QueryAnswerParameters:
             minimum=1,
             maximum=25,
         ),
+        max_synthesis_retries=bounded_int(
+            query_answer.get("max_synthesis_retries"),
+            default=1,
+            minimum=0,
+            maximum=3,
+        ),
+        require_citations_when_evidence_exists=bool(
+            query_answer.get("require_citations_when_evidence_exists", True)
+        ),
     )
 
 

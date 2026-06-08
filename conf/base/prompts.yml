@@ -105,3 +105,19 @@ evidence_answer_synthesis:
 
         Evidence packet:
         {evidence_packet}
+
+evidence_answer_citation_retry:
+  message:
+    role: user
+    content: |
+      Validation feedback:
+      The previous response did not include any valid cited evidence bullets,
+      even though label evidence was supplied. Regenerate the same JSON shape
+      with 2 to 5 bullets, and include citations using only these allowed
+      source_id + section pairs.
+
+      Allowed citation pairs:
+      {allowed_citations}
+
+      Previous response:
+      {previous_response}
