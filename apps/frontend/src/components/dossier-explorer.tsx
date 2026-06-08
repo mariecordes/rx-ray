@@ -8,11 +8,11 @@ import {
   ChevronRight,
   Database,
   FileText,
-  FlaskConical,
   Info,
   Loader2,
   Search,
 } from "lucide-react";
+import Image from "next/image";
 
 import { RxNormKnowledgeGraph } from "@/components/rxnorm-knowledge-graph";
 import { Badge } from "@/components/ui/badge";
@@ -560,19 +560,19 @@ export function DossierExplorer() {
 
   return (
     <main className="min-h-screen bg-slate-50">
+      <div className="w-full bg-[#05021D] px-4 py-5 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-3xl">
+          <Image
+            priority
+            alt="rx-ray"
+            className="mx-auto h-auto w-full rounded-[20px]"
+            height={724}
+            src="/images/rx-ray-banner.png"
+            width={2172}
+          />
+        </div>
+      </div>
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 px-4 py-5 sm:px-6 lg:px-8">
-        <header className="flex flex-col gap-3 border-b border-slate-200 pb-4 md:flex-row md:items-end md:justify-between">
-          <div>
-            <div className="flex items-center gap-2 text-sm font-medium text-cyan-700">
-              <FlaskConical className="size-4" />
-              rx-ray
-            </div>
-            <h1 className="mt-1 text-2xl font-semibold text-slate-950">
-              Drug Dossier Explorer
-            </h1>
-          </div>
-        </header>
-
         <div className="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm leading-5 text-amber-900">
           <Info className="size-4 shrink-0" />
           <span>
