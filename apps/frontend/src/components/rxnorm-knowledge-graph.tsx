@@ -473,9 +473,6 @@ export function RxNormKnowledgeGraph({
       getTtyStyle(left).label.localeCompare(getTtyStyle(right).label)
     );
   }, [positionedNodes, visualRxcuis]);
-  const truncated =
-    dossier.rxnorm_neighborhood.truncated || edges.length > visualEdges.length;
-
   function toggleNodeType(tty: string) {
     setSelectedTypes((current) => {
       const next = new Set(current);
@@ -640,20 +637,17 @@ export function RxNormKnowledgeGraph({
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between gap-3">
+      <CardHeader>
         <div>
           <div className="flex items-center gap-2">
             <CardTitle>Drug Network</CardTitle>
-            <InfoTooltip text="The drug network uses RxNorm, a public medication terminology, to show relationships between medication concepts such as ingredients, brands, dose forms, and related products." />
+            <InfoTooltip text="The drug network uses RxNorm, a public medication terminology, to show relationships between medication concepts such as ingredients, brands, dose forms, and related products. For large drug networks, the app may return only the first requested set of relationships, so additional RxNorm relationships may exist beyond what is shown." />
           </div>
           <p className="mt-1 text-sm leading-6 text-slate-500">
             Explore how the matched drug connects to related medication
             concepts.
           </p>
         </div>
-        {truncated ? (
-          <Badge className="bg-amber-50 text-amber-800">Truncated</Badge>
-        ) : null}
       </CardHeader>
         <CardContent className="space-y-4">
         {edges.length === 0 ? (

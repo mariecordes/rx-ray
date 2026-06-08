@@ -3,11 +3,9 @@
 import { FormEvent, type ReactNode, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
-  Brain,
   ChevronDown,
   ChevronRight,
   Database,
-  FileText,
   Info,
   Loader2,
   Search,
@@ -695,18 +693,15 @@ function QueryUnderstandingPanel({
   return (
     <Card>
       <CardHeader className="border-b border-slate-200">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <div className="flex items-center gap-2">
-              <CardTitle>Ask a Question</CardTitle>
-              <InfoTooltip text="This extracts a structured medication state from your question, resolves drug mentions through RxNorm, and loads the primary drug into the explorer below. It does not generate medical advice." />
-            </div>
-            <p className="mt-1 text-sm leading-6 text-slate-500">
-              What can we help you explore? Ask in plain language, then inspect
-              what the system understood.
-            </p>
+        <div>
+          <div className="flex items-center gap-2">
+            <CardTitle>Ask a Question</CardTitle>
+            <InfoTooltip text="This extracts a structured medication state from your question, resolves drug mentions through RxNorm, and loads the primary drug into the explorer below. It does not generate medical advice." />
           </div>
-          <Brain className="mt-1 size-4 text-slate-400" />
+          <p className="mt-1 text-sm leading-6 text-slate-500">
+            What can we help you explore? Ask in plain language, then inspect
+            what the system understood.
+          </p>
         </div>
       </CardHeader>
       <CardContent className="space-y-4 pt-5">
@@ -1140,19 +1135,15 @@ function LabelEvidencePanel({
     <div ref={ref}>
       <Card>
         <CardHeader className="border-b border-slate-200">
-          <div className="flex flex-row items-start justify-between gap-3">
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                <CardTitle>Drug Labels</CardTitle>
-                <InfoTooltip text="Drug labels come from public FDA label data. They can include warnings, uses, interactions, pregnancy or lactation information, and other text from medication labels." />
-              </div>
-              <p className="mt-1 text-sm leading-6 text-slate-500">
-                Public drug-label text retrieved for the searched drug, with
-                graph selections used to highlight or add more specific label
-                records.
-              </p>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <CardTitle>Drug Labels</CardTitle>
+              <InfoTooltip text="Drug labels come from public FDA label data. They can include warnings, uses, interactions, pregnancy or lactation information, and other text from medication labels." />
             </div>
-            <FileText className="mt-1 size-4 text-slate-400" />
+            <p className="mt-1 text-sm leading-6 text-slate-500">
+              Public drug-label text retrieved for the searched drug, with graph
+              selections used to highlight or add more specific label records.
+            </p>
           </div>
         </CardHeader>
         <CardContent className="space-y-5 pt-5">
