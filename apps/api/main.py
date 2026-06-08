@@ -13,6 +13,7 @@ from src.dossier.builder import DossierBuilder
 from src.dossier.models import DrugDossier, OpenFDALabelEvidence
 from src.dossier.openfda_store import OpenFDALabelStore
 from src.dossier.rxnorm_store import RxNormParquetStore
+from src.query_answer.config import load_query_answer_parameters
 from src.query_answer.models import QueryAnswerResponse
 from src.query_answer.service import QueryAnswerService
 from src.query_understanding.models import QueryUnderstandingResponse
@@ -78,7 +79,11 @@ class QueryUnderstandingRequest(BaseModel):
 
 class QueryAnswerRequest(BaseModel):
     query: str = Field(..., min_length=1)
-    openfda_limit: int = Field(default=5, ge=1, le=25)
+    openfda_limit: int = Field(
+        default_factory=lambda: load_query_answer_parameters().default_openfda_limit,
+        ge=1,
+        le=25,
+    )
 
 
 @lru_cache(maxsize=1)

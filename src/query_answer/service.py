@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 
 from src.dossier.builder import DossierBuilder
+from src.query_answer.config import load_query_answer_parameters
 from src.query_answer.models import QueryAnswerResponse
 from src.query_answer.synthesizer import EvidenceAnswerSynthesizer
 from src.query_understanding.service import QueryUnderstandingService
@@ -27,11 +28,16 @@ class QueryAnswerService:
     def answer(
         self,
         query: str,
-        openfda_limit: int = 5,
+        openfda_limit: int | None = None,
     ) -> QueryAnswerResponse:
+        label_limit = (
+            openfda_limit
+            if openfda_limit is not None
+            else load_query_answer_parameters().default_openfda_limit
+        )
         understanding = self.understanding_service.understand(
             query,
-            openfda_limit=openfda_limit,
+            openfda_limit=label_limit,
         )
         synthesis = self.synthesizer.synthesize(query, understanding)
         warnings = [*understanding.warnings, *synthesis.warnings]

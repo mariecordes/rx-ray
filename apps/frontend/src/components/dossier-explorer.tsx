@@ -482,7 +482,6 @@ export function DossierExplorer() {
         },
         body: JSON.stringify({
           query: question,
-          openfda_limit: openfdaLimit,
         }),
       });
       const payload = await response.json();
