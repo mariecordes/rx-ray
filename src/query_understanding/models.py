@@ -6,7 +6,6 @@ from pydantic import BaseModel, Field
 
 from src.dossier.models import (
     DrugDossier,
-    OpenFDALabelEvidence,
     ResolutionCandidate,
     RxNormConcept,
 )
@@ -47,15 +46,6 @@ class ResolvedDrugMention(BaseModel):
     selected_concept: RxNormConcept | None = None
 
 
-class SecondaryLabelEvidence(BaseModel):
-    """Compact label evidence preview for non-primary resolved drugs."""
-
-    mention: str
-    role: DrugMentionRole
-    resolved_concept: RxNormConcept | None = None
-    label_evidence: OpenFDALabelEvidence | None = None
-
-
 class QueryUnderstandingResponse(BaseModel):
     """Structured query understanding output for frontend inspection."""
 
@@ -64,6 +54,5 @@ class QueryUnderstandingResponse(BaseModel):
     state: QueryState = Field(default_factory=QueryState)
     resolved_drugs: list[ResolvedDrugMention] = Field(default_factory=list)
     primary_dossier: DrugDossier | None = None
-    secondary_label_evidence: list[SecondaryLabelEvidence] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     errors: list[str] = Field(default_factory=list)

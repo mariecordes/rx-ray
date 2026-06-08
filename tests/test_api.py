@@ -165,7 +165,6 @@ async def test_query_understanding_extracts_state_and_primary_dossier(
         mention.text == "ibuprofen" and mention.role == "current_medication"
         for mention in response.resolved_drugs
     )
-    assert response.secondary_label_evidence
 
 
 @pytest.mark.asyncio

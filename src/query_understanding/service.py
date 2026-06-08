@@ -16,7 +16,6 @@ from src.query_understanding.models import (
     ExtractedDrugMention,
     QueryUnderstandingResponse,
     ResolvedDrugMention,
-    SecondaryLabelEvidence,
 )
 
 logger = logging.getLogger(__name__)
@@ -83,29 +82,6 @@ class QueryUnderstandingService:
                 openfda_limit=openfda_limit,
             )
 
-        secondary_previews: list[SecondaryLabelEvidence] = []
-        seen_secondary_rxcuis: set[str] = set()
-        primary_rxcui = primary.selected_concept.rxcui if primary else None
-        for mention in resolved_drugs:
-            concept = mention.selected_concept
-            if concept is None or concept.rxcui == primary_rxcui:
-                continue
-            if concept.rxcui in seen_secondary_rxcuis:
-                continue
-            seen_secondary_rxcuis.add(concept.rxcui)
-            secondary_previews.append(
-                SecondaryLabelEvidence(
-                    mention=mention.text,
-                    role=mention.role,
-                    resolved_concept=concept,
-                    label_evidence=self.builder.openfda_store.get_label_evidence(
-                        concept.rxcui,
-                        fallback_name=concept.name,
-                        limit=min(openfda_limit, 3),
-                    ),
-                )
-            )
-
         if unresolved_mentions:
             warnings.append(
                 "Some drug-like mentions could not be resolved: "
@@ -128,7 +104,6 @@ class QueryUnderstandingService:
             state=extraction.state,
             resolved_drugs=resolved_drugs,
             primary_dossier=primary_dossier,
-            secondary_label_evidence=secondary_previews,
             warnings=warnings,
             errors=errors,
         )
