@@ -21,6 +21,7 @@ import { Input } from "@/components/ui/input";
 import {
   DrugDossier,
   EvidenceAnswer,
+  EvidenceCitation,
   LabelSection,
   OpenFDALabelEvidence,
   OpenFDALabelRecord,
@@ -118,6 +119,24 @@ function displayRxNormType(tty?: string | null) {
 
 function displayStateLabel(value: string) {
   return value.replaceAll("_", " ");
+}
+
+function citationDisplayLabel(
+  citation: EvidenceCitation,
+  sourceById: Map<string, OpenFDALabelRecord>
+) {
+  const source = sourceById.get(citation.source_id);
+  const brandName = primaryValue(source?.brand_names);
+  const genericName = primaryValue(source?.generic_names);
+  const manufacturerName = primaryValue(source?.manufacturer_names);
+  const productName = brandName
+    ? displayBrandName(brandName)
+    : genericName
+      ? displayGenericName(genericName)
+      : "Label source";
+  return [productName, manufacturerName, displaySectionName(citation.section)]
+    .filter(Boolean)
+    .join(" · ");
 }
 
 function InfoTooltip({ text }: { text: string }) {
@@ -419,6 +438,19 @@ export function DossierExplorer() {
     });
   }
 
+  function handleAnswerCitationClick(citation: EvidenceCitation) {
+    if (displayEvidence.sections[citation.section]) {
+      setSelectedSection(citation.section);
+    }
+    const matchingSource = displayEvidence.records.find(
+      (source) => source.record.source_id === citation.source_id
+    );
+    setSelectedSourceKey(matchingSource?.key ?? null);
+    window.requestAnimationFrame(() => {
+      scrollToSection(labelEvidencePanelRef);
+    });
+  }
+
   function resetEvidenceSelection() {
     setSelectedGraphNode(null);
     setNodeLabelEvidence(null);
@@ -594,6 +626,7 @@ export function DossierExplorer() {
           onSubmit={handleQuestionSubmit}
           question={question}
           result={queryUnderstanding}
+          onAnswerCitationClick={handleAnswerCitationClick}
         />
 
         <form
@@ -688,6 +721,7 @@ function QueryUnderstandingPanel({
   error,
   isLoading,
   onQuestionChange,
+  onAnswerCitationClick,
   onSubmit,
   question,
   result,
@@ -696,6 +730,7 @@ function QueryUnderstandingPanel({
   error: string | null;
   isLoading: boolean;
   onQuestionChange: (value: string) => void;
+  onAnswerCitationClick: (citation: EvidenceCitation) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   question: string;
   result: QueryUnderstandingResponse | null;
@@ -748,7 +783,10 @@ function QueryUnderstandingPanel({
         {isLoading ? <QueryUnderstandingLoadingState /> : null}
         {!isLoading && result ? <QueryUnderstandingResult result={result} /> : null}
         {!isLoading && answerResponse ? (
-          <EvidenceAnswerResult response={answerResponse} />
+          <EvidenceAnswerResult
+            response={answerResponse}
+            onCitationClick={onAnswerCitationClick}
+          />
         ) : null}
       </CardContent>
     </Card>
@@ -756,8 +794,10 @@ function QueryUnderstandingPanel({
 }
 
 function EvidenceAnswerResult({
+  onCitationClick,
   response,
 }: {
+  onCitationClick: (citation: EvidenceCitation) => void;
   response: QueryAnswerResponse;
 }) {
   const { answer, understanding } = response;
@@ -792,6 +832,7 @@ function EvidenceAnswerResult({
     <EvidenceAnswerCard
       answer={answer}
       errors={synthesisErrors}
+      onCitationClick={onCitationClick}
       understanding={understanding}
       warnings={synthesisWarnings}
     />
@@ -801,23 +842,28 @@ function EvidenceAnswerResult({
 function EvidenceAnswerCard({
   answer,
   errors,
+  onCitationClick,
   understanding,
   warnings,
 }: {
   answer: EvidenceAnswer;
   errors: string[];
+  onCitationClick: (citation: EvidenceCitation) => void;
   understanding: QueryUnderstandingResponse;
   warnings: string[];
 }) {
-  const sourceNumberById = useMemo(() => {
+  const sourceById = useMemo(() => {
     const records =
       understanding.primary_dossier?.label_evidence?.label_records ?? [];
     return new Map(
       records
-        .map((record, index) =>
-          record.source_id ? ([record.source_id, index + 1] as const) : null
+        .map((record) =>
+          record.source_id ? ([record.source_id, record] as const) : null
         )
-        .filter((entry): entry is readonly [string, number] => entry !== null)
+        .filter(
+          (entry): entry is readonly [string, OpenFDALabelRecord] =>
+            entry !== null
+        )
     );
   }, [understanding.primary_dossier]);
 
@@ -844,33 +890,39 @@ function EvidenceAnswerCard({
         <AnswerSection title="Sources">
           <div className="space-y-2">
             {answer.bullets.map((bullet, index) => (
-              <div
+              <button
                 key={`${bullet.text}-${index}`}
-                className="rounded-md border border-slate-200 bg-white px-3 py-2"
+                type="button"
+                onClick={() => {
+                  const firstCitation = bullet.citations[0];
+                  if (firstCitation) {
+                    onCitationClick(firstCitation);
+                  }
+                }}
+                className={cn(
+                  "w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-left transition",
+                  bullet.citations.length
+                    ? "hover:border-[#C7B4EF] hover:bg-[#FBF9FE]"
+                    : ""
+                )}
               >
                 <p className="text-sm leading-6 text-slate-800">
                   {bullet.text}
                 </p>
                 {bullet.citations.length ? (
-                  <div className="mt-2 flex flex-wrap gap-1.5">
+                  <div className="mt-2 flex flex-wrap gap-x-2 gap-y-1 text-xs italic leading-5 text-slate-500">
                     {bullet.citations.map((citation, citationIndex) => {
-                      const sourceNumber = sourceNumberById.get(
-                        citation.source_id
-                      );
                       return (
-                        <Badge
+                        <span
                           key={`${citation.source_id}-${citation.section}-${citationIndex}`}
-                          className={sourceNumberBadgeClasses}
                         >
-                          {sourceNumber ? `Source ${sourceNumber}` : "Source"}
-                          {" · "}
-                          {displaySectionName(citation.section)}
-                        </Badge>
+                          {citationDisplayLabel(citation, sourceById)}
+                        </span>
                       );
                     })}
                   </div>
                 ) : null}
-              </div>
+              </button>
             ))}
           </div>
         </AnswerSection>
