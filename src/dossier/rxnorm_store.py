@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pandas as pd
@@ -47,6 +48,19 @@ TTY_PRIORITY = {
 }
 
 
+def normalize_drug_search_text(value: str) -> str:
+    """Normalize punctuation and spacing for forgiving drug-name lookup."""
+
+    normalized = re.sub(r"[^0-9a-zA-Z]+", " ", value.casefold())
+    return re.sub(r"\s+", " ", normalized).strip()
+
+
+def compact_drug_search_text(value: str) -> str:
+    """Return a punctuation-free lookup key for dash/space variation."""
+
+    return re.sub(r"[^0-9a-zA-Z]+", "", value.casefold())
+
+
 class RxNormParquetStore:
     """Read-only RxNorm resolver and graph retriever backed by parquet files."""
 
@@ -66,6 +80,12 @@ class RxNormParquetStore:
         if self._rxnconso is None:
             self._rxnconso = pd.read_parquet(self.rxnconso_path)
             self._rxnconso["STR_NORM"] = self._rxnconso["STR"].fillna("").str.casefold()
+            self._rxnconso["STR_SEARCH"] = (
+                self._rxnconso["STR"].fillna("").map(normalize_drug_search_text)
+            )
+            self._rxnconso["STR_COMPACT"] = (
+                self._rxnconso["STR"].fillna("").map(compact_drug_search_text)
+            )
         return self._rxnconso
 
     @property
@@ -104,28 +124,85 @@ class RxNormParquetStore:
         """Resolve a user drug name to ranked RxNorm concepts."""
 
         query = drug_name.strip().casefold()
+        normalized_query = normalize_drug_search_text(drug_name)
+        compact_query = compact_drug_search_text(drug_name)
         if not query:
             return []
 
         df = self.rxnconso
+        candidate_frames = []
+
         exact = df[df["STR_NORM"] == query].copy()
-        exact["match_type"] = "exact"
-        exact["score"] = 100.0
+        if not exact.empty:
+            exact["match_type"] = "exact"
+            exact["score"] = 100.0
+            candidate_frames.append(exact)
+
+        if normalized_query and normalized_query != query:
+            normalized_exact = df[df["STR_SEARCH"] == normalized_query].copy()
+            if not normalized_exact.empty:
+                normalized_exact["match_type"] = "normalized_exact"
+                normalized_exact["score"] = 96.0
+                candidate_frames.append(normalized_exact)
+
+        if compact_query and compact_query != query:
+            compact_exact = df[df["STR_COMPACT"] == compact_query].copy()
+            if not compact_exact.empty:
+                compact_exact["match_type"] = "compact_exact"
+                compact_exact["score"] = 94.0
+                candidate_frames.append(compact_exact)
 
         startswith = df[
             (df["STR_NORM"].str.startswith(query)) & (df["STR_NORM"] != query)
         ].copy()
-        startswith["match_type"] = "prefix"
-        startswith["score"] = 80.0
+        if not startswith.empty:
+            startswith["match_type"] = "prefix"
+            startswith["score"] = 80.0
+            candidate_frames.append(startswith)
+
+        if normalized_query:
+            normalized_startswith = df[
+                (df["STR_SEARCH"].str.startswith(normalized_query))
+                & (df["STR_SEARCH"] != normalized_query)
+            ].copy()
+            if not normalized_startswith.empty:
+                normalized_startswith["match_type"] = "normalized_prefix"
+                normalized_startswith["score"] = 76.0
+                candidate_frames.append(normalized_startswith)
+
+        if compact_query:
+            compact_startswith = df[
+                (df["STR_COMPACT"].str.startswith(compact_query))
+                & (df["STR_COMPACT"] != compact_query)
+            ].copy()
+            if not compact_startswith.empty:
+                compact_startswith["match_type"] = "compact_prefix"
+                compact_startswith["score"] = 74.0
+                candidate_frames.append(compact_startswith)
 
         contains = df[
             (df["STR_NORM"].str.contains(query, regex=False))
             & (~df["STR_NORM"].str.startswith(query))
         ].copy()
-        contains["match_type"] = "contains"
-        contains["score"] = 60.0
+        if not contains.empty:
+            contains["match_type"] = "contains"
+            contains["score"] = 60.0
+            candidate_frames.append(contains)
 
-        candidates = pd.concat([exact, startswith, contains], ignore_index=True)
+        if normalized_query:
+            normalized_contains = df[
+                (df["STR_SEARCH"].str.contains(normalized_query, regex=False))
+                & (~df["STR_SEARCH"].str.startswith(normalized_query))
+            ].copy()
+            if not normalized_contains.empty:
+                normalized_contains["match_type"] = "normalized_contains"
+                normalized_contains["score"] = 56.0
+                candidate_frames.append(normalized_contains)
+
+        if not candidate_frames:
+            return []
+
+        candidates = pd.concat(candidate_frames, ignore_index=True)
         if candidates.empty:
             return []
 

@@ -1,8 +1,11 @@
 "use client";
 
-import { FormEvent, useMemo, useRef, useState } from "react";
+import { FormEvent, type ReactNode, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
+  Brain,
+  ChevronDown,
+  ChevronRight,
   Database,
   FileText,
   FlaskConical,
@@ -21,6 +24,7 @@ import {
   LabelSection,
   OpenFDALabelEvidence,
   OpenFDALabelRecord,
+  QueryUnderstandingResponse,
   RxNormConcept,
 } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -109,6 +113,10 @@ function displayRxNormType(tty?: string | null) {
     return "Type unknown";
   }
   return rxNormTypeLabels[tty.toUpperCase()] ?? sentenceCase(tty);
+}
+
+function displayStateLabel(value: string) {
+  return value.replaceAll("_", " ");
 }
 
 function InfoTooltip({ text }: { text: string }) {
@@ -346,6 +354,13 @@ function groupLabelSectionsBySource(
 
 export function DossierExplorer() {
   const [drug, setDrug] = useState("aspirin");
+  const [question, setQuestion] = useState(
+    "I take ibuprofen for migraine and want to use tretinoin for acne. I am pregnant."
+  );
+  const [queryUnderstanding, setQueryUnderstanding] =
+    useState<QueryUnderstandingResponse | null>(null);
+  const [isQueryLoading, setIsQueryLoading] = useState(false);
+  const [queryError, setQueryError] = useState<string | null>(null);
   const [openfdaLimit, setOpenfdaLimit] = useState(5);
   const [dossier, setDossier] = useState<DrugDossier | null>(null);
   const [selectedSection, setSelectedSection] = useState<string | null>(null);
@@ -402,15 +417,68 @@ export function DossierExplorer() {
     });
   }
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setIsLoading(true);
-    setError(null);
+  function resetEvidenceSelection() {
     setSelectedGraphNode(null);
     setNodeLabelEvidence(null);
     setNodeEvidenceError(null);
     setIsNodeEvidenceLoading(false);
+    setSelectedSourceKey(null);
     nodeEvidenceRequestRef.current += 1;
+  }
+
+  function loadDossier(nextDossier: DrugDossier) {
+    setDossier(nextDossier);
+    const firstSection = Object.keys(nextDossier.label_evidence?.sections ?? {})[0];
+    setSelectedSection(firstSection ?? null);
+    resetEvidenceSelection();
+  }
+
+  async function handleQuestionSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setIsQueryLoading(true);
+    setQueryError(null);
+    setQueryUnderstanding(null);
+
+    try {
+      const response = await fetch("/api/query-understanding", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          query: question,
+          openfda_limit: openfdaLimit,
+        }),
+      });
+      const payload = await response.json();
+
+      if (!response.ok) {
+        throw new Error(payload.detail ?? "Failed to understand query");
+      }
+
+      const understanding = payload as QueryUnderstandingResponse;
+      setQueryUnderstanding(understanding);
+      if (understanding.primary_dossier) {
+        loadDossier(understanding.primary_dossier);
+        const matchedName = understanding.primary_dossier.resolved_drug?.name;
+        if (matchedName) {
+          setDrug(matchedName);
+        }
+      }
+    } catch (err) {
+      setQueryError(
+        err instanceof Error ? err.message : "Failed to understand query"
+      );
+    } finally {
+      setIsQueryLoading(false);
+    }
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setIsLoading(true);
+    setError(null);
+    resetEvidenceSelection();
 
     try {
       const response = await fetch("/api/dossier", {
@@ -432,10 +500,7 @@ export function DossierExplorer() {
         throw new Error(payload.detail ?? "Failed to build dossier");
       }
 
-      setDossier(payload);
-      const firstSection = Object.keys(payload.label_evidence?.sections ?? {})[0];
-      setSelectedSection(firstSection ?? null);
-      setSelectedSourceKey(null);
+      loadDossier(payload);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to build dossier");
     } finally {
@@ -515,6 +580,15 @@ export function DossierExplorer() {
             data. Not medical advice.
           </span>
         </div>
+
+        <QueryUnderstandingPanel
+          error={queryError}
+          isLoading={isQueryLoading}
+          onQuestionChange={setQuestion}
+          onSubmit={handleQuestionSubmit}
+          question={question}
+          result={queryUnderstanding}
+        />
 
         <form
           onSubmit={handleSubmit}
@@ -600,6 +674,282 @@ export function DossierExplorer() {
         )}
       </div>
     </main>
+  );
+}
+
+function QueryUnderstandingPanel({
+  error,
+  isLoading,
+  onQuestionChange,
+  onSubmit,
+  question,
+  result,
+}: {
+  error: string | null;
+  isLoading: boolean;
+  onQuestionChange: (value: string) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  question: string;
+  result: QueryUnderstandingResponse | null;
+}) {
+  return (
+    <Card>
+      <CardHeader className="border-b border-slate-200">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <CardTitle>Ask a Question</CardTitle>
+              <InfoTooltip text="This extracts a structured medication state from your question, resolves drug mentions through RxNorm, and loads the primary drug into the explorer below. It does not generate medical advice." />
+            </div>
+            <p className="mt-1 text-sm leading-6 text-slate-500">
+              What can we help you explore? Ask in plain language, then inspect
+              what the system understood.
+            </p>
+          </div>
+          <Brain className="mt-1 size-4 text-slate-400" />
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4 pt-5">
+        <form onSubmit={onSubmit} className="grid gap-3 lg:grid-cols-[1fr_auto]">
+          <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
+            Question
+            <textarea
+              value={question}
+              onChange={(event) => onQuestionChange(event.target.value)}
+              placeholder="Can I use tretinoin if I am pregnant and already take ibuprofen?"
+              rows={1}
+              className="min-h-10 w-full resize-y rounded-md border border-slate-200 bg-white px-3 py-2 text-sm leading-6 text-slate-950 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100"
+            />
+          </label>
+          <div className="flex items-end">
+            <Button className="w-full lg:w-auto" disabled={isLoading || !question.trim()}>
+              {isLoading ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Search className="size-4" />
+              )}
+              Explore
+            </Button>
+          </div>
+        </form>
+
+        {error ? (
+          <div className="flex items-center gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+            <AlertTriangle className="size-4" />
+            {error}
+          </div>
+        ) : null}
+
+        {isLoading ? <QueryUnderstandingLoadingState /> : null}
+        {!isLoading && result ? <QueryUnderstandingResult result={result} /> : null}
+      </CardContent>
+    </Card>
+  );
+}
+
+function QueryUnderstandingLoadingState() {
+  return (
+    <div className="flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-600">
+      <Loader2 className="size-4 animate-spin text-slate-500" />
+      Understanding your query and extracting relevant information...
+    </div>
+  );
+}
+
+function QueryUnderstandingResult({
+  result,
+}: {
+  result: QueryUnderstandingResponse;
+}) {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  return (
+    <div className="rounded-md border border-slate-200 bg-slate-50">
+      <button
+        type="button"
+        onClick={() => setIsExpanded((current) => !current)}
+        className="flex w-full items-center justify-between gap-3 px-3 py-3 text-left"
+      >
+        <div className="flex min-w-0 items-center gap-2">
+          {isExpanded ? (
+            <ChevronDown className="size-4 shrink-0 text-slate-500" />
+          ) : (
+            <ChevronRight className="size-4 shrink-0 text-slate-500" />
+          )}
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <div className="text-xs font-medium uppercase text-slate-500">
+                Find out what the system understood
+              </div>
+              <InfoTooltip text="The app first extracts medication concepts and context with deterministic rules, then asks an LLM to revise the extracted parameters before using it to retrieve evidence." />
+            </div>
+            {/* {!isExpanded ? (
+              <p className="mt-1 text-sm text-slate-600">
+                Extracted medication, patient context, and intent parameters.
+              </p>
+            ) : null} */}
+          </div>
+        </div>
+      </button>
+
+      <QueryUnderstandingStatus result={result} />
+
+      {isExpanded ? (
+        <div className="space-y-3 border-t border-slate-200 p-3">
+          {/* <div className="text-xs font-medium uppercase text-slate-500">
+            Parameters
+          </div> */}
+
+          <ParameterGroup title="Medication concepts">
+            <ParameterRow
+              // emphasize
+              label="Primary drug"
+              values={result.state.primary_drug ? [result.state.primary_drug] : []}
+            />
+            <ParameterRow
+              label="Current medications"
+              values={result.state.current_medications}
+            />
+            <ParameterRow
+              label="All drugs mentioned"
+              values={result.state.all_drugs_mentioned}
+            />
+          </ParameterGroup>
+
+          <ParameterGroup title="Patient context">
+            <ParameterRow label="Allergies" values={result.state.allergies} />
+            <ParameterRow label="Conditions" values={result.state.conditions} />
+            <ParameterRow
+              label="Patient details"
+              values={result.state.patient_context}
+            />
+          </ParameterGroup>
+
+          <ParameterGroup title="Intent">
+            <ParameterRow
+              label="User intent"
+              values={
+                result.state.intent ? [displayStateLabel(result.state.intent)] : []
+              }
+            />
+          </ParameterGroup>
+        </div>
+      ) : null}
+
+    </div>
+  );
+}
+
+function QueryUnderstandingStatus({
+  result,
+}: {
+  result: QueryUnderstandingResponse;
+}) {
+  const hasNoPrimaryDossier = !result.primary_dossier;
+  const visibleWarnings = result.warnings.filter(
+    (warning) => !warning.startsWith("No primary drug could be resolved")
+  );
+
+  if (!hasNoPrimaryDossier && visibleWarnings.length === 0 && result.errors.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="space-y-2 border-t border-slate-200 p-3">
+      {hasNoPrimaryDossier || visibleWarnings.length ? (
+        <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm leading-5 text-amber-900">
+          {hasNoPrimaryDossier ? (
+            <p>
+              No primary medication could be linked to RxNorm, so the dossier
+              below was not updated.
+            </p>
+          ) : null}
+          {visibleWarnings.length ? (
+            <div className={cn("space-y-1", hasNoPrimaryDossier ? "mt-2" : "")}>
+              {visibleWarnings.map((warning) => (
+                <p key={warning}>{warning}</p>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      {result.errors.length ? (
+        <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm leading-5 text-red-800">
+          <ul className="list-disc space-y-1 pl-4">
+            {result.errors.map((error) => (
+              <li key={error}>{error}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function ParameterGroup({
+  children,
+  defaultOpen = false,
+  title,
+}: {
+  children: ReactNode;
+  defaultOpen?: boolean;
+  title: string;
+}) {
+  const [isOpen, setIsOpen] = useState(defaultOpen);
+
+  return (
+    <div className="rounded-md border border-slate-200 bg-white">
+      <button
+        type="button"
+        onClick={() => setIsOpen((current) => !current)}
+        className="flex w-full items-center gap-2 px-3 py-2 text-left"
+      >
+        {isOpen ? (
+          <ChevronDown className="size-4 shrink-0 text-slate-500" />
+        ) : (
+          <ChevronRight className="size-4 shrink-0 text-slate-500" />
+        )}
+        <span className="text-xs font-medium uppercase text-slate-500">
+          {title}
+        </span>
+      </button>
+      {isOpen ? (
+        <div className="space-y-3 border-t border-slate-100 px-3 py-3">
+          {children}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function ParameterRow({
+  emphasize = false,
+  label,
+  values,
+}: {
+  emphasize?: boolean;
+  label: string;
+  values: string[];
+}) {
+  return (
+    <div className="grid gap-2 sm:grid-cols-[160px_minmax(0,1fr)]">
+      <div className="text-sm font-medium text-slate-600">{label}</div>
+      {values.length ? (
+        <div className="flex flex-wrap gap-1.5">
+          {values.map((value) => (
+            <Badge
+              key={value}
+              className="border-slate-200 bg-slate-50 text-slate-800"
+            >
+              {emphasize ? displayGraphNodeName(value) : value}
+            </Badge>
+          ))}
+        </div>
+      ) : (
+        <div className="text-sm text-slate-400 italic">Not detected</div>
+      )}
+    </div>
   );
 }
 

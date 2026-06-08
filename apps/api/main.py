@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import logging
+import sys
 from functools import lru_cache
 
+from dotenv import load_dotenv
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -10,6 +13,37 @@ from src.dossier.builder import DossierBuilder
 from src.dossier.models import DrugDossier, OpenFDALabelEvidence
 from src.dossier.openfda_store import OpenFDALabelStore
 from src.dossier.rxnorm_store import RxNormParquetStore
+from src.query_understanding.models import QueryUnderstandingResponse
+from src.query_understanding.service import QueryUnderstandingService
+
+load_dotenv()
+
+
+def configure_api_logging() -> None:
+    """Ensure rx-ray API diagnostics are visible in the uvicorn console."""
+
+    logger = logging.getLogger("src.query_understanding")
+    logger.setLevel(logging.INFO)
+
+    has_handler = any(
+        getattr(handler, "_rx_ray_api_handler", False)
+        for handler in logger.handlers
+    )
+    if not has_handler:
+        handler = logging.StreamHandler(sys.stdout)
+        handler.setLevel(logging.INFO)
+        handler.setFormatter(
+            logging.Formatter(
+                "%(asctime)s - %(levelname)s - %(name)s - %(message)s"
+            )
+        )
+        handler._rx_ray_api_handler = True  # type: ignore[attr-defined]
+        logger.addHandler(handler)
+
+    logger.propagate = False
+
+
+configure_api_logging()
 
 
 class HealthResponse(BaseModel):
@@ -29,6 +63,11 @@ class LabelEvidenceRequest(BaseModel):
     rxcui: str = Field(..., min_length=1)
     name: str | None = None
     limit: int = Field(default=3, ge=1, le=25)
+
+
+class QueryUnderstandingRequest(BaseModel):
+    query: str = Field(..., min_length=1)
+    openfda_limit: int = Field(default=5, ge=1, le=25)
 
 
 @lru_cache(maxsize=1)
@@ -69,6 +108,17 @@ async def build_label_evidence(
     )
 
 
+async def understand_query(
+    request: QueryUnderstandingRequest,
+    builder: DossierBuilder = Depends(get_dossier_builder),
+) -> QueryUnderstandingResponse:
+    service = QueryUnderstandingService(builder=builder)
+    return service.understand(
+        request.query.strip(),
+        openfda_limit=request.openfda_limit,
+    )
+
+
 def create_app() -> FastAPI:
     api = FastAPI(
         title="rx-ray",
@@ -100,6 +150,12 @@ def create_app() -> FastAPI:
         build_label_evidence,
         methods=["POST"],
         response_model=OpenFDALabelEvidence,
+    )
+    api.add_api_route(
+        "/query-understanding",
+        understand_query,
+        methods=["POST"],
+        response_model=QueryUnderstandingResponse,
     )
     return api
 
