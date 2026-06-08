@@ -3,7 +3,9 @@ import pytest
 from apps.api.main import (
     DossierRequest,
     LabelEvidenceRequest,
+    QueryAnswerRequest,
     QueryUnderstandingRequest,
+    answer_query,
     build_dossier,
     build_label_evidence,
     configure_api_logging,
@@ -11,11 +13,25 @@ from apps.api.main import (
     understand_query,
 )
 from src.dossier.builder import DossierBuilder
-from src.dossier.models import OpenFDALabelEvidence
+from src.dossier.models import (
+    DrugDossier,
+    LabelSection,
+    OpenFDALabelEvidence,
+    OpenFDALabelRecord,
+    RxNormConcept,
+)
 from src.dossier.openfda_store import OpenFDALabelStore
 from src.dossier.rxnorm_store import RxNormParquetStore
+from src.query_answer.synthesizer import (
+    EvidenceAnswerSynthesizer,
+    STANDARD_SAFETY_NOTE,
+)
 from src.query_understanding.extractor import ExtractionResult, HybridQueryExtractor
-from src.query_understanding.models import ExtractedDrugMention, QueryState
+from src.query_understanding.models import (
+    ExtractedDrugMention,
+    QueryState,
+    QueryUnderstandingResponse,
+)
 from src.query_understanding.service import QueryUnderstandingService
 
 
@@ -391,6 +407,114 @@ async def test_query_understanding_unresolved_query_returns_warning(
     assert response.primary_dossier is None
     assert response.warnings
     assert "No primary drug could be resolved" in response.warnings[0]
+
+
+@pytest.mark.asyncio
+async def test_query_answer_returns_understanding_without_llm_config(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("ANSWER_SYNTHESIS_OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("ANSWER_SYNTHESIS_OPENAI_MODEL", raising=False)
+
+    response = await answer_query(
+        QueryAnswerRequest(query="Can I take aspirin?", openfda_limit=2),
+        builder=offline_builder(),
+    )
+
+    assert response.understanding.primary_dossier is not None
+    assert response.answer is None
+    assert any("not configured" in warning for warning in response.warnings)
+
+
+@pytest.mark.asyncio
+async def test_query_answer_unresolved_primary_returns_no_answer(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("ANSWER_SYNTHESIS_OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("ANSWER_SYNTHESIS_OPENAI_MODEL", raising=False)
+
+    response = await answer_query(
+        QueryAnswerRequest(query="Can I take notarealdrugzzzz?"),
+        builder=offline_builder(),
+    )
+
+    assert response.understanding.primary_dossier is None
+    assert response.answer is None
+    assert any(
+        "No primary drug could be resolved" in warning for warning in response.warnings
+    )
+
+
+def test_answer_synthesis_filters_citations_to_supplied_evidence() -> None:
+    packet = EvidenceAnswerSynthesizer.build_evidence_packet(
+        response_with_label_evidence()
+    )
+    answer = EvidenceAnswerSynthesizer.parse_answer_data(
+        {
+            "summary": "Retrieved label evidence mentions aspirin warnings.",
+            "bullets": [
+                {
+                    "text": "The warning evidence comes from the supplied label.",
+                    "citations": [
+                        {
+                            "source_id": "label-1",
+                            "section": "warnings",
+                            "snippet": "warning text",
+                        },
+                        {
+                            "source_id": "made-up",
+                            "section": "warnings",
+                            "snippet": "invented",
+                        },
+                    ],
+                }
+            ],
+            "limitations": ["Limited to retrieved public label text."],
+            "safety_note": "Model-provided safety note should not be used.",
+        },
+        EvidenceAnswerSynthesizer.allowed_citations(packet),
+    )
+
+    assert [citation.model_dump() for citation in answer.bullets[0].citations] == [
+        {
+            "source_id": "label-1",
+            "section": "warnings",
+            "snippet": "warning text",
+        }
+    ]
+    assert answer.safety_note == STANDARD_SAFETY_NOTE
+
+
+def response_with_label_evidence() -> "QueryUnderstandingResponse":
+    return QueryUnderstandingResponse(
+        query="Can I take aspirin?",
+        state=QueryState(primary_drug="aspirin", all_drugs_mentioned=["aspirin"]),
+        primary_dossier=DrugDossier(
+            query="aspirin",
+            resolved_drug=RxNormConcept(rxcui="1191", name="aspirin", tty="IN"),
+            label_evidence=OpenFDALabelEvidence(
+                rxcui="1191",
+                labels_found=1,
+                label_limit=1,
+                label_records=[
+                    OpenFDALabelRecord(
+                        source_id="label-1",
+                        brand_names=["Aspirin"],
+                        generic_names=["ASPIRIN"],
+                    )
+                ],
+                sections={
+                    "warnings": [
+                        LabelSection(
+                            section="warnings",
+                            text="Aspirin warning text.",
+                            source_id="label-1",
+                        )
+                    ]
+                },
+            ),
+        ),
+    )
 
 
 def test_rxnorm_resolver_handles_punctuation_variation() -> None:
