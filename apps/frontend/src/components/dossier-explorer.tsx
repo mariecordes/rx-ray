@@ -870,7 +870,8 @@ function QueryUnderstandingPanel({
               placeholder="Can I use tretinoin if I am pregnant and already take ibuprofen?"
               rows={1}
               aria-label="Question"
-              className="min-h-11 flex-1 resize-y rounded-md border border-[#C7B4EF] bg-white px-3 py-2 text-sm leading-6 text-slate-950 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-[#371E96] focus:ring-2 focus:ring-[#E8DDF9]"
+              className="min-h-11 flex-1 resize-y rounded-md border border-[#C7B4EF] bg-white px-3 py-2 text-slate-950 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-[#371E96] focus:ring-2 focus:ring-[#E8DDF9]"
+              style={{ fontSize: "16px", lineHeight: "27px" }}
             />
             <Button
               type="submit"
@@ -1001,8 +1002,11 @@ function EvidenceAnswerCard({
 
   return (
     <div className="space-y-3">
-      <div className="rounded-md border border-[#D7C8F4] bg-[#FBF9FE] px-3 py-3">
-        <p className="text-sm leading-6 text-slate-800">
+      <div className="rounded-md border border-[#C7B4EF] bg-[#FBF9FE] px-4 py-4 shadow-sm">
+        <p
+          className="text-slate-800"
+          style={{ fontSize: "16px", lineHeight: "27px" }}
+        >
           {answer.summary}
         </p>
       </div>
@@ -1028,11 +1032,12 @@ function EvidenceAnswerCard({
                 )}
               >
                 {bullet.citations.length ? (
-                  <div className="mb-2 flex flex-col gap-1.5">
+                  <div className="mb-1.5 flex flex-col gap-1">
                     {bullet.citations.map((citation, citationIndex) => (
                       <div
                         key={`${citation.source_id}-${citation.section}-${citationIndex}`}
-                        className="flex items-start gap-2 text-sm font-semibold leading-5 text-slate-800"
+                        className="flex items-start gap-2 font-semibold leading-5 text-slate-800"
+                        style={{ fontSize: "14px" }}
                       >
                         <FileText className="mt-0.5 size-4 shrink-0 text-slate-700" />
                         <span>{citationDisplayLabel(citation, sourceById)}</span>
@@ -1042,9 +1047,10 @@ function EvidenceAnswerCard({
                 ) : null}
                 <p
                   className={cn(
-                    "text-sm leading-6 text-slate-800",
+                    "leading-6 text-slate-800",
                     bullet.citations.length ? "pl-6" : ""
                   )}
+                  style={{ fontSize: "14px" }}
                 >
                   {bullet.text}
                 </p>
@@ -1060,7 +1066,8 @@ function EvidenceAnswerCard({
             {answer.limitations.map((limitation) => (
               <div
                 key={limitation}
-                className="flex items-start gap-2 rounded-md border border-[#D7C8F4] bg-white px-3 py-2 text-sm leading-6 text-slate-800"
+                className="flex items-start gap-2 rounded-md border border-[#D7C8F4] bg-white px-3 py-2 leading-6 text-slate-800"
+                style={{ fontSize: "14px" }}
               >
                 <TriangleAlert className="mt-1 size-4 shrink-0 text-slate-700" />
                 <span>{limitation}</span>
