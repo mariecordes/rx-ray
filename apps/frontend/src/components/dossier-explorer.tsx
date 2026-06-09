@@ -40,15 +40,15 @@ import {
 import { cn } from "@/lib/utils";
 
 const sectionLabels: Record<string, string> = {
-  boxed_warning: "Boxed warning",
+  boxed_warning: "Boxed Warning",
   contraindications: "Contraindications",
   warnings: "Warnings",
-  drug_interactions: "Drug interactions",
+  drug_interactions: "Drug Interactions",
   pregnancy: "Pregnancy",
   lactation: "Lactation",
-  adverse_reactions: "Adverse reactions",
-  indications_and_usage: "Indications",
-  use_in_specific_populations: "Specific populations",
+  adverse_reactions: "Adverse Reactions",
+  indications_and_usage: "Indications & Usage",
+  use_in_specific_populations: "Specific Populations",
 };
 
 function displaySectionName(section: string) {
