@@ -1,5 +1,5 @@
-import { DossierExplorer } from "@/components/dossier-explorer";
+import { AskQuestionPage } from "@/components/ask-question-page";
 
 export default function Home() {
-  return <DossierExplorer />;
+  return <AskQuestionPage />;
 }

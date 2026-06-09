@@ -1,17 +1,25 @@
 "use client";
 
-import { FormEvent, type ReactNode, useMemo, useRef, useState } from "react";
+import {
+  FormEvent,
+  type RefObject,
+  type ReactNode,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   AlertTriangle,
   ChevronDown,
   ChevronRight,
   Database,
+  FileText,
   Info,
   Loader2,
   Search,
   TriangleAlert,
 } from "lucide-react";
-import Image from "next/image";
 
 import { RxNormKnowledgeGraph } from "@/components/rxnorm-knowledge-graph";
 import { Badge } from "@/components/ui/badge";
@@ -373,7 +381,10 @@ function groupLabelSectionsBySource(
 }
 
 export function DossierExplorer() {
-  const [drug, setDrug] = useState("aspirin");
+  return <AskQuestionExperience />;
+}
+
+export function AskQuestionExperience() {
   const [question, setQuestion] = useState(
     "I take ibuprofen for migraine and want to use tretinoin for acne. I am pregnant."
   );
@@ -382,89 +393,21 @@ export function DossierExplorer() {
   const [queryAnswer, setQueryAnswer] = useState<QueryAnswerResponse | null>(null);
   const [isQueryLoading, setIsQueryLoading] = useState(false);
   const [queryError, setQueryError] = useState<string | null>(null);
-  const [openfdaLimit, setOpenfdaLimit] = useState(5);
   const [dossier, setDossier] = useState<DrugDossier | null>(null);
-  const [selectedSection, setSelectedSection] = useState<string | null>(null);
-  const [selectedSourceKey, setSelectedSourceKey] = useState<string | null>(null);
-  const [selectedGraphNode, setSelectedGraphNode] =
-    useState<RxNormConcept | null>(null);
-  const [nodeLabelEvidence, setNodeLabelEvidence] =
-    useState<OpenFDALabelEvidence | null>(null);
-  const [isNodeEvidenceLoading, setIsNodeEvidenceLoading] = useState(false);
-  const [nodeEvidenceError, setNodeEvidenceError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const drugNetworkPanelRef = useRef<HTMLDivElement>(null);
-  const labelEvidencePanelRef = useRef<HTMLDivElement>(null);
-  const nodeEvidenceRequestRef = useRef(0);
-
-  const labelEvidence = dossier?.label_evidence ?? null;
-  const displayEvidence = useMemo(
-    () => buildDisplayEvidenceModel(labelEvidence, nodeLabelEvidence),
-    [labelEvidence, nodeLabelEvidence]
-  );
-  const sectionEntries = useMemo(() => {
-    return Object.entries(displayEvidence.sections);
-  }, [displayEvidence]);
-  const activeSection =
-    selectedSection && displayEvidence.sections[selectedSection]
-      ? selectedSection
-      : sectionEntries[0]?.[0] ?? null;
-  const activeTexts: DisplayLabelSection[] = activeSection
-    ? displayEvidence.sections[activeSection] ?? []
-    : [];
-
-  function toggleSourceSelection(sourceKey?: string | null) {
-    if (!sourceKey) {
-      return;
-    }
-    setSelectedSourceKey((current) =>
-      current === sourceKey ? null : sourceKey
-    );
-  }
-
-  function selectSourceFromStrip(sourceKey?: string | null) {
-    if (!sourceKey) {
-      return;
-    }
-    const nextSourceKey = selectedSourceKey === sourceKey ? null : sourceKey;
-    setSelectedSourceKey(nextSourceKey);
-  }
-
-  function scrollToSection(ref: React.RefObject<HTMLDivElement | null>) {
-    ref.current?.scrollIntoView({
-      behavior: "smooth",
-      block: "start",
-    });
-  }
+  const [isEvidenceOpen, setIsEvidenceOpen] = useState(false);
+  const [highlightCitation, setHighlightCitation] =
+    useState<EvidenceCitation | null>(null);
+  const supportingEvidenceRef = useRef<HTMLDivElement>(null);
 
   function handleAnswerCitationClick(citation: EvidenceCitation) {
-    if (displayEvidence.sections[citation.section]) {
-      setSelectedSection(citation.section);
-    }
-    const matchingSource = displayEvidence.records.find(
-      (source) => source.record.source_id === citation.source_id
-    );
-    setSelectedSourceKey(matchingSource?.key ?? null);
+    setHighlightCitation(citation);
+    setIsEvidenceOpen(true);
     window.requestAnimationFrame(() => {
-      scrollToSection(labelEvidencePanelRef);
+      supportingEvidenceRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
     });
-  }
-
-  function resetEvidenceSelection() {
-    setSelectedGraphNode(null);
-    setNodeLabelEvidence(null);
-    setNodeEvidenceError(null);
-    setIsNodeEvidenceLoading(false);
-    setSelectedSourceKey(null);
-    nodeEvidenceRequestRef.current += 1;
-  }
-
-  function loadDossier(nextDossier: DrugDossier) {
-    setDossier(nextDossier);
-    const firstSection = Object.keys(nextDossier.label_evidence?.sections ?? {})[0];
-    setSelectedSection(firstSection ?? null);
-    resetEvidenceSelection();
   }
 
   async function handleQuestionSubmit(event: FormEvent<HTMLFormElement>) {
@@ -495,11 +438,9 @@ export function DossierExplorer() {
       setQueryAnswer(queryAnswerResponse);
       setQueryUnderstanding(understanding);
       if (understanding.primary_dossier) {
-        loadDossier(understanding.primary_dossier);
-        const matchedName = understanding.primary_dossier.resolved_drug?.name;
-        if (matchedName) {
-          setDrug(matchedName);
-        }
+        setDossier(understanding.primary_dossier);
+        setIsEvidenceOpen(false);
+        setHighlightCitation(null);
       }
     } catch (err) {
       setQueryError(
@@ -510,11 +451,46 @@ export function DossierExplorer() {
     }
   }
 
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="mx-auto w-full max-w-4xl">
+        <QueryUnderstandingPanel
+          answerResponse={queryAnswer}
+          error={queryError}
+          isLoading={isQueryLoading}
+          onQuestionChange={setQuestion}
+          onSubmit={handleQuestionSubmit}
+          question={question}
+          result={queryUnderstanding}
+          onAnswerCitationClick={handleAnswerCitationClick}
+        />
+      </div>
+
+      {dossier ? (
+        <SupportingEvidence
+          dossier={dossier}
+          evidenceRef={supportingEvidenceRef}
+          highlightCitation={highlightCitation}
+          isOpen={isEvidenceOpen}
+          onOpenChange={setIsEvidenceOpen}
+          onCitationHandled={() => setHighlightCitation(null)}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+export function DrugDossierExperience() {
+  const [drug, setDrug] = useState("aspirin");
+  const [openfdaLimit, setOpenfdaLimit] = useState(5);
+  const [dossier, setDossier] = useState<DrugDossier | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setIsLoading(true);
     setError(null);
-    resetEvidenceSelection();
 
     try {
       const response = await fetch("/api/dossier", {
@@ -536,12 +512,237 @@ export function DossierExplorer() {
         throw new Error(payload.detail ?? "Failed to build dossier");
       }
 
-      loadDossier(payload);
+      setDossier(payload);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to build dossier");
     } finally {
       setIsLoading(false);
     }
+  }
+
+  return (
+    <div className="flex flex-col gap-5">
+      <Card>
+        <CardHeader>
+          <CardTitle>Drug Dossier</CardTitle>
+          <p className="mt-1 text-sm leading-6 text-slate-500">
+            Search for a drug to explore related medication concepts and public
+            label information.
+          </p>
+        </CardHeader>
+        <CardContent>
+          <form
+            onSubmit={handleSubmit}
+            className="grid gap-3 md:grid-cols-[1fr_140px_auto]"
+          >
+            <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
+              Drug
+              <Input
+                value={drug}
+                onChange={(event) => setDrug(event.target.value)}
+                placeholder="aspirin"
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
+              <span className="flex items-center gap-1.5">
+                Label limit
+                <InfoTooltip text="Controls how many FDA drug-label records are retrieved for the searched drug. Higher limits may show more sources, but can make the page denser." />
+              </span>
+              <Input
+                min={1}
+                max={25}
+                type="number"
+                value={openfdaLimit}
+                onChange={(event) => setOpenfdaLimit(Number(event.target.value))}
+              />
+            </label>
+            <div className="flex items-end">
+              <Button className="w-full" disabled={isLoading || !drug.trim()}>
+                {isLoading ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Search className="size-4" />
+                )}
+                Search
+              </Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
+
+      {error ? (
+        <div className="flex items-center gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+          <AlertTriangle className="size-4" />
+          {error}
+        </div>
+      ) : null}
+
+      {!dossier ? <EmptyState /> : <DossierResults dossier={dossier} />}
+    </div>
+  );
+}
+
+function SupportingEvidence({
+  dossier,
+  evidenceRef,
+  highlightCitation,
+  isOpen,
+  onCitationHandled,
+  onOpenChange,
+}: {
+  dossier: DrugDossier;
+  evidenceRef: RefObject<HTMLDivElement | null>;
+  highlightCitation: EvidenceCitation | null;
+  isOpen: boolean;
+  onCitationHandled: () => void;
+  onOpenChange: (isOpen: boolean) => void;
+}) {
+  return (
+    <div ref={evidenceRef} className="scroll-mt-6">
+      {!isOpen ? (
+        <div className="relative flex items-center py-4">
+          <div className="flex-1 border-t border-[#D7C8F4]" />
+          <Button
+            type="button"
+            className="mx-4 rounded-full px-5"
+            onClick={() => onOpenChange(true)}
+          >
+            Explore supporting evidence
+            <ChevronRight className="size-4" />
+          </Button>
+          <div className="flex-1 border-t border-[#D7C8F4]" />
+        </div>
+      ) : (
+        <Card className="border-[#C7B4EF] shadow-md">
+          <CardHeader className="flex flex-row items-center justify-between gap-3">
+            <div>
+              <CardTitle>Supporting Evidence</CardTitle>
+              <p className="mt-1 text-sm leading-6 text-slate-500">
+                Inspect the retrieved dossier behind the generated response.
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => onOpenChange(false)}
+            >
+              <ChevronDown className="size-4" />
+              Collapse
+            </Button>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            <div className="flex border-b border-slate-200">
+              <button
+                type="button"
+                className="rounded-t-md border-x border-t border-[#C7B4EF] bg-white px-4 py-2 text-sm font-semibold text-[#251467]"
+              >
+                {dossier.resolved_drug
+                  ? displayGraphNodeName(dossier.resolved_drug.name)
+                  : "Matched drug"}
+              </button>
+            </div>
+            <DossierResults
+              dossier={dossier}
+              highlightCitation={highlightCitation}
+              onCitationHandled={onCitationHandled}
+            />
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+function DossierResults({
+  dossier,
+  highlightCitation = null,
+  onCitationHandled,
+}: {
+  dossier: DrugDossier;
+  highlightCitation?: EvidenceCitation | null;
+  onCitationHandled?: () => void;
+}) {
+  const [selectedSection, setSelectedSection] = useState<string | null>(null);
+  const [selectedSourceKey, setSelectedSourceKey] = useState<string | null>(null);
+  const [selectedGraphNode, setSelectedGraphNode] =
+    useState<RxNormConcept | null>(null);
+  const [nodeLabelEvidence, setNodeLabelEvidence] =
+    useState<OpenFDALabelEvidence | null>(null);
+  const [isNodeEvidenceLoading, setIsNodeEvidenceLoading] = useState(false);
+  const [nodeEvidenceError, setNodeEvidenceError] = useState<string | null>(null);
+  const drugNetworkPanelRef = useRef<HTMLDivElement>(null);
+  const labelEvidencePanelRef = useRef<HTMLDivElement>(null);
+  const nodeEvidenceRequestRef = useRef(0);
+
+  const labelEvidence = dossier.label_evidence ?? null;
+  const displayEvidence = useMemo(
+    () => buildDisplayEvidenceModel(labelEvidence, nodeLabelEvidence),
+    [labelEvidence, nodeLabelEvidence]
+  );
+  const sectionEntries = useMemo(() => {
+    return Object.entries(displayEvidence.sections);
+  }, [displayEvidence]);
+  const activeSection =
+    selectedSection && displayEvidence.sections[selectedSection]
+      ? selectedSection
+      : sectionEntries[0]?.[0] ?? null;
+  const activeTexts: DisplayLabelSection[] = activeSection
+    ? displayEvidence.sections[activeSection] ?? []
+    : [];
+
+  useEffect(() => {
+    const firstSection = Object.keys(dossier.label_evidence?.sections ?? {})[0];
+    setSelectedSection(firstSection ?? null);
+    setSelectedSourceKey(null);
+    setSelectedGraphNode(null);
+    setNodeLabelEvidence(null);
+    setNodeEvidenceError(null);
+    setIsNodeEvidenceLoading(false);
+    nodeEvidenceRequestRef.current += 1;
+  }, [dossier]);
+
+  useEffect(() => {
+    if (!highlightCitation) {
+      return;
+    }
+    if (displayEvidence.sections[highlightCitation.section]) {
+      setSelectedSection(highlightCitation.section);
+    }
+    const matchingSource = displayEvidence.records.find(
+      (source) => source.record.source_id === highlightCitation.source_id
+    );
+    setSelectedSourceKey(matchingSource?.key ?? null);
+    window.requestAnimationFrame(() => {
+      labelEvidencePanelRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+      onCitationHandled?.();
+    });
+  }, [displayEvidence, highlightCitation, onCitationHandled]);
+
+  function toggleSourceSelection(sourceKey?: string | null) {
+    if (!sourceKey) {
+      return;
+    }
+    setSelectedSourceKey((current) =>
+      current === sourceKey ? null : sourceKey
+    );
+  }
+
+  function selectSourceFromStrip(sourceKey?: string | null) {
+    if (!sourceKey) {
+      return;
+    }
+    const nextSourceKey = selectedSourceKey === sourceKey ? null : sourceKey;
+    setSelectedSourceKey(nextSourceKey);
+  }
+
+  function scrollToSection(ref: RefObject<HTMLDivElement | null>) {
+    ref.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
   }
 
   async function handleSelectedGraphNodeChange(node: RxNormConcept | null) {
@@ -595,123 +796,36 @@ export function DossierExplorer() {
   }
 
   return (
-    <main className="min-h-screen bg-[#F8F4FC]">
-      <div className="w-full bg-[#05021D] px-4 py-5 sm:px-6 lg:px-8">
-        <div className="mx-auto max-w-3xl">
-          <Image
-            priority
-            alt="rx-ray"
-            className="mx-auto h-auto w-full rounded-[20px]"
-            height={724}
-            src="/images/rx-ray-banner.png"
-            width={2172}
-          />
-        </div>
-      </div>
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 px-4 py-5 sm:px-6 lg:px-8">
-        <div className="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm leading-5 text-amber-900">
-          <Info className="size-4 shrink-0" />
-          <span>
-            Educational prototype using public drug terminology and FDA label
-            data. Not medical advice.
-          </span>
-        </div>
-
-        <QueryUnderstandingPanel
-          answerResponse={queryAnswer}
-          error={queryError}
-          isLoading={isQueryLoading}
-          onQuestionChange={setQuestion}
-          onSubmit={handleQuestionSubmit}
-          question={question}
-          result={queryUnderstanding}
-          onAnswerCitationClick={handleAnswerCitationClick}
+    <div className="flex flex-col gap-5">
+      <Overview
+        dossier={dossier}
+        onJumpToLabels={() => scrollToSection(labelEvidencePanelRef)}
+        onJumpToNetwork={() => scrollToSection(drugNetworkPanelRef)}
+      />
+      <div ref={drugNetworkPanelRef}>
+        <RxNormKnowledgeGraph
+          key={dossier.resolved_drug?.rxcui ?? dossier.query}
+          dossier={dossier}
+          onSelectedNodeChange={handleSelectedGraphNodeChange}
         />
-
-        <form
-          onSubmit={handleSubmit}
-          className="grid gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-sm md:grid-cols-[1fr_140px_auto]"
-        >
-          <p className="text-sm leading-5 text-slate-600 md:col-span-3">
-            Search for a drug to explore related medication concepts and public
-            label information.
-          </p>
-          <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
-            Drug
-            <Input
-              value={drug}
-              onChange={(event) => setDrug(event.target.value)}
-              placeholder="aspirin"
-            />
-          </label>
-          <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
-            <span className="flex items-center gap-1.5">
-              Label limit
-              <InfoTooltip text="Controls how many FDA drug-label records are retrieved for the searched drug. Higher limits may show more sources, but can make the page denser." />
-            </span>
-            <Input
-              min={1}
-              max={25}
-              type="number"
-              value={openfdaLimit}
-              onChange={(event) => setOpenfdaLimit(Number(event.target.value))}
-            />
-          </label>
-          <div className="flex items-end">
-            <Button className="w-full" disabled={isLoading || !drug.trim()}>
-              {isLoading ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <Search className="size-4" />
-              )}
-              Search
-            </Button>
-          </div>
-        </form>
-
-        {error ? (
-          <div className="flex items-center gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
-            <AlertTriangle className="size-4" />
-            {error}
-          </div>
-        ) : null}
-
-        {!dossier ? (
-          <EmptyState />
-        ) : (
-          <div className="flex flex-col gap-5">
-            <Overview
-              dossier={dossier}
-              onJumpToLabels={() => scrollToSection(labelEvidencePanelRef)}
-              onJumpToNetwork={() => scrollToSection(drugNetworkPanelRef)}
-            />
-            <div ref={drugNetworkPanelRef}>
-              <RxNormKnowledgeGraph
-                key={dossier.resolved_drug?.rxcui ?? dossier.query}
-                dossier={dossier}
-                onSelectedNodeChange={handleSelectedGraphNodeChange}
-              />
-            </div>
-            <LabelEvidencePanel
-              ref={labelEvidencePanelRef}
-              activeSection={activeSection}
-              activeTexts={activeTexts}
-              displayEvidence={displayEvidence}
-              labelEvidence={labelEvidence}
-              nodeEvidenceError={nodeEvidenceError}
-              nodeLabelEvidence={nodeLabelEvidence}
-              isNodeEvidenceLoading={isNodeEvidenceLoading}
-              sectionEntries={sectionEntries}
-              selectedGraphNode={selectedGraphNode}
-              selectedSourceKey={selectedSourceKey}
-              onSelectSection={setSelectedSection}
-              onSelectSource={toggleSourceSelection}
-              onSelectSourceFromStrip={selectSourceFromStrip}
-            />
-          </div>
-        )}
       </div>
-    </main>
+      <LabelEvidencePanel
+        ref={labelEvidencePanelRef}
+        activeSection={activeSection}
+        activeTexts={activeTexts}
+        displayEvidence={displayEvidence}
+        labelEvidence={labelEvidence}
+        nodeEvidenceError={nodeEvidenceError}
+        nodeLabelEvidence={nodeLabelEvidence}
+        isNodeEvidenceLoading={isNodeEvidenceLoading}
+        sectionEntries={sectionEntries}
+        selectedGraphNode={selectedGraphNode}
+        selectedSourceKey={selectedSourceKey}
+        onSelectSection={setSelectedSection}
+        onSelectSource={toggleSourceSelection}
+        onSelectSourceFromStrip={selectSourceFromStrip}
+      />
+    </div>
   );
 }
 
@@ -875,11 +989,8 @@ function EvidenceAnswerCard({
           </div>
           <InfoTooltip text="This response is generated by an LLM from the extracted query state and retrieved public evidence. It is intended for exploration only and does not provide medical advice." />
         </div>
-        <div className="mt-3 rounded-md border border-slate-200 bg-white px-3 py-2">
-          <div className="text-xs font-medium uppercase text-slate-500">
-            Evidence summary
-          </div>
-          <p className="mt-2 text-sm leading-6 text-slate-800">
+        <div className="mt-3 rounded-md border border-slate-200 bg-white px-3 py-3">
+          <p className="text-sm leading-6 text-slate-800">
             {answer.summary}
           </p>
         </div>
@@ -899,28 +1010,28 @@ function EvidenceAnswerCard({
                   }
                 }}
                 className={cn(
-                  "w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-left transition",
+                  "w-full rounded-md border border-[#D7C8F4] bg-white px-3 py-3 text-left transition",
                   bullet.citations.length
-                    ? "hover:border-[#C7B4EF] hover:bg-[#FBF9FE]"
+                    ? "hover:border-[#C7B4EF] hover:bg-[#F8F4FC]"
                     : ""
                 )}
               >
+                {bullet.citations.length ? (
+                  <div className="mb-2 flex flex-col gap-1.5">
+                    {bullet.citations.map((citation, citationIndex) => (
+                      <div
+                        key={`${citation.source_id}-${citation.section}-${citationIndex}`}
+                        className="flex items-start gap-2 text-sm font-semibold leading-5 text-[#371E96]"
+                      >
+                        <FileText className="mt-0.5 size-4 shrink-0" />
+                        <span>{citationDisplayLabel(citation, sourceById)}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
                 <p className="text-sm leading-6 text-slate-800">
                   {bullet.text}
                 </p>
-                {bullet.citations.length ? (
-                  <div className="mt-2 flex flex-wrap gap-x-2 gap-y-1 text-xs italic leading-5 text-slate-500">
-                    {bullet.citations.map((citation, citationIndex) => {
-                      return (
-                        <span
-                          key={`${citation.source_id}-${citation.section}-${citationIndex}`}
-                        >
-                          {citationDisplayLabel(citation, sourceById)}
-                        </span>
-                      );
-                    })}
-                  </div>
-                ) : null}
               </button>
             ))}
           </div>
@@ -1322,7 +1433,7 @@ function LabelEvidencePanel({
   onSelectSource,
   onSelectSourceFromStrip,
 }: {
-  ref: React.RefObject<HTMLDivElement | null>;
+  ref: RefObject<HTMLDivElement | null>;
   activeSection: string | null;
   activeTexts: DisplayLabelSection[];
   displayEvidence: DisplayEvidenceModel;
