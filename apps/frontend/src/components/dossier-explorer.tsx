@@ -1032,9 +1032,9 @@ function EvidenceAnswerCard({
                     {bullet.citations.map((citation, citationIndex) => (
                       <div
                         key={`${citation.source_id}-${citation.section}-${citationIndex}`}
-                        className="flex items-start gap-2 text-sm font-semibold leading-5 text-[#371E96]"
+                        className="flex items-start gap-2 text-sm font-semibold leading-5 text-slate-800"
                       >
-                        <FileText className="mt-0.5 size-4 shrink-0" />
+                        <FileText className="mt-0.5 size-4 shrink-0 text-slate-700" />
                         <span>{citationDisplayLabel(citation, sourceById)}</span>
                       </div>
                     ))}
@@ -1055,14 +1055,15 @@ function EvidenceAnswerCard({
       ) : null}
 
       {answer.limitations.length ? (
-        <AnswerSection icon={<TriangleAlert className="size-4" />} title="Limitations">
+        <AnswerSection title="Limitations">
           <div className="space-y-2">
             {answer.limitations.map((limitation) => (
               <div
                 key={limitation}
-                className="rounded-md border border-[#D7C8F4] bg-white px-3 py-2 text-sm leading-6 text-slate-800"
+                className="flex items-start gap-2 rounded-md border border-[#D7C8F4] bg-white px-3 py-2 text-sm leading-6 text-slate-800"
               >
-                {limitation}
+                <TriangleAlert className="mt-1 size-4 shrink-0 text-slate-700" />
+                <span>{limitation}</span>
               </div>
             ))}
           </div>
@@ -1115,7 +1116,9 @@ function AnswerSection({
         {icon ? <span className="shrink-0">{icon}</span> : null}
         <span className="text-xs font-medium uppercase">{title}</span>
       </button>
-      {isOpen ? <div className="border-t border-[#D7C8F4] px-3 py-3">{children}</div> : null}
+      {isOpen ? (
+        <div className="border-t border-[#D7C8F4] px-3 py-3">{children}</div>
+      ) : null}
     </div>
   );
 }
