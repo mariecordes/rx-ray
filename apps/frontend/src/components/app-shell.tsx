@@ -56,7 +56,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       </header>
 
       <main className="mx-auto flex w-full max-w-7xl flex-col gap-5 px-4 py-5 sm:px-6 lg:px-8">
-        <div className="mx-auto flex w-full max-w-4xl items-center gap-2 rounded-md border border-[#D7C8F4] bg-[#EEE7FA] px-3 py-2 text-sm leading-5 text-[#3B2478]">
+        <div className="mx-auto flex w-full items-center gap-2 rounded-md border border-[#D7C8F4] bg-[#EEE7FA] px-3 py-2 text-sm leading-5 text-[#3B2478]">
           <Info className="size-4 shrink-0" />
           <span>
             Educational prototype using public drug terminology and FDA label
