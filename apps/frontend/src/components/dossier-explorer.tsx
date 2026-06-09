@@ -399,6 +399,7 @@ export function AskQuestionExperience() {
   const [highlightCitation, setHighlightCitation] =
     useState<EvidenceCitation | null>(null);
   const supportingEvidenceRef = useRef<HTMLDivElement>(null);
+  const queryRequestRef = useRef(0);
 
   function handleAnswerCitationClick(citation: EvidenceCitation) {
     setHighlightCitation(citation);
@@ -413,11 +414,16 @@ export function AskQuestionExperience() {
 
   async function handleQuestionSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const requestId = queryRequestRef.current + 1;
+    queryRequestRef.current = requestId;
     setIsUnderstandingLoading(true);
     setIsAnswerLoading(false);
     setQueryError(null);
     setQueryUnderstanding(null);
     setQueryAnswer(null);
+    setDossier(null);
+    setIsEvidenceOpen(false);
+    setHighlightCitation(null);
 
     try {
       const understandingResponse = await fetch("/api/query-understanding", {
@@ -438,11 +444,18 @@ export function AskQuestionExperience() {
       }
 
       const understanding = understandingPayload as QueryUnderstandingResponse;
+      if (queryRequestRef.current !== requestId) {
+        return;
+      }
       setQueryUnderstanding(understanding);
       if (understanding.primary_dossier) {
         setDossier(understanding.primary_dossier);
         setIsEvidenceOpen(false);
         setHighlightCitation(null);
+      } else {
+        setIsUnderstandingLoading(false);
+        setIsAnswerLoading(false);
+        return;
       }
 
       setIsUnderstandingLoading(false);
@@ -459,6 +472,10 @@ export function AskQuestionExperience() {
       });
       const answerPayload = await answerResponse.json();
 
+      if (queryRequestRef.current !== requestId) {
+        return;
+      }
+
       if (!answerResponse.ok) {
         throw new Error(answerPayload.detail ?? "Failed to generate response");
       }
@@ -468,14 +485,23 @@ export function AskQuestionExperience() {
       setQueryUnderstanding(queryAnswerResponse.understanding);
       if (queryAnswerResponse.understanding.primary_dossier) {
         setDossier(queryAnswerResponse.understanding.primary_dossier);
+      } else {
+        setDossier(null);
+        setIsEvidenceOpen(false);
+        setHighlightCitation(null);
       }
     } catch (err) {
+      if (queryRequestRef.current !== requestId) {
+        return;
+      }
       setQueryError(
         err instanceof Error ? err.message : "Failed to understand query"
       );
     } finally {
-      setIsUnderstandingLoading(false);
-      setIsAnswerLoading(false);
+      if (queryRequestRef.current === requestId) {
+        setIsUnderstandingLoading(false);
+        setIsAnswerLoading(false);
+      }
     }
   }
 
@@ -895,6 +921,7 @@ function QueryUnderstandingPanel({
   const hasResultContent = Boolean(
     isUnderstandingLoading || isAnswerLoading || error || result || answerResponse
   );
+  const canGenerateAnswer = Boolean(result?.primary_dossier);
 
   return (
     <div className="space-y-5">
@@ -963,7 +990,9 @@ function QueryUnderstandingPanel({
             {!isUnderstandingLoading && result ? (
               <QueryUnderstandingResult result={result} />
             ) : null}
-            {isAnswerLoading ? <AnswerSynthesisLoadingState /> : null}
+            {isAnswerLoading && canGenerateAnswer ? (
+              <AnswerSynthesisLoadingState />
+            ) : null}
             {!isUnderstandingLoading && !isAnswerLoading && answerResponse ? (
               <EvidenceAnswerResult
                 response={answerResponse}
@@ -1304,8 +1333,9 @@ function QueryUnderstandingStatus({
         <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm leading-5 text-amber-900">
           {hasNoPrimaryDossier ? (
             <p>
-              No primary medication could be linked to RxNorm, so the dossier
-              below was not updated.
+              We could not link the primary medication to the current medication
+              terminology database, so no generated answer or supporting
+              evidence dossier was created for this query.
             </p>
           ) : null}
           {visibleWarnings.length ? (
