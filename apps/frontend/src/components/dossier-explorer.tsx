@@ -641,7 +641,7 @@ function SupportingEvidence({
         </div>
       ) : (
         <Card className="border-[#C7B4EF] shadow-md">
-          <CardHeader className="flex flex-row items-center justify-between gap-3">
+          <CardHeader className="flex flex-row items-start justify-between gap-3">
             <div>
               <CardTitle>Supporting Evidence</CardTitle>
               <p className="mt-1 text-sm leading-6 text-slate-500">
@@ -651,6 +651,8 @@ function SupportingEvidence({
             <Button
               type="button"
               variant="ghost"
+              className="h-auto px-0 py-0 font-semibold uppercase tracking-wide text-slate-600 hover:bg-transparent hover:text-slate-900"
+              style={{ fontSize: "14px", lineHeight: "20px" }}
               onClick={() => onOpenChange(false)}
             >
               <ChevronDown className="size-4" />
