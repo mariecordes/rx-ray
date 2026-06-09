@@ -1,17 +1,25 @@
 "use client";
 
-import { FormEvent, type ReactNode, useMemo, useRef, useState } from "react";
+import {
+  FormEvent,
+  type RefObject,
+  type ReactNode,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   AlertTriangle,
   ChevronDown,
   ChevronRight,
   Database,
+  FileText,
   Info,
   Loader2,
   Search,
   TriangleAlert,
 } from "lucide-react";
-import Image from "next/image";
 
 import { RxNormKnowledgeGraph } from "@/components/rxnorm-knowledge-graph";
 import { Badge } from "@/components/ui/badge";
@@ -32,15 +40,15 @@ import {
 import { cn } from "@/lib/utils";
 
 const sectionLabels: Record<string, string> = {
-  boxed_warning: "Boxed warning",
+  boxed_warning: "Boxed Warning",
   contraindications: "Contraindications",
   warnings: "Warnings",
-  drug_interactions: "Drug interactions",
+  drug_interactions: "Drug Interactions",
   pregnancy: "Pregnancy",
   lactation: "Lactation",
-  adverse_reactions: "Adverse reactions",
-  indications_and_usage: "Indications",
-  use_in_specific_populations: "Specific populations",
+  adverse_reactions: "Adverse Reactions",
+  indications_and_usage: "Indications & Usage",
+  use_in_specific_populations: "Specific Populations",
 };
 
 function displaySectionName(section: string) {
@@ -373,109 +381,52 @@ function groupLabelSectionsBySource(
 }
 
 export function DossierExplorer() {
-  const [drug, setDrug] = useState("aspirin");
+  return <AskQuestionExperience />;
+}
+
+export function AskQuestionExperience() {
   const [question, setQuestion] = useState(
     "I take ibuprofen for migraine and want to use tretinoin for acne. I am pregnant."
   );
   const [queryUnderstanding, setQueryUnderstanding] =
     useState<QueryUnderstandingResponse | null>(null);
   const [queryAnswer, setQueryAnswer] = useState<QueryAnswerResponse | null>(null);
-  const [isQueryLoading, setIsQueryLoading] = useState(false);
+  const [isUnderstandingLoading, setIsUnderstandingLoading] = useState(false);
+  const [isAnswerLoading, setIsAnswerLoading] = useState(false);
   const [queryError, setQueryError] = useState<string | null>(null);
-  const [openfdaLimit, setOpenfdaLimit] = useState(5);
   const [dossier, setDossier] = useState<DrugDossier | null>(null);
-  const [selectedSection, setSelectedSection] = useState<string | null>(null);
-  const [selectedSourceKey, setSelectedSourceKey] = useState<string | null>(null);
-  const [selectedGraphNode, setSelectedGraphNode] =
-    useState<RxNormConcept | null>(null);
-  const [nodeLabelEvidence, setNodeLabelEvidence] =
-    useState<OpenFDALabelEvidence | null>(null);
-  const [isNodeEvidenceLoading, setIsNodeEvidenceLoading] = useState(false);
-  const [nodeEvidenceError, setNodeEvidenceError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const drugNetworkPanelRef = useRef<HTMLDivElement>(null);
-  const labelEvidencePanelRef = useRef<HTMLDivElement>(null);
-  const nodeEvidenceRequestRef = useRef(0);
-
-  const labelEvidence = dossier?.label_evidence ?? null;
-  const displayEvidence = useMemo(
-    () => buildDisplayEvidenceModel(labelEvidence, nodeLabelEvidence),
-    [labelEvidence, nodeLabelEvidence]
-  );
-  const sectionEntries = useMemo(() => {
-    return Object.entries(displayEvidence.sections);
-  }, [displayEvidence]);
-  const activeSection =
-    selectedSection && displayEvidence.sections[selectedSection]
-      ? selectedSection
-      : sectionEntries[0]?.[0] ?? null;
-  const activeTexts: DisplayLabelSection[] = activeSection
-    ? displayEvidence.sections[activeSection] ?? []
-    : [];
-
-  function toggleSourceSelection(sourceKey?: string | null) {
-    if (!sourceKey) {
-      return;
-    }
-    setSelectedSourceKey((current) =>
-      current === sourceKey ? null : sourceKey
-    );
-  }
-
-  function selectSourceFromStrip(sourceKey?: string | null) {
-    if (!sourceKey) {
-      return;
-    }
-    const nextSourceKey = selectedSourceKey === sourceKey ? null : sourceKey;
-    setSelectedSourceKey(nextSourceKey);
-  }
-
-  function scrollToSection(ref: React.RefObject<HTMLDivElement | null>) {
-    ref.current?.scrollIntoView({
-      behavior: "smooth",
-      block: "start",
-    });
-  }
+  const [isEvidenceOpen, setIsEvidenceOpen] = useState(false);
+  const [highlightCitation, setHighlightCitation] =
+    useState<EvidenceCitation | null>(null);
+  const supportingEvidenceRef = useRef<HTMLDivElement>(null);
+  const queryRequestRef = useRef(0);
 
   function handleAnswerCitationClick(citation: EvidenceCitation) {
-    if (displayEvidence.sections[citation.section]) {
-      setSelectedSection(citation.section);
-    }
-    const matchingSource = displayEvidence.records.find(
-      (source) => source.record.source_id === citation.source_id
-    );
-    setSelectedSourceKey(matchingSource?.key ?? null);
+    setHighlightCitation(citation);
+    setIsEvidenceOpen(true);
     window.requestAnimationFrame(() => {
-      scrollToSection(labelEvidencePanelRef);
+      supportingEvidenceRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
     });
-  }
-
-  function resetEvidenceSelection() {
-    setSelectedGraphNode(null);
-    setNodeLabelEvidence(null);
-    setNodeEvidenceError(null);
-    setIsNodeEvidenceLoading(false);
-    setSelectedSourceKey(null);
-    nodeEvidenceRequestRef.current += 1;
-  }
-
-  function loadDossier(nextDossier: DrugDossier) {
-    setDossier(nextDossier);
-    const firstSection = Object.keys(nextDossier.label_evidence?.sections ?? {})[0];
-    setSelectedSection(firstSection ?? null);
-    resetEvidenceSelection();
   }
 
   async function handleQuestionSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setIsQueryLoading(true);
+    const requestId = queryRequestRef.current + 1;
+    queryRequestRef.current = requestId;
+    setIsUnderstandingLoading(true);
+    setIsAnswerLoading(false);
     setQueryError(null);
     setQueryUnderstanding(null);
     setQueryAnswer(null);
+    setDossier(null);
+    setIsEvidenceOpen(false);
+    setHighlightCitation(null);
 
     try {
-      const response = await fetch("/api/query-answer", {
+      const understandingResponse = await fetch("/api/query-understanding", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -484,37 +435,115 @@ export function DossierExplorer() {
           query: question,
         }),
       });
-      const payload = await response.json();
+      const understandingPayload = await understandingResponse.json();
 
-      if (!response.ok) {
-        throw new Error(payload.detail ?? "Failed to understand query");
+      if (!understandingResponse.ok) {
+        throw new Error(
+          understandingPayload.detail ?? "Failed to understand query"
+        );
       }
 
-      const queryAnswerResponse = payload as QueryAnswerResponse;
-      const understanding = queryAnswerResponse.understanding;
-      setQueryAnswer(queryAnswerResponse);
+      const understanding = understandingPayload as QueryUnderstandingResponse;
+      if (queryRequestRef.current !== requestId) {
+        return;
+      }
       setQueryUnderstanding(understanding);
       if (understanding.primary_dossier) {
-        loadDossier(understanding.primary_dossier);
-        const matchedName = understanding.primary_dossier.resolved_drug?.name;
-        if (matchedName) {
-          setDrug(matchedName);
-        }
+        setDossier(understanding.primary_dossier);
+        setIsEvidenceOpen(false);
+        setHighlightCitation(null);
+      } else {
+        setIsUnderstandingLoading(false);
+        setIsAnswerLoading(false);
+        return;
+      }
+
+      setIsUnderstandingLoading(false);
+      setIsAnswerLoading(true);
+
+      const answerResponse = await fetch("/api/query-answer", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          query: question,
+        }),
+      });
+      const answerPayload = await answerResponse.json();
+
+      if (queryRequestRef.current !== requestId) {
+        return;
+      }
+
+      if (!answerResponse.ok) {
+        throw new Error(answerPayload.detail ?? "Failed to generate response");
+      }
+
+      const queryAnswerResponse = answerPayload as QueryAnswerResponse;
+      setQueryAnswer(queryAnswerResponse);
+      setQueryUnderstanding(queryAnswerResponse.understanding);
+      if (queryAnswerResponse.understanding.primary_dossier) {
+        setDossier(queryAnswerResponse.understanding.primary_dossier);
+      } else {
+        setDossier(null);
+        setIsEvidenceOpen(false);
+        setHighlightCitation(null);
       }
     } catch (err) {
+      if (queryRequestRef.current !== requestId) {
+        return;
+      }
       setQueryError(
         err instanceof Error ? err.message : "Failed to understand query"
       );
     } finally {
-      setIsQueryLoading(false);
+      if (queryRequestRef.current === requestId) {
+        setIsUnderstandingLoading(false);
+        setIsAnswerLoading(false);
+      }
     }
   }
+
+  return (
+    <div className="flex flex-col gap-6">
+        <QueryUnderstandingPanel
+          answerResponse={queryAnswer}
+          error={queryError}
+          isAnswerLoading={isAnswerLoading}
+          isUnderstandingLoading={isUnderstandingLoading}
+          onQuestionChange={setQuestion}
+        onSubmit={handleQuestionSubmit}
+        question={question}
+        result={queryUnderstanding}
+        onAnswerCitationClick={handleAnswerCitationClick}
+      />
+
+      {dossier && queryAnswer && !isAnswerLoading && !isUnderstandingLoading ? (
+        <SupportingEvidence
+          dossier={dossier}
+          evidenceRef={supportingEvidenceRef}
+          highlightCitation={highlightCitation}
+          isOpen={isEvidenceOpen}
+          onOpenChange={setIsEvidenceOpen}
+          onCitationHandled={() => setHighlightCitation(null)}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+export function DrugDossierExperience() {
+  const [drug, setDrug] = useState("aspirin");
+  const [openfdaLimit, setOpenfdaLimit] = useState(5);
+  const [dossier, setDossier] = useState<DrugDossier | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setIsLoading(true);
     setError(null);
-    resetEvidenceSelection();
 
     try {
       const response = await fetch("/api/dossier", {
@@ -536,12 +565,244 @@ export function DossierExplorer() {
         throw new Error(payload.detail ?? "Failed to build dossier");
       }
 
-      loadDossier(payload);
+      setDossier(payload);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to build dossier");
     } finally {
       setIsLoading(false);
     }
+  }
+
+  return (
+    <div className="flex flex-col gap-5">
+      <Card>
+        <CardHeader>
+          <CardTitle>Drug Dossier</CardTitle>
+          <p className="mt-1 text-sm leading-6 text-slate-500">
+            Search for a drug to explore related medication concepts and public
+            label information.
+          </p>
+        </CardHeader>
+        <CardContent>
+          <form
+            onSubmit={handleSubmit}
+            className="grid gap-3 md:grid-cols-[1fr_140px_auto]"
+          >
+            <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
+              Drug
+              <Input
+                value={drug}
+                onChange={(event) => setDrug(event.target.value)}
+                placeholder="aspirin"
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
+              <span className="flex items-center gap-1.5">
+                Label limit
+                <InfoTooltip text="Controls how many FDA drug-label records are retrieved for the searched drug. Higher limits may show more sources, but can make the page denser." />
+              </span>
+              <Input
+                min={1}
+                max={25}
+                type="number"
+                value={openfdaLimit}
+                onChange={(event) => setOpenfdaLimit(Number(event.target.value))}
+              />
+            </label>
+            <div className="flex items-end">
+              <Button className="w-full" disabled={isLoading || !drug.trim()}>
+                {isLoading ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Search className="size-4" />
+                )}
+                Search
+              </Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
+
+      {error ? (
+        <div className="flex items-center gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+          <AlertTriangle className="size-4" />
+          {error}
+        </div>
+      ) : null}
+
+      {!dossier ? <EmptyState /> : <DossierResults dossier={dossier} />}
+    </div>
+  );
+}
+
+function SupportingEvidence({
+  dossier,
+  evidenceRef,
+  highlightCitation,
+  isOpen,
+  onCitationHandled,
+  onOpenChange,
+}: {
+  dossier: DrugDossier;
+  evidenceRef: RefObject<HTMLDivElement | null>;
+  highlightCitation: EvidenceCitation | null;
+  isOpen: boolean;
+  onCitationHandled: () => void;
+  onOpenChange: (isOpen: boolean) => void;
+}) {
+  return (
+    <div ref={evidenceRef} className="scroll-mt-6">
+      {!isOpen ? (
+        <div className="relative flex items-center py-4">
+          <div className="flex-1 border-t border-[#D7C8F4]" />
+          <Button
+            type="button"
+            className="mx-4 rounded-full px-5"
+            onClick={() => onOpenChange(true)}
+          >
+            Explore supporting evidence
+            <ChevronRight className="size-4" />
+          </Button>
+          <div className="flex-1 border-t border-[#D7C8F4]" />
+        </div>
+      ) : (
+        <Card className="border-[#C7B4EF] shadow-md">
+          <CardHeader className="flex flex-row items-start justify-between gap-3">
+            <div>
+              <CardTitle>Supporting Evidence</CardTitle>
+              <p className="mt-1 text-sm leading-6 text-slate-500">
+                Inspect the retrieved dossier behind the generated response.
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              className="h-auto px-0 py-0 font-semibold uppercase tracking-wide text-slate-600 hover:bg-transparent hover:text-slate-900"
+              style={{ fontSize: "14px", lineHeight: "20px" }}
+              onClick={() => onOpenChange(false)}
+            >
+              <ChevronDown className="size-4" />
+              Collapse
+            </Button>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            <div className="flex items-end">
+              <button
+                type="button"
+                className="rounded-t-md bg-[#371E8F] px-4 py-2 text-sm font-semibold text-white shadow-sm"
+              >
+                {dossier.resolved_drug
+                  ? displayGraphNodeName(dossier.resolved_drug.name)
+                  : "Matched drug"}
+              </button>
+            </div>
+            <div className="-mt-5 rounded-b-md rounded-tr-md border border-slate-200 bg-white p-4 shadow-sm">
+              <DossierResults
+                dossier={dossier}
+                highlightCitation={highlightCitation}
+                variant="embedded"
+                onCitationHandled={onCitationHandled}
+              />
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+function DossierResults({
+  dossier,
+  highlightCitation = null,
+  onCitationHandled,
+  variant = "cards",
+}: {
+  dossier: DrugDossier;
+  highlightCitation?: EvidenceCitation | null;
+  onCitationHandled?: () => void;
+  variant?: "cards" | "embedded";
+}) {
+  const [selectedSection, setSelectedSection] = useState<string | null>(null);
+  const [selectedSourceKey, setSelectedSourceKey] = useState<string | null>(null);
+  const [selectedGraphNode, setSelectedGraphNode] =
+    useState<RxNormConcept | null>(null);
+  const [nodeLabelEvidence, setNodeLabelEvidence] =
+    useState<OpenFDALabelEvidence | null>(null);
+  const [isNodeEvidenceLoading, setIsNodeEvidenceLoading] = useState(false);
+  const [nodeEvidenceError, setNodeEvidenceError] = useState<string | null>(null);
+  const drugNetworkPanelRef = useRef<HTMLDivElement>(null);
+  const labelEvidencePanelRef = useRef<HTMLDivElement>(null);
+  const nodeEvidenceRequestRef = useRef(0);
+
+  const labelEvidence = dossier.label_evidence ?? null;
+  const displayEvidence = useMemo(
+    () => buildDisplayEvidenceModel(labelEvidence, nodeLabelEvidence),
+    [labelEvidence, nodeLabelEvidence]
+  );
+  const sectionEntries = useMemo(() => {
+    return Object.entries(displayEvidence.sections);
+  }, [displayEvidence]);
+  const activeSection =
+    selectedSection && displayEvidence.sections[selectedSection]
+      ? selectedSection
+      : sectionEntries[0]?.[0] ?? null;
+  const activeTexts: DisplayLabelSection[] = activeSection
+    ? displayEvidence.sections[activeSection] ?? []
+    : [];
+
+  useEffect(() => {
+    const firstSection = Object.keys(dossier.label_evidence?.sections ?? {})[0];
+    setSelectedSection(firstSection ?? null);
+    setSelectedSourceKey(null);
+    setSelectedGraphNode(null);
+    setNodeLabelEvidence(null);
+    setNodeEvidenceError(null);
+    setIsNodeEvidenceLoading(false);
+    nodeEvidenceRequestRef.current += 1;
+  }, [dossier]);
+
+  useEffect(() => {
+    if (!highlightCitation) {
+      return;
+    }
+    if (displayEvidence.sections[highlightCitation.section]) {
+      setSelectedSection(highlightCitation.section);
+    }
+    const matchingSource = displayEvidence.records.find(
+      (source) => source.record.source_id === highlightCitation.source_id
+    );
+    setSelectedSourceKey(matchingSource?.key ?? null);
+    window.requestAnimationFrame(() => {
+      labelEvidencePanelRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+      onCitationHandled?.();
+    });
+  }, [displayEvidence, highlightCitation, onCitationHandled]);
+
+  function toggleSourceSelection(sourceKey?: string | null) {
+    if (!sourceKey) {
+      return;
+    }
+    setSelectedSourceKey((current) =>
+      current === sourceKey ? null : sourceKey
+    );
+  }
+
+  function selectSourceFromStrip(sourceKey?: string | null) {
+    if (!sourceKey) {
+      return;
+    }
+    const nextSourceKey = selectedSourceKey === sourceKey ? null : sourceKey;
+    setSelectedSourceKey(nextSourceKey);
+  }
+
+  function scrollToSection(ref: RefObject<HTMLDivElement | null>) {
+    ref.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
   }
 
   async function handleSelectedGraphNodeChange(node: RxNormConcept | null) {
@@ -595,130 +856,52 @@ export function DossierExplorer() {
   }
 
   return (
-    <main className="min-h-screen bg-[#F8F4FC]">
-      <div className="w-full bg-[#05021D] px-4 py-5 sm:px-6 lg:px-8">
-        <div className="mx-auto max-w-3xl">
-          <Image
-            priority
-            alt="rx-ray"
-            className="mx-auto h-auto w-full rounded-[20px]"
-            height={724}
-            src="/images/rx-ray-banner.png"
-            width={2172}
-          />
-        </div>
-      </div>
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 px-4 py-5 sm:px-6 lg:px-8">
-        <div className="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm leading-5 text-amber-900">
-          <Info className="size-4 shrink-0" />
-          <span>
-            Educational prototype using public drug terminology and FDA label
-            data. Not medical advice.
-          </span>
-        </div>
-
-        <QueryUnderstandingPanel
-          answerResponse={queryAnswer}
-          error={queryError}
-          isLoading={isQueryLoading}
-          onQuestionChange={setQuestion}
-          onSubmit={handleQuestionSubmit}
-          question={question}
-          result={queryUnderstanding}
-          onAnswerCitationClick={handleAnswerCitationClick}
+    <div
+      className={cn(
+        "flex flex-col",
+        variant === "embedded" ? "gap-6" : "gap-5"
+      )}
+    >
+      <Overview
+        dossier={dossier}
+        variant={variant}
+        onJumpToLabels={() => scrollToSection(labelEvidencePanelRef)}
+        onJumpToNetwork={() => scrollToSection(drugNetworkPanelRef)}
+      />
+      <div ref={drugNetworkPanelRef}>
+        <RxNormKnowledgeGraph
+          key={dossier.resolved_drug?.rxcui ?? dossier.query}
+          dossier={dossier}
+          variant={variant === "embedded" ? "embedded" : "card"}
+          onSelectedNodeChange={handleSelectedGraphNodeChange}
         />
-
-        <form
-          onSubmit={handleSubmit}
-          className="grid gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-sm md:grid-cols-[1fr_140px_auto]"
-        >
-          <p className="text-sm leading-5 text-slate-600 md:col-span-3">
-            Search for a drug to explore related medication concepts and public
-            label information.
-          </p>
-          <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
-            Drug
-            <Input
-              value={drug}
-              onChange={(event) => setDrug(event.target.value)}
-              placeholder="aspirin"
-            />
-          </label>
-          <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
-            <span className="flex items-center gap-1.5">
-              Label limit
-              <InfoTooltip text="Controls how many FDA drug-label records are retrieved for the searched drug. Higher limits may show more sources, but can make the page denser." />
-            </span>
-            <Input
-              min={1}
-              max={25}
-              type="number"
-              value={openfdaLimit}
-              onChange={(event) => setOpenfdaLimit(Number(event.target.value))}
-            />
-          </label>
-          <div className="flex items-end">
-            <Button className="w-full" disabled={isLoading || !drug.trim()}>
-              {isLoading ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <Search className="size-4" />
-              )}
-              Search
-            </Button>
-          </div>
-        </form>
-
-        {error ? (
-          <div className="flex items-center gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
-            <AlertTriangle className="size-4" />
-            {error}
-          </div>
-        ) : null}
-
-        {!dossier ? (
-          <EmptyState />
-        ) : (
-          <div className="flex flex-col gap-5">
-            <Overview
-              dossier={dossier}
-              onJumpToLabels={() => scrollToSection(labelEvidencePanelRef)}
-              onJumpToNetwork={() => scrollToSection(drugNetworkPanelRef)}
-            />
-            <div ref={drugNetworkPanelRef}>
-              <RxNormKnowledgeGraph
-                key={dossier.resolved_drug?.rxcui ?? dossier.query}
-                dossier={dossier}
-                onSelectedNodeChange={handleSelectedGraphNodeChange}
-              />
-            </div>
-            <LabelEvidencePanel
-              ref={labelEvidencePanelRef}
-              activeSection={activeSection}
-              activeTexts={activeTexts}
-              displayEvidence={displayEvidence}
-              labelEvidence={labelEvidence}
-              nodeEvidenceError={nodeEvidenceError}
-              nodeLabelEvidence={nodeLabelEvidence}
-              isNodeEvidenceLoading={isNodeEvidenceLoading}
-              sectionEntries={sectionEntries}
-              selectedGraphNode={selectedGraphNode}
-              selectedSourceKey={selectedSourceKey}
-              onSelectSection={setSelectedSection}
-              onSelectSource={toggleSourceSelection}
-              onSelectSourceFromStrip={selectSourceFromStrip}
-            />
-          </div>
-        )}
       </div>
-    </main>
+      <LabelEvidencePanel
+        ref={labelEvidencePanelRef}
+        activeSection={activeSection}
+        activeTexts={activeTexts}
+        displayEvidence={displayEvidence}
+        labelEvidence={labelEvidence}
+        nodeEvidenceError={nodeEvidenceError}
+        nodeLabelEvidence={nodeLabelEvidence}
+        isNodeEvidenceLoading={isNodeEvidenceLoading}
+        sectionEntries={sectionEntries}
+        selectedGraphNode={selectedGraphNode}
+        selectedSourceKey={selectedSourceKey}
+        variant={variant}
+        onSelectSection={setSelectedSection}
+        onSelectSource={toggleSourceSelection}
+        onSelectSourceFromStrip={selectSourceFromStrip}
+      />
+    </div>
   );
 }
 
 function QueryUnderstandingPanel({
   answerResponse,
   error,
-  isLoading,
+  isAnswerLoading,
+  isUnderstandingLoading,
   onQuestionChange,
   onAnswerCitationClick,
   onSubmit,
@@ -727,68 +910,99 @@ function QueryUnderstandingPanel({
 }: {
   answerResponse: QueryAnswerResponse | null;
   error: string | null;
-  isLoading: boolean;
+  isAnswerLoading: boolean;
+  isUnderstandingLoading: boolean;
   onQuestionChange: (value: string) => void;
   onAnswerCitationClick: (citation: EvidenceCitation) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   question: string;
   result: QueryUnderstandingResponse | null;
 }) {
+  const hasResultContent = Boolean(
+    isUnderstandingLoading || isAnswerLoading || error || result || answerResponse
+  );
+  const canGenerateAnswer = Boolean(result?.primary_dossier);
+
   return (
-    <Card>
-      <CardHeader className="border-b border-slate-200">
-        <div>
-          <div className="flex items-center gap-2">
+    <div className="space-y-5">
+      <Card>
+        <CardContent className="pb-7 pt-6">
+          <div className="flex items-center justify-center gap-2">
             <CardTitle>Ask a Question</CardTitle>
             <InfoTooltip text="This extracts a structured medication state from your question, resolves drug mentions through RxNorm, and loads the primary drug into the explorer below. It does not generate medical advice." />
           </div>
-          <p className="mt-1 text-sm leading-6 text-slate-500">
+          <p className="mx-auto mt-1 max-w-2xl text-sm leading-6 text-slate-500">
             What can we help you explore? Ask in plain language, then inspect
             what the system understood.
           </p>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-4 pt-5">
-        <form onSubmit={onSubmit} className="grid gap-3 lg:grid-cols-[1fr_auto]">
-          <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
-            Question
+          <form
+            onSubmit={onSubmit}
+            className="mx-auto mt-5 flex max-w-4xl items-stretch gap-2"
+          >
             <textarea
               value={question}
               onChange={(event) => onQuestionChange(event.target.value)}
               placeholder="Can I use tretinoin if I am pregnant and already take ibuprofen?"
               rows={1}
-              className="min-h-10 w-full resize-y rounded-md border border-slate-200 bg-white px-3 py-2 text-sm leading-6 text-slate-950 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100"
+              aria-label="Question"
+              className="min-h-11 flex-1 resize-y rounded-md border border-[#C7B4EF] bg-white px-3 py-2 text-slate-950 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-[#371E8F] focus:ring-2 focus:ring-[#E8DDF9]"
+              style={{ fontSize: "15px", lineHeight: "27px" }}
             />
-          </label>
-          <div className="flex items-end">
-            <Button className="w-full lg:w-auto" disabled={isLoading || !question.trim()}>
-              {isLoading ? (
+            <Button
+              type="submit"
+              aria-label="Explore"
+              className="h-11 w-11 shrink-0 px-0"
+              disabled={
+                isUnderstandingLoading || isAnswerLoading || !question.trim()
+              }
+            >
+              {isUnderstandingLoading || isAnswerLoading ? (
                 <Loader2 className="size-4 animate-spin" />
               ) : (
                 <Search className="size-4" />
               )}
-              Explore
             </Button>
-          </div>
-        </form>
+          </form>
+        </CardContent>
+      </Card>
 
-        {error ? (
-          <div className="flex items-center gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
-            <AlertTriangle className="size-4" />
-            {error}
-          </div>
-        ) : null}
+      {hasResultContent ? (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <CardTitle>Generated response</CardTitle>
+              <InfoTooltip text="This response is generated by an LLM from the extracted query state and retrieved public evidence. It is intended for exploration only and does not provide medical advice." />
+            </div>
+            <p className="mt-1 text-sm leading-6 text-slate-500">
+              Educational summary grounded in the retrieved public evidence for
+              the mentioned drugs.
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {error ? (
+              <div className="flex items-center gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+                <AlertTriangle className="size-4" />
+                {error}
+              </div>
+            ) : null}
 
-        {isLoading ? <QueryUnderstandingLoadingState /> : null}
-        {!isLoading && result ? <QueryUnderstandingResult result={result} /> : null}
-        {!isLoading && answerResponse ? (
-          <EvidenceAnswerResult
-            response={answerResponse}
-            onCitationClick={onAnswerCitationClick}
-          />
-        ) : null}
-      </CardContent>
-    </Card>
+            {isUnderstandingLoading ? <QueryUnderstandingLoadingState /> : null}
+            {!isUnderstandingLoading && result ? (
+              <QueryUnderstandingResult result={result} />
+            ) : null}
+            {isAnswerLoading && canGenerateAnswer ? (
+              <AnswerSynthesisLoadingState />
+            ) : null}
+            {!isUnderstandingLoading && !isAnswerLoading && answerResponse ? (
+              <EvidenceAnswerResult
+                response={answerResponse}
+                onCitationClick={onAnswerCitationClick}
+              />
+            ) : null}
+          </CardContent>
+        </Card>
+      ) : null}
+    </div>
   );
 }
 
@@ -867,22 +1081,14 @@ function EvidenceAnswerCard({
   }, [understanding.primary_dossier]);
 
   return (
-    <div className="rounded-md border border-[#D7C8F4] bg-[#FBF9FE]">
-      <div className="px-3 py-3">
-        <div className="flex items-center gap-2">
-          <div className="text-xs font-medium uppercase text-slate-500">
-            Generated response
-          </div>
-          <InfoTooltip text="This response is generated by an LLM from the extracted query state and retrieved public evidence. It is intended for exploration only and does not provide medical advice." />
-        </div>
-        <div className="mt-3 rounded-md border border-slate-200 bg-white px-3 py-2">
-          <div className="text-xs font-medium uppercase text-slate-500">
-            Evidence summary
-          </div>
-          <p className="mt-2 text-sm leading-6 text-slate-800">
-            {answer.summary}
-          </p>
-        </div>
+    <div className="space-y-3">
+      <div className="rounded-md border border-[#C7B4EF] bg-[#FBF9FE] px-4 py-4 shadow-sm">
+        <p
+          className="text-slate-800"
+          style={{ fontSize: "15px", lineHeight: "27px" }}
+        >
+          {answer.summary}
+        </p>
       </div>
 
       {answer.bullets.length ? (
@@ -899,28 +1105,35 @@ function EvidenceAnswerCard({
                   }
                 }}
                 className={cn(
-                  "w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-left transition",
+                  "w-full rounded-md border border-[#D7C8F4] bg-white px-3 py-3 text-left transition",
                   bullet.citations.length
-                    ? "hover:border-[#C7B4EF] hover:bg-[#FBF9FE]"
+                    ? "hover:border-[#C7B4EF] hover:bg-[#F8F4FC]"
                     : ""
                 )}
               >
-                <p className="text-sm leading-6 text-slate-800">
-                  {bullet.text}
-                </p>
                 {bullet.citations.length ? (
-                  <div className="mt-2 flex flex-wrap gap-x-2 gap-y-1 text-xs italic leading-5 text-slate-500">
-                    {bullet.citations.map((citation, citationIndex) => {
-                      return (
-                        <span
-                          key={`${citation.source_id}-${citation.section}-${citationIndex}`}
-                        >
-                          {citationDisplayLabel(citation, sourceById)}
-                        </span>
-                      );
-                    })}
+                  <div className="mb-1.5 flex flex-col gap-1">
+                    {bullet.citations.map((citation, citationIndex) => (
+                      <div
+                        key={`${citation.source_id}-${citation.section}-${citationIndex}`}
+                        className="flex items-start gap-2 font-semibold leading-5 text-slate-800"
+                        style={{ fontSize: "14px" }}
+                      >
+                        <FileText className="mt-0.5 size-4 shrink-0 text-slate-700" />
+                        <span>{citationDisplayLabel(citation, sourceById)}</span>
+                      </div>
+                    ))}
                   </div>
                 ) : null}
+                <p
+                  className={cn(
+                    "leading-6 text-slate-800",
+                    bullet.citations.length ? "pl-6" : ""
+                  )}
+                  style={{ fontSize: "14px" }}
+                >
+                  {bullet.text}
+                </p>
               </button>
             ))}
           </div>
@@ -928,21 +1141,28 @@ function EvidenceAnswerCard({
       ) : null}
 
       {answer.limitations.length ? (
-        <AnswerSection icon={<TriangleAlert className="size-4" />} title="Limitations">
-          <ul className="list-disc space-y-1 pl-5 text-sm leading-5 text-slate-700">
+        <AnswerSection title="Limitations">
+          <div className="space-y-2">
             {answer.limitations.map((limitation) => (
-              <li key={limitation}>{limitation}</li>
+              <div
+                key={limitation}
+                className="flex items-start gap-2 rounded-md border border-[#D7C8F4] bg-white px-3 py-2 leading-6 text-slate-800"
+                style={{ fontSize: "14px" }}
+              >
+                <TriangleAlert className="mt-1 size-4 shrink-0 text-slate-700" />
+                <span>{limitation}</span>
+              </div>
             ))}
-          </ul>
+          </div>
         </AnswerSection>
       ) : null}
 
-      <p className="border-t border-[#D7C8F4] px-3 py-3 text-xs leading-5 text-slate-500">
+      <p className="text-center text-xs leading-5 text-slate-500">
         {answer.safety_note}
       </p>
 
       {warnings.length || errors.length ? (
-        <div className="space-y-1 border-t border-[#D7C8F4] px-3 py-3 text-xs leading-5 text-slate-500">
+        <div className="space-y-1 rounded-md border border-[#D7C8F4] bg-[#FBF9FE] px-3 py-3 text-xs leading-5 text-slate-500">
           {warnings.map((warning) => (
             <p key={warning}>{warning}</p>
           ))}
@@ -969,7 +1189,7 @@ function AnswerSection({
   const [isOpen, setIsOpen] = useState(false);
 
   return (
-    <div className="border-t border-[#D7C8F4]">
+    <div className="rounded-md border border-[#D7C8F4] bg-[#FBF9FE]">
       <button
         type="button"
         onClick={() => setIsOpen((current) => !current)}
@@ -983,7 +1203,9 @@ function AnswerSection({
         {icon ? <span className="shrink-0">{icon}</span> : null}
         <span className="text-xs font-medium uppercase">{title}</span>
       </button>
-      {isOpen ? <div className="px-3 pb-3">{children}</div> : null}
+      {isOpen ? (
+        <div className="border-t border-[#D7C8F4] px-3 py-3">{children}</div>
+      ) : null}
     </div>
   );
 }
@@ -993,6 +1215,16 @@ function QueryUnderstandingLoadingState() {
     <div className="flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-600">
       <Loader2 className="size-4 animate-spin text-slate-500" />
       Understanding your query and extracting relevant information...
+    </div>
+  );
+}
+
+function AnswerSynthesisLoadingState() {
+  return (
+    <div className="flex items-center gap-2 rounded-md border border-[#D7C8F4] bg-[#FBF9FE] px-3 py-3 text-sm leading-6 text-slate-700">
+      <Loader2 className="size-4 animate-spin text-[#371E8F]" />
+      Incorporating what the system understood with retrieved public evidence to
+      generate a response...
     </div>
   );
 }
@@ -1101,8 +1333,9 @@ function QueryUnderstandingStatus({
         <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm leading-5 text-amber-900">
           {hasNoPrimaryDossier ? (
             <p>
-              No primary medication could be linked to RxNorm, so the dossier
-              below was not updated.
+              We could not link the primary medication to the current medication
+              terminology database, so no generated answer or supporting
+              evidence dossier was created for this query.
             </p>
           ) : null}
           {visibleWarnings.length ? (
@@ -1209,10 +1442,12 @@ function Overview({
   dossier,
   onJumpToLabels,
   onJumpToNetwork,
+  variant = "cards",
 }: {
   dossier: DrugDossier;
   onJumpToLabels: () => void;
   onJumpToNetwork: () => void;
+  variant?: "cards" | "embedded";
 }) {
   const networkCount = dossier.rxnorm_neighborhood.edges.length;
   const labelCount = dossier.label_evidence?.labels_found ?? 0;
@@ -1220,11 +1455,22 @@ function Overview({
   const hasLabels = labelCount > 0;
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Overview</CardTitle>
-      </CardHeader>
-      <CardContent className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
+    <section
+      className={cn(
+        variant === "cards" && "rounded-lg border border-slate-200 bg-white shadow-sm"
+      )}
+    >
+      {variant === "cards" ? (
+        <CardHeader>
+          <CardTitle>Overview</CardTitle>
+        </CardHeader>
+      ) : null}
+      <div
+        className={cn(
+          "grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]",
+          variant === "cards" && "p-4"
+        )}
+      >
         <div>
           <div className="text-sm text-slate-500">Matched drug</div>
           {dossier.resolved_drug ? (
@@ -1267,8 +1513,8 @@ function Overview({
             onClick={onJumpToLabels}
           />
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </section>
   );
 }
 
@@ -1318,11 +1564,12 @@ function LabelEvidencePanel({
   sectionEntries,
   selectedGraphNode,
   selectedSourceKey,
+  variant = "cards",
   onSelectSection,
   onSelectSource,
   onSelectSourceFromStrip,
 }: {
-  ref: React.RefObject<HTMLDivElement | null>;
+  ref: RefObject<HTMLDivElement | null>;
   activeSection: string | null;
   activeTexts: DisplayLabelSection[];
   displayEvidence: DisplayEvidenceModel;
@@ -1333,6 +1580,7 @@ function LabelEvidencePanel({
   sectionEntries: [string, DisplayLabelSection[]][];
   selectedGraphNode: RxNormConcept | null;
   selectedSourceKey: string | null;
+  variant?: "cards" | "embedded";
   onSelectSection: (section: string) => void;
   onSelectSource: (sourceKey?: string | null) => void;
   onSelectSourceFromStrip: (sourceKey?: string | null) => void;
@@ -1379,8 +1627,17 @@ function LabelEvidencePanel({
 
   return (
     <div ref={ref}>
-      <Card>
-        <CardHeader className="border-b border-slate-200">
+      <section
+        className={cn(
+          variant === "cards" && "rounded-lg border border-slate-200 bg-white shadow-sm"
+        )}
+      >
+        <div
+          className={cn(
+            variant === "cards" && "border-b border-slate-200 p-4",
+            variant === "embedded" && "border-t border-slate-200 p-0 pt-6"
+          )}
+        >
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <CardTitle>Drug Labels</CardTitle>
@@ -1391,8 +1648,13 @@ function LabelEvidencePanel({
               selections used to highlight or add more specific label records.
             </p>
           </div>
-        </CardHeader>
-        <CardContent className="space-y-5 pt-5">
+        </div>
+        <div
+          className={cn(
+            "space-y-5",
+            variant === "cards" ? "p-4 pt-5" : "p-0 pt-4"
+          )}
+        >
           <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
             <div className="mb-2 text-xs font-medium uppercase text-slate-500">
               Graph selection context
@@ -1621,8 +1883,8 @@ function LabelEvidencePanel({
               {labelEvidence.errors.join(" ")}
             </div>
           ) : null}
-        </CardContent>
-      </Card>
+        </div>
+      </section>
     </div>
   );
 }

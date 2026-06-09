@@ -1,11 +1,17 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
+import { AppShell } from "@/components/app-shell";
+
 import "./globals.css";
 
 export const metadata: Metadata = {
   title: "rx-ray",
   description: "Interactive drug dossier explorer",
+  icons: {
+    icon: "/images/rx-ray-tab-favicon.png",
+    apple: "/images/rx-ray-tab-favicon.png",
+  },
 };
 
 export default function RootLayout({
@@ -15,7 +21,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <AppShell>{children}</AppShell>
+      </body>
     </html>
   );
 }
