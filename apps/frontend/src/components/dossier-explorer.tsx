@@ -391,7 +391,8 @@ export function AskQuestionExperience() {
   const [queryUnderstanding, setQueryUnderstanding] =
     useState<QueryUnderstandingResponse | null>(null);
   const [queryAnswer, setQueryAnswer] = useState<QueryAnswerResponse | null>(null);
-  const [isQueryLoading, setIsQueryLoading] = useState(false);
+  const [isUnderstandingLoading, setIsUnderstandingLoading] = useState(false);
+  const [isAnswerLoading, setIsAnswerLoading] = useState(false);
   const [queryError, setQueryError] = useState<string | null>(null);
   const [dossier, setDossier] = useState<DrugDossier | null>(null);
   const [isEvidenceOpen, setIsEvidenceOpen] = useState(false);
@@ -412,13 +413,14 @@ export function AskQuestionExperience() {
 
   async function handleQuestionSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setIsQueryLoading(true);
+    setIsUnderstandingLoading(true);
+    setIsAnswerLoading(false);
     setQueryError(null);
     setQueryUnderstanding(null);
     setQueryAnswer(null);
 
     try {
-      const response = await fetch("/api/query-answer", {
+      const understandingResponse = await fetch("/api/query-understanding", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -427,44 +429,71 @@ export function AskQuestionExperience() {
           query: question,
         }),
       });
-      const payload = await response.json();
+      const understandingPayload = await understandingResponse.json();
 
-      if (!response.ok) {
-        throw new Error(payload.detail ?? "Failed to understand query");
+      if (!understandingResponse.ok) {
+        throw new Error(
+          understandingPayload.detail ?? "Failed to understand query"
+        );
       }
 
-      const queryAnswerResponse = payload as QueryAnswerResponse;
-      const understanding = queryAnswerResponse.understanding;
-      setQueryAnswer(queryAnswerResponse);
+      const understanding = understandingPayload as QueryUnderstandingResponse;
       setQueryUnderstanding(understanding);
       if (understanding.primary_dossier) {
         setDossier(understanding.primary_dossier);
         setIsEvidenceOpen(false);
         setHighlightCitation(null);
       }
+
+      setIsUnderstandingLoading(false);
+      setIsAnswerLoading(true);
+
+      const answerResponse = await fetch("/api/query-answer", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          query: question,
+        }),
+      });
+      const answerPayload = await answerResponse.json();
+
+      if (!answerResponse.ok) {
+        throw new Error(answerPayload.detail ?? "Failed to generate response");
+      }
+
+      const queryAnswerResponse = answerPayload as QueryAnswerResponse;
+      setQueryAnswer(queryAnswerResponse);
+      setQueryUnderstanding(queryAnswerResponse.understanding);
+      if (queryAnswerResponse.understanding.primary_dossier) {
+        setDossier(queryAnswerResponse.understanding.primary_dossier);
+      }
     } catch (err) {
       setQueryError(
         err instanceof Error ? err.message : "Failed to understand query"
       );
     } finally {
-      setIsQueryLoading(false);
+      setIsUnderstandingLoading(false);
+      setIsAnswerLoading(false);
     }
   }
 
   return (
     <div className="flex flex-col gap-6">
-      <QueryUnderstandingPanel
-        answerResponse={queryAnswer}
-        error={queryError}
-        isLoading={isQueryLoading}
-        onQuestionChange={setQuestion}
+        <QueryUnderstandingPanel
+          answerResponse={queryAnswer}
+          error={queryError}
+          isAnswerLoading={isAnswerLoading}
+          isUnderstandingLoading={isUnderstandingLoading}
+          onQuestionChange={setQuestion}
         onSubmit={handleQuestionSubmit}
         question={question}
         result={queryUnderstanding}
         onAnswerCitationClick={handleAnswerCitationClick}
       />
 
-      {dossier ? (
+      {dossier && queryAnswer && !isAnswerLoading && !isUnderstandingLoading ? (
         <SupportingEvidence
           dossier={dossier}
           evidenceRef={supportingEvidenceRef}
@@ -830,7 +859,8 @@ function DossierResults({
 function QueryUnderstandingPanel({
   answerResponse,
   error,
-  isLoading,
+  isAnswerLoading,
+  isUnderstandingLoading,
   onQuestionChange,
   onAnswerCitationClick,
   onSubmit,
@@ -839,14 +869,17 @@ function QueryUnderstandingPanel({
 }: {
   answerResponse: QueryAnswerResponse | null;
   error: string | null;
-  isLoading: boolean;
+  isAnswerLoading: boolean;
+  isUnderstandingLoading: boolean;
   onQuestionChange: (value: string) => void;
   onAnswerCitationClick: (citation: EvidenceCitation) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   question: string;
   result: QueryUnderstandingResponse | null;
 }) {
-  const hasResultContent = Boolean(isLoading || error || result || answerResponse);
+  const hasResultContent = Boolean(
+    isUnderstandingLoading || isAnswerLoading || error || result || answerResponse
+  );
 
   return (
     <div className="space-y-5">
@@ -877,9 +910,11 @@ function QueryUnderstandingPanel({
               type="submit"
               aria-label="Explore"
               className="h-11 w-11 shrink-0 px-0"
-              disabled={isLoading || !question.trim()}
+              disabled={
+                isUnderstandingLoading || isAnswerLoading || !question.trim()
+              }
             >
-              {isLoading ? (
+              {isUnderstandingLoading || isAnswerLoading ? (
                 <Loader2 className="size-4 animate-spin" />
               ) : (
                 <Search className="size-4" />
@@ -909,11 +944,12 @@ function QueryUnderstandingPanel({
               </div>
             ) : null}
 
-            {isLoading ? <QueryUnderstandingLoadingState /> : null}
-            {!isLoading && result ? (
+            {isUnderstandingLoading ? <QueryUnderstandingLoadingState /> : null}
+            {!isUnderstandingLoading && result ? (
               <QueryUnderstandingResult result={result} />
             ) : null}
-            {!isLoading && answerResponse ? (
+            {isAnswerLoading ? <AnswerSynthesisLoadingState /> : null}
+            {!isUnderstandingLoading && !isAnswerLoading && answerResponse ? (
               <EvidenceAnswerResult
                 response={answerResponse}
                 onCitationClick={onAnswerCitationClick}
@@ -1135,6 +1171,16 @@ function QueryUnderstandingLoadingState() {
     <div className="flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-600">
       <Loader2 className="size-4 animate-spin text-slate-500" />
       Understanding your query and extracting relevant information...
+    </div>
+  );
+}
+
+function AnswerSynthesisLoadingState() {
+  return (
+    <div className="flex items-center gap-2 rounded-md border border-[#D7C8F4] bg-[#FBF9FE] px-3 py-3 text-sm leading-6 text-slate-700">
+      <Loader2 className="size-4 animate-spin text-[#371E96]" />
+      Incorporating what the system understood with retrieved public evidence to
+      generate a response...
     </div>
   );
 }
