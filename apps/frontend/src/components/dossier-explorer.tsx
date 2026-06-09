@@ -9,6 +9,7 @@ import {
   Info,
   Loader2,
   Search,
+  TriangleAlert,
 } from "lucide-react";
 import Image from "next/image";
 
@@ -19,9 +20,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
   DrugDossier,
+  EvidenceAnswer,
+  EvidenceCitation,
   LabelSection,
   OpenFDALabelEvidence,
   OpenFDALabelRecord,
+  QueryAnswerResponse,
   QueryUnderstandingResponse,
   RxNormConcept,
 } from "@/lib/types";
@@ -115,6 +119,24 @@ function displayRxNormType(tty?: string | null) {
 
 function displayStateLabel(value: string) {
   return value.replaceAll("_", " ");
+}
+
+function citationDisplayLabel(
+  citation: EvidenceCitation,
+  sourceById: Map<string, OpenFDALabelRecord>
+) {
+  const source = sourceById.get(citation.source_id);
+  const brandName = primaryValue(source?.brand_names);
+  const genericName = primaryValue(source?.generic_names);
+  const manufacturerName = primaryValue(source?.manufacturer_names);
+  const productName = brandName
+    ? displayBrandName(brandName)
+    : genericName
+      ? displayGenericName(genericName)
+      : "Label source";
+  return [productName, manufacturerName, displaySectionName(citation.section)]
+    .filter(Boolean)
+    .join(" · ");
 }
 
 function InfoTooltip({ text }: { text: string }) {
@@ -357,6 +379,7 @@ export function DossierExplorer() {
   );
   const [queryUnderstanding, setQueryUnderstanding] =
     useState<QueryUnderstandingResponse | null>(null);
+  const [queryAnswer, setQueryAnswer] = useState<QueryAnswerResponse | null>(null);
   const [isQueryLoading, setIsQueryLoading] = useState(false);
   const [queryError, setQueryError] = useState<string | null>(null);
   const [openfdaLimit, setOpenfdaLimit] = useState(5);
@@ -415,6 +438,19 @@ export function DossierExplorer() {
     });
   }
 
+  function handleAnswerCitationClick(citation: EvidenceCitation) {
+    if (displayEvidence.sections[citation.section]) {
+      setSelectedSection(citation.section);
+    }
+    const matchingSource = displayEvidence.records.find(
+      (source) => source.record.source_id === citation.source_id
+    );
+    setSelectedSourceKey(matchingSource?.key ?? null);
+    window.requestAnimationFrame(() => {
+      scrollToSection(labelEvidencePanelRef);
+    });
+  }
+
   function resetEvidenceSelection() {
     setSelectedGraphNode(null);
     setNodeLabelEvidence(null);
@@ -436,16 +472,16 @@ export function DossierExplorer() {
     setIsQueryLoading(true);
     setQueryError(null);
     setQueryUnderstanding(null);
+    setQueryAnswer(null);
 
     try {
-      const response = await fetch("/api/query-understanding", {
+      const response = await fetch("/api/query-answer", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
           query: question,
-          openfda_limit: openfdaLimit,
         }),
       });
       const payload = await response.json();
@@ -454,7 +490,9 @@ export function DossierExplorer() {
         throw new Error(payload.detail ?? "Failed to understand query");
       }
 
-      const understanding = payload as QueryUnderstandingResponse;
+      const queryAnswerResponse = payload as QueryAnswerResponse;
+      const understanding = queryAnswerResponse.understanding;
+      setQueryAnswer(queryAnswerResponse);
       setQueryUnderstanding(understanding);
       if (understanding.primary_dossier) {
         loadDossier(understanding.primary_dossier);
@@ -580,12 +618,14 @@ export function DossierExplorer() {
         </div>
 
         <QueryUnderstandingPanel
+          answerResponse={queryAnswer}
           error={queryError}
           isLoading={isQueryLoading}
           onQuestionChange={setQuestion}
           onSubmit={handleQuestionSubmit}
           question={question}
           result={queryUnderstanding}
+          onAnswerCitationClick={handleAnswerCitationClick}
         />
 
         <form
@@ -676,16 +716,20 @@ export function DossierExplorer() {
 }
 
 function QueryUnderstandingPanel({
+  answerResponse,
   error,
   isLoading,
   onQuestionChange,
+  onAnswerCitationClick,
   onSubmit,
   question,
   result,
 }: {
+  answerResponse: QueryAnswerResponse | null;
   error: string | null;
   isLoading: boolean;
   onQuestionChange: (value: string) => void;
+  onAnswerCitationClick: (citation: EvidenceCitation) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   question: string;
   result: QueryUnderstandingResponse | null;
@@ -737,8 +781,210 @@ function QueryUnderstandingPanel({
 
         {isLoading ? <QueryUnderstandingLoadingState /> : null}
         {!isLoading && result ? <QueryUnderstandingResult result={result} /> : null}
+        {!isLoading && answerResponse ? (
+          <EvidenceAnswerResult
+            response={answerResponse}
+            onCitationClick={onAnswerCitationClick}
+          />
+        ) : null}
       </CardContent>
     </Card>
+  );
+}
+
+function EvidenceAnswerResult({
+  onCitationClick,
+  response,
+}: {
+  onCitationClick: (citation: EvidenceCitation) => void;
+  response: QueryAnswerResponse;
+}) {
+  const { answer, understanding } = response;
+  const synthesisWarnings = response.warnings.filter(
+    (warning) => !understanding.warnings.includes(warning)
+  );
+  const synthesisErrors = response.errors.filter(
+    (error) => !understanding.errors.includes(error)
+  );
+
+  if (!answer) {
+    if (!understanding.primary_dossier) {
+      return null;
+    }
+    return (
+      <div className="rounded-md border border-slate-200 bg-slate-50">
+        <div className="px-3 py-3">
+          <div className="text-xs font-medium uppercase text-slate-500">
+            Generated response
+          </div>
+          <p className="mt-2 text-sm leading-5 text-slate-600">
+            {synthesisErrors.length
+              ? "The generated response could not be created, but the retrieved evidence is available below."
+              : "Generated responses are not configured in this environment, but the retrieved evidence is available below."}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <EvidenceAnswerCard
+      answer={answer}
+      errors={synthesisErrors}
+      onCitationClick={onCitationClick}
+      understanding={understanding}
+      warnings={synthesisWarnings}
+    />
+  );
+}
+
+function EvidenceAnswerCard({
+  answer,
+  errors,
+  onCitationClick,
+  understanding,
+  warnings,
+}: {
+  answer: EvidenceAnswer;
+  errors: string[];
+  onCitationClick: (citation: EvidenceCitation) => void;
+  understanding: QueryUnderstandingResponse;
+  warnings: string[];
+}) {
+  const sourceById = useMemo(() => {
+    const records =
+      understanding.primary_dossier?.label_evidence?.label_records ?? [];
+    return new Map(
+      records
+        .map((record) =>
+          record.source_id ? ([record.source_id, record] as const) : null
+        )
+        .filter(
+          (entry): entry is readonly [string, OpenFDALabelRecord] =>
+            entry !== null
+        )
+    );
+  }, [understanding.primary_dossier]);
+
+  return (
+    <div className="rounded-md border border-[#D7C8F4] bg-[#FBF9FE]">
+      <div className="px-3 py-3">
+        <div className="flex items-center gap-2">
+          <div className="text-xs font-medium uppercase text-slate-500">
+            Generated response
+          </div>
+          <InfoTooltip text="This response is generated by an LLM from the extracted query state and retrieved public evidence. It is intended for exploration only and does not provide medical advice." />
+        </div>
+        <div className="mt-3 rounded-md border border-slate-200 bg-white px-3 py-2">
+          <div className="text-xs font-medium uppercase text-slate-500">
+            Evidence summary
+          </div>
+          <p className="mt-2 text-sm leading-6 text-slate-800">
+            {answer.summary}
+          </p>
+        </div>
+      </div>
+
+      {answer.bullets.length ? (
+        <AnswerSection title="Sources">
+          <div className="space-y-2">
+            {answer.bullets.map((bullet, index) => (
+              <button
+                key={`${bullet.text}-${index}`}
+                type="button"
+                onClick={() => {
+                  const firstCitation = bullet.citations[0];
+                  if (firstCitation) {
+                    onCitationClick(firstCitation);
+                  }
+                }}
+                className={cn(
+                  "w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-left transition",
+                  bullet.citations.length
+                    ? "hover:border-[#C7B4EF] hover:bg-[#FBF9FE]"
+                    : ""
+                )}
+              >
+                <p className="text-sm leading-6 text-slate-800">
+                  {bullet.text}
+                </p>
+                {bullet.citations.length ? (
+                  <div className="mt-2 flex flex-wrap gap-x-2 gap-y-1 text-xs italic leading-5 text-slate-500">
+                    {bullet.citations.map((citation, citationIndex) => {
+                      return (
+                        <span
+                          key={`${citation.source_id}-${citation.section}-${citationIndex}`}
+                        >
+                          {citationDisplayLabel(citation, sourceById)}
+                        </span>
+                      );
+                    })}
+                  </div>
+                ) : null}
+              </button>
+            ))}
+          </div>
+        </AnswerSection>
+      ) : null}
+
+      {answer.limitations.length ? (
+        <AnswerSection icon={<TriangleAlert className="size-4" />} title="Limitations">
+          <ul className="list-disc space-y-1 pl-5 text-sm leading-5 text-slate-700">
+            {answer.limitations.map((limitation) => (
+              <li key={limitation}>{limitation}</li>
+            ))}
+          </ul>
+        </AnswerSection>
+      ) : null}
+
+      <p className="border-t border-[#D7C8F4] px-3 py-3 text-xs leading-5 text-slate-500">
+        {answer.safety_note}
+      </p>
+
+      {warnings.length || errors.length ? (
+        <div className="space-y-1 border-t border-[#D7C8F4] px-3 py-3 text-xs leading-5 text-slate-500">
+          {warnings.map((warning) => (
+            <p key={warning}>{warning}</p>
+          ))}
+          {errors.map((error) => (
+            <p key={error} className="text-red-700">
+              {error}
+            </p>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function AnswerSection({
+  children,
+  icon,
+  title,
+}: {
+  children: ReactNode;
+  icon?: ReactNode;
+  title: string;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+
+  return (
+    <div className="border-t border-[#D7C8F4]">
+      <button
+        type="button"
+        onClick={() => setIsOpen((current) => !current)}
+        className="flex w-full items-center gap-2 px-3 py-3 text-left text-slate-500"
+      >
+        {isOpen ? (
+          <ChevronDown className="size-4 shrink-0" />
+        ) : (
+          <ChevronRight className="size-4 shrink-0" />
+        )}
+        {icon ? <span className="shrink-0">{icon}</span> : null}
+        <span className="text-xs font-medium uppercase">{title}</span>
+      </button>
+      {isOpen ? <div className="px-3 pb-3">{children}</div> : null}
+    </div>
   );
 }
 

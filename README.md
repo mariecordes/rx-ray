@@ -104,11 +104,15 @@ OPENFDA_BASE_URL="https://api.fda.gov/drug/label.json"
 # Optional query-extraction LLM revision
 QUERY_EXTRACTION_OPENAI_API_KEY=...
 QUERY_EXTRACTION_OPENAI_MODEL=...
+
+# Optional grounded answer synthesis
+ANSWER_SYNTHESIS_OPENAI_API_KEY=...
+ANSWER_SYNTHESIS_OPENAI_MODEL=...
 ```
 
 The old generic `OPENAI_API_KEY` / `OPENAI_MODEL` names are intentionally not
-used for query understanding, so later answer-synthesis models can have
-separate configuration.
+used, so query extraction and answer synthesis can have separate models,
+credentials, and usage tracking.
 
 ## Run Locally
 
@@ -144,6 +148,8 @@ If you change `.env`, restart the backend.
 - `GET /health`: backend status.
 - `POST /query-understanding`: extracts state from a natural-language query,
   resolves drug mentions, and returns a primary dossier when possible.
+- `POST /query-answer`: runs query understanding, retrieves the primary dossier,
+  and optionally generates a grounded educational evidence summary.
 - `POST /dossier`: builds a dossier for one direct drug search.
 - `POST /label-evidence`: fetches OpenFDA label evidence for a selected RxNorm
   concept.
@@ -202,12 +208,11 @@ currently the reliable frontend validation path.
 
 ## Project Direction
 
-The current milestone is the evidence explorer and query-understanding layer.
-Planned next steps include:
+The current milestone combines the evidence explorer, query-understanding layer,
+and grounded LLM answer synthesis for natural-language questions. Planned next
+steps include:
 
-- grounded LLM answer synthesis using the extracted state and retrieved
-  evidence,
-- clearer reasoning/execution traces for query processing,
+- clearer reasoning/execution traces for query processing and synthesis,
 - richer multi-drug workflows, especially for interaction-style questions,
 - evaluation views for comparing neural-only, symbolic-only, and combined
   responses.

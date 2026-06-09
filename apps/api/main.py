@@ -13,6 +13,9 @@ from src.dossier.builder import DossierBuilder
 from src.dossier.models import DrugDossier, OpenFDALabelEvidence
 from src.dossier.openfda_store import OpenFDALabelStore
 from src.dossier.rxnorm_store import RxNormParquetStore
+from src.query_answer.config import load_query_answer_parameters
+from src.query_answer.models import QueryAnswerResponse
+from src.query_answer.service import QueryAnswerService
 from src.query_understanding.models import QueryUnderstandingResponse
 from src.query_understanding.service import QueryUnderstandingService
 
@@ -22,25 +25,29 @@ load_dotenv()
 def configure_api_logging() -> None:
     """Ensure rx-ray API diagnostics are visible in the uvicorn console."""
 
-    logger = logging.getLogger("src.query_understanding")
-    logger.setLevel(logging.INFO)
+    loggers = [
+        logging.getLogger("src.query_understanding"),
+        logging.getLogger("src.query_answer"),
+    ]
 
-    has_handler = any(
-        getattr(handler, "_rx_ray_api_handler", False)
-        for handler in logger.handlers
-    )
-    if not has_handler:
-        handler = logging.StreamHandler(sys.stdout)
-        handler.setLevel(logging.INFO)
-        handler.setFormatter(
-            logging.Formatter(
-                "%(asctime)s - %(levelname)s - %(name)s - %(message)s"
-            )
+    for logger in loggers:
+        logger.setLevel(logging.INFO)
+        has_handler = any(
+            getattr(handler, "_rx_ray_api_handler", False)
+            for handler in logger.handlers
         )
-        handler._rx_ray_api_handler = True  # type: ignore[attr-defined]
-        logger.addHandler(handler)
+        if not has_handler:
+            handler = logging.StreamHandler(sys.stdout)
+            handler.setLevel(logging.INFO)
+            handler.setFormatter(
+                logging.Formatter(
+                    "%(asctime)s - %(levelname)s - %(name)s - %(message)s"
+                )
+            )
+            handler._rx_ray_api_handler = True  # type: ignore[attr-defined]
+            logger.addHandler(handler)
 
-    logger.propagate = False
+        logger.propagate = False
 
 
 configure_api_logging()
@@ -68,6 +75,15 @@ class LabelEvidenceRequest(BaseModel):
 class QueryUnderstandingRequest(BaseModel):
     query: str = Field(..., min_length=1)
     openfda_limit: int = Field(default=5, ge=1, le=25)
+
+
+class QueryAnswerRequest(BaseModel):
+    query: str = Field(..., min_length=1)
+    openfda_limit: int = Field(
+        default_factory=lambda: load_query_answer_parameters().default_openfda_limit,
+        ge=1,
+        le=25,
+    )
 
 
 @lru_cache(maxsize=1)
@@ -119,6 +135,17 @@ async def understand_query(
     )
 
 
+async def answer_query(
+    request: QueryAnswerRequest,
+    builder: DossierBuilder = Depends(get_dossier_builder),
+) -> QueryAnswerResponse:
+    service = QueryAnswerService(builder=builder)
+    return service.answer(
+        request.query.strip(),
+        openfda_limit=request.openfda_limit,
+    )
+
+
 def create_app() -> FastAPI:
     api = FastAPI(
         title="rx-ray",
@@ -156,6 +183,12 @@ def create_app() -> FastAPI:
         understand_query,
         methods=["POST"],
         response_model=QueryUnderstandingResponse,
+    )
+    api.add_api_route(
+        "/query-answer",
+        answer_query,
+        methods=["POST"],
+        response_model=QueryAnswerResponse,
     )
     return api
 

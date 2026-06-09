@@ -74,6 +74,10 @@ def load_parameters(path="conf/base/parameters.yml") -> Dict:
     """
     with open(path, "r") as file:
         params = yaml.safe_load(file)
+    if params is None:
+        return {}
+    if not isinstance(params, dict):
+        raise ValueError("Parameters YAML did not parse to a dict")
     return params
 
 
