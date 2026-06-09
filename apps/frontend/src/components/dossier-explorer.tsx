@@ -926,7 +926,7 @@ function QueryUnderstandingPanel({
   return (
     <div className="space-y-5">
       <Card>
-        <CardContent className="pt-6">
+        <CardContent className="pb-7 pt-6">
           <div className="flex items-center justify-center gap-2">
             <CardTitle>Ask a Question</CardTitle>
             <InfoTooltip text="This extracts a structured medication state from your question, resolves drug mentions through RxNorm, and loads the primary drug into the explorer below. It does not generate medical advice." />
@@ -946,7 +946,7 @@ function QueryUnderstandingPanel({
               rows={1}
               aria-label="Question"
               className="min-h-11 flex-1 resize-y rounded-md border border-[#C7B4EF] bg-white px-3 py-2 text-slate-950 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-[#371E8F] focus:ring-2 focus:ring-[#E8DDF9]"
-              style={{ fontSize: "16px", lineHeight: "27px" }}
+              style={{ fontSize: "15px", lineHeight: "27px" }}
             />
             <Button
               type="submit"
@@ -1085,7 +1085,7 @@ function EvidenceAnswerCard({
       <div className="rounded-md border border-[#C7B4EF] bg-[#FBF9FE] px-4 py-4 shadow-sm">
         <p
           className="text-slate-800"
-          style={{ fontSize: "16px", lineHeight: "27px" }}
+          style={{ fontSize: "15px", lineHeight: "27px" }}
         >
           {answer.summary}
         </p>
