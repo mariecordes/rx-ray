@@ -8,6 +8,10 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "rx-ray",
   description: "Interactive drug dossier explorer",
+  icons: {
+    icon: "/images/rx-ray-tab-favicon.png",
+    apple: "/images/rx-ray-tab-favicon.png",
+  },
 };
 
 export default function RootLayout({
