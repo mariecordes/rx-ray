@@ -2,7 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export function AboutPage() {
   return (
-    <div className="mx-auto w-full max-w-4xl">
+    <div className="w-full">
       <Card>
         <CardHeader>
           <CardTitle>About rx-ray</CardTitle>
