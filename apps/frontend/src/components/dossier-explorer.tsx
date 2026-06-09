@@ -658,21 +658,24 @@ function SupportingEvidence({
             </Button>
           </CardHeader>
           <CardContent className="space-y-5">
-            <div className="flex border-b border-slate-200">
+            <div className="flex items-end">
               <button
                 type="button"
-                className="rounded-t-md border-x border-t border-[#C7B4EF] bg-white px-4 py-2 text-sm font-semibold text-[#251467]"
+                className="rounded-t-md bg-[#371E96] px-4 py-2 text-sm font-semibold text-white shadow-sm"
               >
                 {dossier.resolved_drug
                   ? displayGraphNodeName(dossier.resolved_drug.name)
                   : "Matched drug"}
               </button>
             </div>
-            <DossierResults
-              dossier={dossier}
-              highlightCitation={highlightCitation}
-              onCitationHandled={onCitationHandled}
-            />
+            <div className="-mt-5 rounded-b-md rounded-tr-md border border-slate-200 bg-white p-4 shadow-sm">
+              <DossierResults
+                dossier={dossier}
+                highlightCitation={highlightCitation}
+                variant="embedded"
+                onCitationHandled={onCitationHandled}
+              />
+            </div>
           </CardContent>
         </Card>
       )}
@@ -684,10 +687,12 @@ function DossierResults({
   dossier,
   highlightCitation = null,
   onCitationHandled,
+  variant = "cards",
 }: {
   dossier: DrugDossier;
   highlightCitation?: EvidenceCitation | null;
   onCitationHandled?: () => void;
+  variant?: "cards" | "embedded";
 }) {
   const [selectedSection, setSelectedSection] = useState<string | null>(null);
   const [selectedSourceKey, setSelectedSourceKey] = useState<string | null>(null);
@@ -823,9 +828,15 @@ function DossierResults({
   }
 
   return (
-    <div className="flex flex-col gap-5">
+    <div
+      className={cn(
+        "flex flex-col",
+        variant === "embedded" ? "gap-6" : "gap-5"
+      )}
+    >
       <Overview
         dossier={dossier}
+        variant={variant}
         onJumpToLabels={() => scrollToSection(labelEvidencePanelRef)}
         onJumpToNetwork={() => scrollToSection(drugNetworkPanelRef)}
       />
@@ -833,6 +844,7 @@ function DossierResults({
         <RxNormKnowledgeGraph
           key={dossier.resolved_drug?.rxcui ?? dossier.query}
           dossier={dossier}
+          variant={variant === "embedded" ? "embedded" : "card"}
           onSelectedNodeChange={handleSelectedGraphNodeChange}
         />
       </div>
@@ -848,6 +860,7 @@ function DossierResults({
         sectionEntries={sectionEntries}
         selectedGraphNode={selectedGraphNode}
         selectedSourceKey={selectedSourceKey}
+        variant={variant}
         onSelectSection={setSelectedSection}
         onSelectSource={toggleSourceSelection}
         onSelectSourceFromStrip={selectSourceFromStrip}
@@ -1397,10 +1410,12 @@ function Overview({
   dossier,
   onJumpToLabels,
   onJumpToNetwork,
+  variant = "cards",
 }: {
   dossier: DrugDossier;
   onJumpToLabels: () => void;
   onJumpToNetwork: () => void;
+  variant?: "cards" | "embedded";
 }) {
   const networkCount = dossier.rxnorm_neighborhood.edges.length;
   const labelCount = dossier.label_evidence?.labels_found ?? 0;
@@ -1408,11 +1423,22 @@ function Overview({
   const hasLabels = labelCount > 0;
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Overview</CardTitle>
-      </CardHeader>
-      <CardContent className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
+    <section
+      className={cn(
+        variant === "cards" && "rounded-lg border border-slate-200 bg-white shadow-sm"
+      )}
+    >
+      {variant === "cards" ? (
+        <CardHeader>
+          <CardTitle>Overview</CardTitle>
+        </CardHeader>
+      ) : null}
+      <div
+        className={cn(
+          "grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]",
+          variant === "cards" && "p-4"
+        )}
+      >
         <div>
           <div className="text-sm text-slate-500">Matched drug</div>
           {dossier.resolved_drug ? (
@@ -1455,8 +1481,8 @@ function Overview({
             onClick={onJumpToLabels}
           />
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </section>
   );
 }
 
@@ -1506,6 +1532,7 @@ function LabelEvidencePanel({
   sectionEntries,
   selectedGraphNode,
   selectedSourceKey,
+  variant = "cards",
   onSelectSection,
   onSelectSource,
   onSelectSourceFromStrip,
@@ -1521,6 +1548,7 @@ function LabelEvidencePanel({
   sectionEntries: [string, DisplayLabelSection[]][];
   selectedGraphNode: RxNormConcept | null;
   selectedSourceKey: string | null;
+  variant?: "cards" | "embedded";
   onSelectSection: (section: string) => void;
   onSelectSource: (sourceKey?: string | null) => void;
   onSelectSourceFromStrip: (sourceKey?: string | null) => void;
@@ -1567,8 +1595,17 @@ function LabelEvidencePanel({
 
   return (
     <div ref={ref}>
-      <Card>
-        <CardHeader className="border-b border-slate-200">
+      <section
+        className={cn(
+          variant === "cards" && "rounded-lg border border-slate-200 bg-white shadow-sm"
+        )}
+      >
+        <div
+          className={cn(
+            variant === "cards" && "border-b border-slate-200 p-4",
+            variant === "embedded" && "border-t border-slate-200 p-0 pt-6"
+          )}
+        >
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <CardTitle>Drug Labels</CardTitle>
@@ -1579,8 +1616,13 @@ function LabelEvidencePanel({
               selections used to highlight or add more specific label records.
             </p>
           </div>
-        </CardHeader>
-        <CardContent className="space-y-5 pt-5">
+        </div>
+        <div
+          className={cn(
+            "space-y-5",
+            variant === "cards" ? "p-4 pt-5" : "p-0 pt-4"
+          )}
+        >
           <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
             <div className="mb-2 text-xs font-medium uppercase text-slate-500">
               Graph selection context
@@ -1809,8 +1851,8 @@ function LabelEvidencePanel({
               {labelEvidence.errors.join(" ")}
             </div>
           ) : null}
-        </CardContent>
-      </Card>
+        </div>
+      </section>
     </div>
   );
 }

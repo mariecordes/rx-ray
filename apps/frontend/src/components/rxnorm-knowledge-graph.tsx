@@ -12,7 +12,7 @@ import type { MouseEvent, PointerEvent, WheelEvent } from "react";
 import { useMemo, useRef, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { CardTitle } from "@/components/ui/card";
 import { DrugDossier, RxNormConcept, RxNormEdge } from "@/lib/types";
 
 const GRAPH_WIDTH = 900;
@@ -366,9 +366,11 @@ function trimEdge(
 export function RxNormKnowledgeGraph({
   dossier,
   onSelectedNodeChange,
+  variant = "card",
 }: {
   dossier: DrugDossier;
   onSelectedNodeChange?: (node: RxNormConcept | null) => void;
+  variant?: "card" | "embedded";
 }) {
   const [selectedRxcui, setSelectedRxcui] = useState<string | null>(null);
   const [tooltip, setTooltip] = useState<{
@@ -636,8 +638,20 @@ export function RxNormKnowledgeGraph({
   }
 
   return (
-    <Card>
-      <CardHeader>
+    <section
+      className={
+        variant === "card"
+          ? "rounded-lg border border-slate-200 bg-white shadow-sm"
+          : undefined
+      }
+    >
+      <div
+        className={
+          variant === "embedded"
+            ? "border-t border-slate-200 p-0 pt-6"
+            : "border-b border-slate-100 p-4"
+        }
+      >
         <div>
           <div className="flex items-center gap-2">
             <CardTitle>Drug Network</CardTitle>
@@ -648,8 +662,8 @@ export function RxNormKnowledgeGraph({
             concepts.
           </p>
         </div>
-      </CardHeader>
-        <CardContent className="space-y-4">
+      </div>
+      <div className={variant === "embedded" ? "space-y-4 p-0 pt-4" : "space-y-4 p-4"}>
         {edges.length === 0 ? (
           <p className="text-sm text-slate-600">
             No relationship data returned.
@@ -1024,7 +1038,7 @@ export function RxNormKnowledgeGraph({
             </div>
           </div>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </section>
   );
 }
