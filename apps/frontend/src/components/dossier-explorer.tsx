@@ -689,7 +689,7 @@ function SupportingEvidence({
             <div className="flex items-end">
               <button
                 type="button"
-                className="rounded-t-md bg-[#371E96] px-4 py-2 text-sm font-semibold text-white shadow-sm"
+                className="rounded-t-md bg-[#371E8F] px-4 py-2 text-sm font-semibold text-white shadow-sm"
               >
                 {dossier.resolved_drug
                   ? displayGraphNodeName(dossier.resolved_drug.name)
@@ -945,7 +945,7 @@ function QueryUnderstandingPanel({
               placeholder="Can I use tretinoin if I am pregnant and already take ibuprofen?"
               rows={1}
               aria-label="Question"
-              className="min-h-11 flex-1 resize-y rounded-md border border-[#C7B4EF] bg-white px-3 py-2 text-slate-950 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-[#371E96] focus:ring-2 focus:ring-[#E8DDF9]"
+              className="min-h-11 flex-1 resize-y rounded-md border border-[#C7B4EF] bg-white px-3 py-2 text-slate-950 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-[#371E8F] focus:ring-2 focus:ring-[#E8DDF9]"
               style={{ fontSize: "16px", lineHeight: "27px" }}
             />
             <Button
@@ -1222,7 +1222,7 @@ function QueryUnderstandingLoadingState() {
 function AnswerSynthesisLoadingState() {
   return (
     <div className="flex items-center gap-2 rounded-md border border-[#D7C8F4] bg-[#FBF9FE] px-3 py-3 text-sm leading-6 text-slate-700">
-      <Loader2 className="size-4 animate-spin text-[#371E96]" />
+      <Loader2 className="size-4 animate-spin text-[#371E8F]" />
       Incorporating what the system understood with retrieved public evidence to
       generate a response...
     </div>
