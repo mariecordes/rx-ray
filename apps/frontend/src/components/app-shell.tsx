@@ -19,39 +19,43 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="min-h-screen bg-[#F8F4FC]">
-      <header className="w-full bg-[#05021D] px-4 pb-5 pt-4 sm:px-6 lg:px-8">
-        <nav
-          aria-label="Primary"
-          className="mx-auto mb-4 flex w-full max-w-xl items-center justify-center gap-2"
-        >
-          {navItems.map((item) => {
-            const isActive =
-              item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={cn(
-                  "rounded-md px-3 py-1.5 text-sm font-medium transition",
-                  isActive
-                    ? "bg-white/15 text-white shadow-sm"
-                    : "text-white/70 hover:bg-white/10 hover:text-white"
-                )}
-              >
-                {item.label}
-              </Link>
-            );
-          })}
-        </nav>
-        <div className="mx-auto max-w-3xl">
-          <Image
-            priority
-            alt="rx-ray"
-            className="mx-auto h-auto w-full rounded-[20px]"
-            height={724}
-            src="/images/rx-ray-banner.png"
-            width={2172}
-          />
+      <header className="w-full bg-[#05021D] py-3">
+        <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-4 sm:flex-row sm:items-center sm:gap-8 sm:px-6 lg:px-8">
+          <Link href="/" className="block w-fit" aria-label="rx-ray home">
+            <Image
+              priority
+              alt="rx-ray"
+              className="h-22 w-66 rounded-md object-contain object-left"
+              height={724}
+              src="/images/rx-ray-banner.png"
+              width={2172}
+            />
+          </Link>
+          <nav
+            aria-label="Primary"
+            className="flex items-center gap-1 sm:gap-2"
+          >
+            {navItems.map((item) => {
+              const isActive =
+                item.href === "/"
+                  ? pathname === "/"
+                  : pathname.startsWith(item.href);
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={cn(
+                    "rounded-md px-3 py-1.5 text-sm font-medium transition",
+                    isActive
+                      ? "bg-white/15 text-white shadow-sm"
+                      : "text-white/70 hover:bg-white/10 hover:text-white"
+                  )}
+                >
+                  {item.label}
+                </Link>
+              );
+            })}
+          </nav>
         </div>
       </header>
 
