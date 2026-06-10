@@ -83,3 +83,64 @@ def test_openfda_section_normalization() -> None:
     assert evidence.summary_metadata["label_set_ids"] == ["label-set-1"]
     assert evidence.summary_metadata["spl_ids"] == ["spl-1"]
     assert evidence.summary_metadata["spl_set_ids"] == ["spl-set-1"]
+
+
+def label_fixture(label_id: str) -> dict[str, object]:
+    return {
+        "id": label_id,
+        "set_id": f"{label_id}-set",
+        "openfda": {
+            "brand_name": [f"Brand {label_id}"],
+            "generic_name": ["aspirin"],
+            "manufacturer_name": [f"Manufacturer {label_id}"],
+        },
+        "warnings": [f"Warning text {label_id}"],
+    }
+
+
+def test_openfda_cache_refreshes_when_cached_labels_are_below_limit(
+    tmp_path: Path,
+) -> None:
+    class RefreshingOpenFDAStore(OpenFDALabelStore):
+        def __init__(self) -> None:
+            super().__init__(cache_dir=tmp_path, use_cache=True, allow_live=True)
+            self.queries: list[tuple[str, int]] = []
+
+        def _query(self, search: str, limit: int) -> list[dict[str, object]]:
+            self.queries.append((search, limit))
+            return [label_fixture(f"live-{index}") for index in range(limit)]
+
+    store = RefreshingOpenFDAStore()
+    store._write_cache("1191", [label_fixture(f"cached-{index}") for index in range(5)])
+
+    evidence = store.get_label_evidence("1191", fallback_name="aspirin", limit=10)
+
+    assert evidence.retrieval_mode == "live_rxcui"
+    assert evidence.labels_found == 10
+    assert evidence.label_limit == 10
+    assert store.queries == [("openfda.rxcui:1191", 10)]
+    assert len(store._read_cache("1191") or []) == 10
+
+
+def test_openfda_cache_is_sliced_to_requested_limit(tmp_path: Path) -> None:
+    class CachedOpenFDAStore(OpenFDALabelStore):
+        def __init__(self) -> None:
+            super().__init__(cache_dir=tmp_path, use_cache=True, allow_live=True)
+
+        def _query(self, search: str, limit: int) -> list[dict[str, object]]:
+            raise AssertionError("Cache should satisfy this request.")
+
+    store = CachedOpenFDAStore()
+    store._write_cache(
+        "1191",
+        [label_fixture(f"cached-{index}") for index in range(10)],
+    )
+
+    evidence = store.get_label_evidence("1191", fallback_name="aspirin", limit=5)
+
+    assert evidence.retrieval_mode == "cache"
+    assert evidence.labels_found == 5
+    assert evidence.label_limit == 5
+    assert [record.id for record in evidence.label_records] == [
+        f"cached-{index}" for index in range(5)
+    ]
