@@ -39,6 +39,7 @@ import {
   QueryAnswerResponse,
   QueryUnderstandingResponse,
   RxNormConcept,
+  SecondaryDrugEvidence,
 } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -130,6 +131,16 @@ function displayRxNormType(tty?: string | null) {
 
 function displayStateLabel(value: string) {
   return value.replaceAll("_", " ");
+}
+
+function displayMentionRole(value: string) {
+  const labels: Record<string, string> = {
+    primary_drug: "Primary medication",
+    current_medication: "Current medication",
+    mentioned_drug: "Mentioned medication",
+    allergy: "Allergy",
+  };
+  return labels[value] ?? sentenceCase(value.replaceAll("_", " "));
 }
 
 function citationDisplayLabel(
@@ -528,6 +539,7 @@ export function AskQuestionExperience() {
           evidenceRef={supportingEvidenceRef}
           highlightCitation={highlightCitation}
           isOpen={isEvidenceOpen}
+          secondaryEvidence={queryAnswer.secondary_evidence ?? []}
           onOpenChange={setIsEvidenceOpen}
           onCitationHandled={() => setHighlightCitation(null)}
         />
@@ -643,6 +655,7 @@ function SupportingEvidence({
   evidenceRef,
   highlightCitation,
   isOpen,
+  secondaryEvidence,
   onCitationHandled,
   onOpenChange,
 }: {
@@ -650,9 +663,35 @@ function SupportingEvidence({
   evidenceRef: RefObject<HTMLDivElement | null>;
   highlightCitation: EvidenceCitation | null;
   isOpen: boolean;
+  secondaryEvidence: SecondaryDrugEvidence[];
   onCitationHandled: () => void;
   onOpenChange: (isOpen: boolean) => void;
 }) {
+  const evidenceTabs = useMemo(
+    () => buildSupportingEvidenceTabs(dossier, secondaryEvidence),
+    [dossier, secondaryEvidence]
+  );
+  const [activeTabKey, setActiveTabKey] = useState("primary");
+
+  useEffect(() => {
+    setActiveTabKey("primary");
+  }, [dossier, secondaryEvidence]);
+
+  useEffect(() => {
+    if (!highlightCitation) {
+      return;
+    }
+    const matchingTab = evidenceTabs.find((tab) =>
+      tab.sourceIds.has(highlightCitation.source_id)
+    );
+    if (matchingTab) {
+      setActiveTabKey(matchingTab.key);
+    }
+  }, [evidenceTabs, highlightCitation]);
+
+  const activeTab = evidenceTabs.find((tab) => tab.key === activeTabKey)
+    ?? evidenceTabs[0];
+
   return (
     <div ref={evidenceRef} className="scroll-mt-6">
       {!isOpen ? (
@@ -689,28 +728,267 @@ function SupportingEvidence({
             </Button>
           </CardHeader>
           <CardContent className="space-y-5">
-            <div className="flex items-end">
+            <div className="flex flex-wrap items-end gap-1">
+              {evidenceTabs.map((tab) => (
               <button
+                  key={tab.key}
                 type="button"
-                className="rounded-t-md bg-[#371E8F] px-4 py-2 text-sm font-semibold text-white shadow-sm"
-              >
-                {dossier.resolved_drug
-                  ? displayGraphNodeName(dossier.resolved_drug.name)
-                  : "Matched drug"}
+                  onClick={() => setActiveTabKey(tab.key)}
+                  className={cn(
+                    "rounded-t-md px-4 py-2 text-sm font-semibold shadow-sm",
+                    activeTab.key === tab.key
+                      ? "bg-[#371E8F] text-white"
+                      : "border border-slate-200 bg-slate-50 text-slate-700"
+                  )}
+                >
+                  {tab.label}
               </button>
+              ))}
             </div>
             <div className="-mt-5 rounded-b-md rounded-tr-md border border-slate-200 bg-white p-4 shadow-sm">
+              {activeTab.kind === "primary" ? (
               <DossierResults
                 dossier={dossier}
                 highlightCitation={highlightCitation}
                 variant="embedded"
                 onCitationHandled={onCitationHandled}
               />
+              ) : (
+                <SecondaryEvidenceResults
+                  evidence={activeTab.evidence}
+                  highlightCitation={highlightCitation}
+                  onCitationHandled={onCitationHandled}
+                />
+              )}
             </div>
           </CardContent>
         </Card>
       )}
     </div>
+  );
+}
+
+type SupportingEvidenceTab =
+  | {
+      key: "primary";
+      kind: "primary";
+      label: string;
+      sourceIds: Set<string>;
+    }
+  | {
+      key: string;
+      kind: "secondary";
+      label: string;
+      sourceIds: Set<string>;
+      evidence: SecondaryDrugEvidence;
+    };
+
+function buildSupportingEvidenceTabs(
+  dossier: DrugDossier,
+  secondaryEvidence: SecondaryDrugEvidence[]
+): SupportingEvidenceTab[] {
+  const primaryLabel = dossier.resolved_drug
+    ? displayGraphNodeName(dossier.resolved_drug.name)
+    : "Matched drug";
+  return [
+    {
+      key: "primary",
+      kind: "primary",
+      label: primaryLabel,
+      sourceIds: labelEvidenceSourceIds(dossier.label_evidence ?? null),
+    },
+    ...secondaryEvidence.map((evidence) => ({
+      key: `secondary-${evidence.resolved_concept.rxcui}`,
+      kind: "secondary" as const,
+      label: displayGraphNodeName(evidence.resolved_concept.name),
+      sourceIds: labelEvidenceSourceIds(evidence.label_evidence ?? null),
+      evidence,
+    })),
+  ];
+}
+
+function labelEvidenceSourceIds(evidence: OpenFDALabelEvidence | null) {
+  return new Set(
+    (evidence?.label_records ?? [])
+      .map((record) => record.source_id)
+      .filter((sourceId): sourceId is string => Boolean(sourceId))
+  );
+}
+
+function SecondaryEvidenceResults({
+  evidence,
+  highlightCitation,
+  onCitationHandled,
+}: {
+  evidence: SecondaryDrugEvidence;
+  highlightCitation: EvidenceCitation | null;
+  onCitationHandled?: () => void;
+}) {
+  const [selectedSection, setSelectedSection] = useState<string | null>(null);
+  const [selectedSourceKey, setSelectedSourceKey] = useState<string | null>(null);
+  const labelEvidencePanelRef = useRef<HTMLDivElement>(null);
+  const labelEvidence = evidence.label_evidence ?? null;
+  const displayEvidence = useMemo(
+    () => buildDisplayEvidenceModel(labelEvidence, null),
+    [labelEvidence]
+  );
+  const sectionEntries = useMemo(
+    () => Object.entries(displayEvidence.sections),
+    [displayEvidence]
+  );
+  const activeSection =
+    selectedSection && displayEvidence.sections[selectedSection]
+      ? selectedSection
+      : sectionEntries[0]?.[0] ?? null;
+  const activeTexts = activeSection
+    ? displayEvidence.sections[activeSection] ?? []
+    : [];
+
+  useEffect(() => {
+    const firstSection = Object.keys(labelEvidence?.sections ?? {})[0];
+    setSelectedSection(firstSection ?? null);
+    setSelectedSourceKey(null);
+  }, [labelEvidence]);
+
+  useEffect(() => {
+    if (!highlightCitation) {
+      return;
+    }
+    if (!labelEvidenceSourceIds(labelEvidence).has(highlightCitation.source_id)) {
+      return;
+    }
+    if (displayEvidence.sections[highlightCitation.section]) {
+      setSelectedSection(highlightCitation.section);
+    }
+    const matchingSource = displayEvidence.records.find(
+      (source) => source.record.source_id === highlightCitation.source_id
+    );
+    setSelectedSourceKey(matchingSource?.key ?? null);
+    window.requestAnimationFrame(() => {
+      labelEvidencePanelRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+      onCitationHandled?.();
+    });
+  }, [displayEvidence, highlightCitation, labelEvidence, onCitationHandled]);
+
+  function toggleSourceSelection(sourceKey?: string | null) {
+    if (!sourceKey) {
+      return;
+    }
+    setSelectedSourceKey((current) =>
+      current === sourceKey ? null : sourceKey
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-6">
+      <SecondaryEvidenceOverview evidence={evidence} />
+      <RxNormPairContextPanel evidence={evidence} />
+      <LabelEvidencePanel
+        ref={labelEvidencePanelRef}
+        activeSection={activeSection}
+        activeTexts={activeTexts}
+        displayEvidence={displayEvidence}
+        labelEvidence={labelEvidence}
+        nodeEvidenceError={null}
+        nodeLabelEvidence={null}
+        isNodeEvidenceLoading={false}
+        sectionEntries={sectionEntries}
+        selectedGraphNode={null}
+        selectedSourceKey={selectedSourceKey}
+        showGraphContext={false}
+        variant="embedded"
+        onSelectSection={setSelectedSection}
+        onSelectSource={toggleSourceSelection}
+        onSelectSourceFromStrip={toggleSourceSelection}
+      />
+    </div>
+  );
+}
+
+function SecondaryEvidenceOverview({
+  evidence,
+}: {
+  evidence: SecondaryDrugEvidence;
+}) {
+  const labelCount = evidence.label_evidence?.labels_found ?? 0;
+  const hasLabels = labelCount > 0;
+  return (
+    <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
+      <div>
+        <div className="text-sm text-slate-500">Matched drug</div>
+        <div className="mt-2 space-y-2">
+          <div className="text-xl font-semibold text-slate-950">
+            {displayGraphNodeName(evidence.resolved_concept.name)}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Badge>RXCUI {evidence.resolved_concept.rxcui}</Badge>
+            <Badge>{displayRxNormType(evidence.resolved_concept.tty)}</Badge>
+            <Badge>{displayMentionRole(evidence.role)}</Badge>
+          </div>
+        </div>
+      </div>
+      <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-left">
+        <div className="flex items-center justify-between gap-3">
+          <div className="text-sm font-semibold text-slate-950">Drug Labels</div>
+          <Badge
+            style={{
+              backgroundColor: hasLabels ? "#ecfdf5" : "#fffbeb",
+              borderColor: hasLabels ? "#a7f3d0" : "#fde68a",
+              color: hasLabels ? "#065f46" : "#92400e",
+            }}
+          >
+            {hasLabels ? "Available" : "Not found"}
+          </Badge>
+        </div>
+        <div className="mt-2 text-sm leading-5 text-slate-600">
+          {hasLabels
+            ? `${labelCount} label source${labelCount === 1 ? "" : "s"} available`
+            : "No compact label sources were retrieved for this mentioned medication."}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function RxNormPairContextPanel({
+  evidence,
+}: {
+  evidence: SecondaryDrugEvidence;
+}) {
+  const context = evidence.rxnorm_context;
+  if (!context) {
+    return null;
+  }
+  return (
+    <section className="rounded-md border border-slate-200 bg-slate-50 p-3">
+      <div className="mb-2 text-xs font-medium uppercase text-slate-500">
+        RxNorm terminology context
+      </div>
+      <p className="text-sm leading-6 text-slate-700">{context.summary}</p>
+      {context.direct_edges.length ? (
+        <div className="mt-2 space-y-1 text-sm text-slate-600">
+          {context.direct_edges.slice(0, 3).map((edge) => (
+            <div key={`${edge.source_rxcui}-${edge.target_rxcui}-${edge.relation}`}>
+              {displayGraphNodeName(edge.source_name)} ·{" "}
+              {sentenceCase(edge.relation.replaceAll("_", " "))} ·{" "}
+              {displayGraphNodeName(edge.target_name)}
+            </div>
+          ))}
+        </div>
+      ) : null}
+      {context.shared_neighbors.length ? (
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {context.shared_neighbors.slice(0, 5).map((neighbor) => (
+            <Badge key={neighbor.rxcui} className="bg-white text-slate-700">
+              {displayGraphNodeName(neighbor.name)}
+            </Badge>
+          ))}
+        </div>
+      ) : null}
+    </section>
   );
 }
 
@@ -1050,6 +1328,7 @@ function EvidenceAnswerResult({
       coverage={response.coverage ?? { items: [], summary_counts: {} }}
       errors={synthesisErrors}
       onCitationClick={onCitationClick}
+      secondaryEvidence={response.secondary_evidence ?? []}
       understanding={understanding}
       warnings={synthesisWarnings}
     />
@@ -1061,6 +1340,7 @@ function EvidenceAnswerCard({
   coverage,
   errors,
   onCitationClick,
+  secondaryEvidence,
   understanding,
   warnings,
 }: {
@@ -1068,12 +1348,17 @@ function EvidenceAnswerCard({
   coverage: EvidenceCoverageReport;
   errors: string[];
   onCitationClick: (citation: EvidenceCitation) => void;
+  secondaryEvidence: SecondaryDrugEvidence[];
   understanding: QueryUnderstandingResponse;
   warnings: string[];
 }) {
   const sourceById = useMemo(() => {
-    const records =
-      understanding.primary_dossier?.label_evidence?.label_records ?? [];
+    const records = [
+      ...(understanding.primary_dossier?.label_evidence?.label_records ?? []),
+      ...secondaryEvidence.flatMap(
+        (item) => item.label_evidence?.label_records ?? []
+      ),
+    ];
     return new Map(
       records
         .map((record) =>
@@ -1084,7 +1369,7 @@ function EvidenceAnswerCard({
             entry !== null
         )
     );
-  }, [understanding.primary_dossier]);
+  }, [secondaryEvidence, understanding.primary_dossier]);
   const hasVisibleCoverage = coverage.items.some(
     (item) => !hiddenCoverageCategories.has(item.category)
   );
@@ -1439,10 +1724,11 @@ const coverageStatusClasses: Record<EvidenceCoverageStatus, string> = {
   out_of_scope: "border-slate-200 bg-slate-50 text-slate-700",
 };
 
-const hiddenCoverageCategories = new Set(["mentioned_drug", "intent"]);
+const hiddenCoverageCategories = new Set(["intent"]);
 
 const coverageCategoryLabels: Record<string, string> = {
   primary_drug: "Primary medication",
+  mentioned_drug: "Mentioned medications",
   current_medication: "Current medications",
   allergy: "Allergies",
   condition: "Conditions",
@@ -1807,6 +2093,7 @@ function LabelEvidencePanel({
   sectionEntries,
   selectedGraphNode,
   selectedSourceKey,
+  showGraphContext = true,
   variant = "cards",
   onSelectSection,
   onSelectSource,
@@ -1823,6 +2110,7 @@ function LabelEvidencePanel({
   sectionEntries: [string, DisplayLabelSection[]][];
   selectedGraphNode: RxNormConcept | null;
   selectedSourceKey: string | null;
+  showGraphContext?: boolean;
   variant?: "cards" | "embedded";
   onSelectSection: (section: string) => void;
   onSelectSource: (sourceKey?: string | null) => void;
@@ -1887,8 +2175,10 @@ function LabelEvidencePanel({
               <InfoTooltip text="Drug labels come from public FDA label data. They can include warnings, uses, interactions, pregnancy or lactation information, and other text from medication labels." />
             </div>
             <p className="mt-1 text-sm leading-6 text-slate-500">
-              Public drug-label text retrieved for the searched drug, with graph
-              selections used to highlight or add more specific label records.
+              Public drug-label text retrieved for this medication
+              {showGraphContext
+                ? ", with graph selections used to highlight or add more specific label records."
+                : "."}
             </p>
           </div>
         </div>
@@ -1898,6 +2188,7 @@ function LabelEvidencePanel({
             variant === "cards" ? "p-4 pt-5" : "p-0 pt-4"
           )}
         >
+          {showGraphContext ? (
           <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
             <div className="mb-2 text-xs font-medium uppercase text-slate-500">
               Graph selection context
@@ -1910,6 +2201,7 @@ function LabelEvidencePanel({
               nodeLabelEvidence={nodeLabelEvidence}
             />
           </div>
+          ) : null}
 
           <div className="grid gap-4 xl:grid-cols-[minmax(240px,0.32fr)_minmax(0,1fr)]">
             <aside className="rounded-md border border-slate-200 bg-slate-50 p-3">

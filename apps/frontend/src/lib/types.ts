@@ -149,9 +149,29 @@ export type EvidenceCoverageReport = {
   summary_counts: Record<string, number>;
 };
 
+export type RxNormPairContext = {
+  primary_rxcui: string;
+  secondary_rxcui: string;
+  status: string;
+  summary: string;
+  direct_edges: RxNormEdge[];
+  shared_neighbors: RxNormConcept[];
+};
+
+export type SecondaryDrugEvidence = {
+  mention_text: string;
+  role: string;
+  resolved_concept: RxNormConcept;
+  label_evidence?: OpenFDALabelEvidence | null;
+  interaction_label_evidence?: OpenFDALabelEvidence | null;
+  retrieval_modes: string[];
+  rxnorm_context?: RxNormPairContext | null;
+};
+
 export type QueryAnswerResponse = {
   understanding: QueryUnderstandingResponse;
   answer?: EvidenceAnswer | null;
+  secondary_evidence: SecondaryDrugEvidence[];
   coverage: EvidenceCoverageReport;
   warnings: string[];
   errors: string[];

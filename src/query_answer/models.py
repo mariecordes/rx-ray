@@ -4,6 +4,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from src.dossier.models import OpenFDALabelEvidence, RxNormConcept, RxNormEdge
 from src.query_understanding.models import QueryUnderstandingResponse
 
 
@@ -58,11 +59,35 @@ class EvidenceCoverageReport(BaseModel):
     summary_counts: dict[str, int] = Field(default_factory=dict)
 
 
+class RxNormPairContext(BaseModel):
+    """Terminology-only context between primary and secondary RxNorm concepts."""
+
+    primary_rxcui: str
+    secondary_rxcui: str
+    status: str
+    summary: str
+    direct_edges: list[RxNormEdge] = Field(default_factory=list)
+    shared_neighbors: list[RxNormConcept] = Field(default_factory=list)
+
+
+class SecondaryDrugEvidence(BaseModel):
+    """Compact evidence bundle for a non-primary resolved medication."""
+
+    mention_text: str
+    role: str
+    resolved_concept: RxNormConcept
+    label_evidence: OpenFDALabelEvidence | None = None
+    interaction_label_evidence: OpenFDALabelEvidence | None = None
+    retrieval_modes: list[str] = Field(default_factory=list)
+    rxnorm_context: RxNormPairContext | None = None
+
+
 class QueryAnswerResponse(BaseModel):
     """Natural-language query understanding plus optional answer synthesis."""
 
     understanding: QueryUnderstandingResponse
     answer: EvidenceAnswer | None = None
+    secondary_evidence: list[SecondaryDrugEvidence] = Field(default_factory=list)
     coverage: EvidenceCoverageReport = Field(default_factory=EvidenceCoverageReport)
     warnings: list[str] = Field(default_factory=list)
     errors: list[str] = Field(default_factory=list)

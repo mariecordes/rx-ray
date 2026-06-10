@@ -100,6 +100,57 @@ class OpenFDALabelStore:
             )
         return evidence
 
+    def get_interaction_label_evidence(
+        self,
+        rxcui: str,
+        interaction_name: str,
+        fallback_name: str | None = None,
+        limit: int = 3,
+    ) -> OpenFDALabelEvidence:
+        """Fetch labels whose drug-interactions section mentions another drug."""
+
+        errors: list[str] = []
+        labels: list[dict[str, Any]] = []
+        retrieval_mode = "none"
+        interaction_query = self._quote_query_value(interaction_name)
+
+        if self.allow_live and limit > 0 and interaction_query:
+            try:
+                labels = self._query(
+                    f"openfda.rxcui:{rxcui}+AND+drug_interactions:{interaction_query}",
+                    limit=limit,
+                )
+                retrieval_mode = "interaction_targeted_lookup" if labels else "none"
+                if not labels and fallback_name:
+                    labels = self._query(
+                        "openfda.generic_name:"
+                        f"{self._quote_query_value(fallback_name)}"
+                        f"+AND+drug_interactions:{interaction_query}",
+                        limit=limit,
+                    )
+                    retrieval_mode = (
+                        "interaction_targeted_lookup" if labels else "none"
+                    )
+            except requests.RequestException as exc:
+                errors.append(f"OpenFDA interaction request failed: {exc}")
+            except ValueError as exc:
+                errors.append(
+                    f"OpenFDA interaction response could not be parsed: {exc}"
+                )
+
+        evidence = self._normalize_labels(
+            rxcui,
+            labels,
+            retrieval_mode,
+            label_limit=limit,
+        )
+        evidence.errors.extend(errors)
+        if not labels and not errors and not self.allow_live:
+            evidence.errors.append(
+                "Live OpenFDA interaction lookup disabled."
+            )
+        return evidence
+
     def _query(self, search: str, limit: int) -> list[dict[str, Any]]:
         response = self.session.get(
             self.base_url,
@@ -230,3 +281,8 @@ class OpenFDALabelStore:
         if isinstance(value, list):
             return [str(item).strip() for item in value if str(item).strip()]
         return [str(value).strip()] if str(value).strip() else []
+
+    @staticmethod
+    def _quote_query_value(value: str) -> str:
+        escaped = value.strip().replace('"', '\\"')
+        return f'"{escaped}"' if escaped else ""

@@ -1,4 +1,7 @@
 query_answer:
   default_openfda_limit: 10
+  secondary_openfda_limit: 3
+  max_secondary_drugs: 3
+  interaction_lookup_limit: 3
   max_synthesis_retries: 1
   require_citations_when_evidence_exists: true

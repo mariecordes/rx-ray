@@ -5,6 +5,8 @@ from src.query_answer.models import (
     EvidenceCoverageItem,
     EvidenceCoverageReport,
     QueryAnswerResponse,
+    RxNormPairContext,
+    SecondaryDrugEvidence,
 )
 from src.query_answer.service import QueryAnswerService
 
@@ -14,4 +16,6 @@ __all__ = [
     "EvidenceCoverageReport",
     "QueryAnswerResponse",
     "QueryAnswerService",
+    "RxNormPairContext",
+    "SecondaryDrugEvidence",
 ]
