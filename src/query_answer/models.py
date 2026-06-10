@@ -47,6 +47,8 @@ class EvidenceCoverageItem(BaseModel):
     status: EvidenceCoverageStatus
     reason: str
     matched_evidence: str | None = None
+    source_id: str | None = None
+    section: str | None = None
 
 
 class EvidenceCoverageReport(BaseModel):

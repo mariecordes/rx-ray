@@ -140,6 +140,8 @@ export type EvidenceCoverageItem = {
   status: EvidenceCoverageStatus;
   reason: string;
   matched_evidence?: string | null;
+  source_id?: string | null;
+  section?: string | null;
 };
 
 export type EvidenceCoverageReport = {

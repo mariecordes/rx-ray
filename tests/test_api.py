@@ -675,6 +675,35 @@ def test_evidence_coverage_marks_secondary_and_context_gaps() -> None:
     )
 
 
+def test_evidence_coverage_match_includes_source_reference() -> None:
+    understanding = response_with_label_evidence().model_copy(
+        update={
+            "state": QueryState(
+                primary_drug="aspirin",
+                all_drugs_mentioned=["aspirin"],
+                conditions=["aspirin"],
+            ),
+        }
+    )
+    service = QueryAnswerService(
+        builder=offline_builder(),
+        understanding_service=FakeUnderstandingService(understanding),
+        synthesizer=FakeAnswerSynthesizer(),
+    )
+
+    response = service.answer("Can I take aspirin?")
+
+    condition_item = next(
+        item
+        for item in response.coverage.items
+        if item.category == "condition" and item.label == "aspirin"
+    )
+    assert condition_item.status == "addressed"
+    assert condition_item.source_id == "label-1"
+    assert condition_item.section == "warnings"
+    assert condition_item.matched_evidence is not None
+
+
 def test_evidence_snippet_uses_word_boundaries() -> None:
     text = (
         " ".join(f"prefixword{index}" for index in range(20))

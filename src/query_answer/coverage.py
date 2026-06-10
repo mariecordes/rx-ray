@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from collections import Counter
+from dataclasses import dataclass
 
 from src.dossier.models import LabelSection
 from src.query_answer.models import (
@@ -90,7 +91,7 @@ def build_evidence_coverage(
             coverage_from_text(
                 category="current_medication",
                 label=drug,
-                evidence_text=evidence_text,
+                sections=sections,
                 has_label_text=has_label_text,
                 not_found_reason=(
                     "The retrieved labels did not explicitly mention the "
@@ -104,7 +105,7 @@ def build_evidence_coverage(
             coverage_from_text(
                 category="allergy",
                 label=allergy,
-                evidence_text=evidence_text,
+                sections=sections,
                 has_label_text=has_label_text,
                 not_found_reason=(
                     "The retrieved labels did not explicitly mention "
@@ -118,7 +119,7 @@ def build_evidence_coverage(
             coverage_from_text(
                 category="condition",
                 label=condition,
-                evidence_text=evidence_text,
+                sections=sections,
                 has_label_text=has_label_text,
                 not_found_reason=(
                     "The retrieved labels did not explicitly mention "
@@ -212,7 +213,7 @@ def coverage_from_text(
     *,
     category: str,
     label: str,
-    evidence_text: str,
+    sections: dict[str, list[LabelSection]],
     has_label_text: bool,
     not_found_reason: str,
 ) -> EvidenceCoverageItem:
@@ -223,14 +224,16 @@ def coverage_from_text(
             status="not_retrieved",
             reason="No label text was retrieved for coverage matching.",
         )
-    match = find_match(label, evidence_text)
+    match = find_match_in_sections(label, sections)
     if match:
         return EvidenceCoverageItem(
             category=category,
             label=label,
             status="addressed",
             reason="The retrieved label text explicitly mentions this item.",
-            matched_evidence=match,
+            matched_evidence=match.snippet,
+            source_id=match.source_id,
+            section=match.section,
         )
     return EvidenceCoverageItem(
         category=category,
@@ -255,21 +258,26 @@ def patient_context_coverage(
         )
     related_sections = patient_context_sections(label, sections)
     if related_sections:
+        source_match = first_section_source(related_sections[0], sections)
         return EvidenceCoverageItem(
             category="patient_context",
             label=label,
             status="addressed",
             reason="A relevant label section was retrieved for this patient context.",
             matched_evidence=", ".join(related_sections),
+            source_id=source_match.source_id if source_match else None,
+            section=source_match.section if source_match else related_sections[0],
         )
-    match = find_match(label, evidence_text)
+    match = find_match_in_sections(label, sections)
     if match:
         return EvidenceCoverageItem(
             category="patient_context",
             label=label,
             status="addressed",
             reason="The retrieved label text explicitly mentions this patient context.",
-            matched_evidence=match,
+            matched_evidence=match.snippet,
+            source_id=match.source_id,
+            section=match.section,
         )
     return EvidenceCoverageItem(
         category="patient_context",
@@ -295,6 +303,55 @@ def patient_context_sections(
     if normalized in {"child", "children", "pediatric"}:
         section_names.append("use_in_specific_populations")
     return [section for section in section_names if sections.get(section)]
+
+
+@dataclass(frozen=True)
+class CoverageEvidenceMatch:
+    snippet: str
+    source_id: str | None
+    section: str
+
+
+def find_match_in_sections(
+    label: str,
+    sections: dict[str, list[LabelSection]],
+) -> CoverageEvidenceMatch | None:
+    normalized_label = normalize(label)
+    if not normalized_label:
+        return None
+
+    pattern = re.compile(re.escape(label), flags=re.IGNORECASE)
+    for section_name, entries in sections.items():
+        for entry in entries:
+            normalized_text = normalize(entry.text)
+            if normalized_label not in normalized_text:
+                continue
+            match = pattern.search(entry.text)
+            if match:
+                return CoverageEvidenceMatch(
+                    snippet=evidence_snippet(
+                        entry.text,
+                        match.start(),
+                        match.end(),
+                    ),
+                    source_id=entry.source_id,
+                    section=section_name,
+                )
+    return None
+
+
+def first_section_source(
+    section_name: str,
+    sections: dict[str, list[LabelSection]],
+) -> CoverageEvidenceMatch | None:
+    first_entry = next(iter(sections.get(section_name, [])), None)
+    if first_entry is None:
+        return None
+    return CoverageEvidenceMatch(
+        snippet=section_name,
+        source_id=first_entry.source_id,
+        section=section_name,
+    )
 
 
 def find_match(label: str, evidence_text: str) -> str | None:

@@ -1172,7 +1172,10 @@ function EvidenceAnswerCard({
           infoText="This checklist compares what the system extracted from your question with the retrieved evidence. It shows what was addressed, what was not found in the retrieved labels, what was not retrieved, and what is only used as context. Hover over a reason when available to inspect the matching evidence snippet."
           tone="audit"
         >
-          <EvidenceCoverageList coverage={coverage} />
+          <EvidenceCoverageList
+            coverage={coverage}
+            onCitationClick={onCitationClick}
+          />
         </AnswerSection>
       ) : null}
 
@@ -1198,8 +1201,10 @@ function EvidenceAnswerCard({
 
 function EvidenceCoverageList({
   coverage,
+  onCitationClick,
 }: {
   coverage: EvidenceCoverageReport;
+  onCitationClick: (citation: EvidenceCitation) => void;
 }) {
   const groupedItems = useMemo(() => {
     const groups = new Map<string, EvidenceCoverageItem[]>();
@@ -1273,7 +1278,10 @@ function EvidenceCoverageList({
                     {coverageStatusLabels[item.status]}
                   </span>
                   <div className="text-sm leading-5 text-slate-600">
-                    <CoverageReason item={item} />
+                    <CoverageReason
+                      item={item}
+                      onCitationClick={onCitationClick}
+                    />
                   </div>
                 </div>
               ))}
@@ -1285,14 +1293,40 @@ function EvidenceCoverageList({
   );
 }
 
-function CoverageReason({ item }: { item: EvidenceCoverageItem }) {
+function CoverageReason({
+  item,
+  onCitationClick,
+}: {
+  item: EvidenceCoverageItem;
+  onCitationClick: (citation: EvidenceCitation) => void;
+}) {
   if (!item.matched_evidence) {
     return <p>{item.reason}</p>;
   }
+  const citation =
+    item.source_id && item.section
+      ? {
+          source_id: item.source_id,
+          section: item.section,
+          snippet: item.matched_evidence,
+        }
+      : null;
+  const reasonClasses = cn(
+    "group relative inline border-b border-dotted border-slate-400 text-left",
+    citation ? "cursor-pointer hover:text-[#371E8F]" : ""
+  );
 
   return (
     <p>
-      <span className="group relative inline border-b border-dotted border-slate-400">
+      <button
+        type="button"
+        onClick={() => {
+          if (citation) {
+            onCitationClick(citation);
+          }
+        }}
+        className={reasonClasses}
+      >
         {item.reason}
         <span className="pointer-events-none absolute left-0 top-full z-30 mt-2 hidden w-80 max-w-[75vw] rounded-md border border-slate-200 bg-white px-3 py-2 text-xs normal-case leading-5 text-slate-700 shadow-lg group-hover:block">
           <HighlightedMatchedEvidence
@@ -1300,7 +1334,7 @@ function CoverageReason({ item }: { item: EvidenceCoverageItem }) {
             text={item.matched_evidence}
           />
         </span>
-      </span>
+      </button>
     </p>
   );
 }
