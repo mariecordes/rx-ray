@@ -30,6 +30,9 @@ import {
   DrugDossier,
   EvidenceAnswer,
   EvidenceCitation,
+  EvidenceCoverageItem,
+  EvidenceCoverageReport,
+  EvidenceCoverageStatus,
   LabelSection,
   OpenFDALabelEvidence,
   OpenFDALabelRecord,
@@ -1044,6 +1047,7 @@ function EvidenceAnswerResult({
   return (
     <EvidenceAnswerCard
       answer={answer}
+      coverage={response.coverage ?? { items: [], summary_counts: {} }}
       errors={synthesisErrors}
       onCitationClick={onCitationClick}
       understanding={understanding}
@@ -1054,12 +1058,14 @@ function EvidenceAnswerResult({
 
 function EvidenceAnswerCard({
   answer,
+  coverage,
   errors,
   onCitationClick,
   understanding,
   warnings,
 }: {
   answer: EvidenceAnswer;
+  coverage: EvidenceCoverageReport;
   errors: string[];
   onCitationClick: (citation: EvidenceCitation) => void;
   understanding: QueryUnderstandingResponse;
@@ -1079,6 +1085,9 @@ function EvidenceAnswerCard({
         )
     );
   }, [understanding.primary_dossier]);
+  const hasVisibleCoverage = coverage.items.some(
+    (item) => !hiddenCoverageCategories.has(item.category)
+  );
 
   return (
     <div className="space-y-3">
@@ -1157,6 +1166,19 @@ function EvidenceAnswerCard({
         </AnswerSection>
       ) : null}
 
+      {hasVisibleCoverage ? (
+        <AnswerSection
+          title="Evidence coverage"
+          infoText="This checklist compares what the system extracted from your question with the retrieved evidence. It shows what was addressed, what was not found in the retrieved labels, what was not retrieved, and what is only used as context. Hover over a reason when available to inspect the matching evidence snippet."
+          tone="audit"
+        >
+          <EvidenceCoverageList
+            coverage={coverage}
+            onCitationClick={onCitationClick}
+          />
+        </AnswerSection>
+      ) : null}
+
       <p className="text-center text-xs leading-5 text-slate-500">
         {answer.safety_note}
       </p>
@@ -1177,19 +1199,204 @@ function EvidenceAnswerCard({
   );
 }
 
+function EvidenceCoverageList({
+  coverage,
+  onCitationClick,
+}: {
+  coverage: EvidenceCoverageReport;
+  onCitationClick: (citation: EvidenceCitation) => void;
+}) {
+  const groupedItems = useMemo(() => {
+    const groups = new Map<string, EvidenceCoverageItem[]>();
+    for (const item of coverage.items) {
+      // Hide V1-only bookkeeping rows until secondary-drug retrieval and
+      // intent-specific coverage checks are implemented.
+      if (hiddenCoverageCategories.has(item.category)) {
+        continue;
+      }
+      const current = groups.get(item.category) ?? [];
+      current.push(item);
+      groups.set(item.category, current);
+    }
+    return Array.from(groups.entries());
+  }, [coverage.items]);
+  const visibleSummaryCounts = useMemo(() => {
+    const counts: Partial<Record<EvidenceCoverageStatus, number>> = {};
+    for (const [, items] of groupedItems) {
+      for (const item of items) {
+        counts[item.status] = (counts[item.status] ?? 0) + 1;
+      }
+    }
+    return counts;
+  }, [groupedItems]);
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap gap-1.5">
+        {coverageStatusOrder.map((status) => {
+          const count = visibleSummaryCounts[status] ?? 0;
+          if (count === 0) {
+            return null;
+          }
+          return (
+            <span
+              key={status}
+              className={cn(
+                "inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium",
+                coverageStatusClasses[status]
+              )}
+            >
+              {coverageStatusLabels[status]} {count}
+            </span>
+          );
+        })}
+      </div>
+      <div className="space-y-2">
+        {groupedItems.map(([category, items]) => (
+          <div
+            key={category}
+            className="rounded-md border border-slate-200 bg-white px-3 py-3"
+          >
+            <div className="mb-2 text-xs font-medium uppercase text-slate-500">
+              {displayCoverageCategory(category)}
+            </div>
+            <div className="space-y-2">
+              {items.map((item) => (
+                <div
+                  key={`${item.category}-${item.label}-${item.status}`}
+                  className="grid gap-2 sm:grid-cols-[minmax(120px,0.32fr)_auto_minmax(0,1fr)] sm:items-start"
+                >
+                  <span className="rounded-md bg-slate-50 px-2 py-1 text-sm font-medium leading-5 text-slate-800">
+                    {item.label}
+                  </span>
+                  <span
+                    className={cn(
+                      "w-fit rounded-md border px-2 py-1 text-xs font-medium",
+                      coverageStatusClasses[item.status]
+                    )}
+                  >
+                    {coverageStatusLabels[item.status]}
+                  </span>
+                  <div className="text-sm leading-5 text-slate-600">
+                    <CoverageReason
+                      item={item}
+                      onCitationClick={onCitationClick}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function CoverageReason({
+  item,
+  onCitationClick,
+}: {
+  item: EvidenceCoverageItem;
+  onCitationClick: (citation: EvidenceCitation) => void;
+}) {
+  if (!item.matched_evidence) {
+    return <p>{item.reason}</p>;
+  }
+  const citation =
+    item.source_id && item.section
+      ? {
+          source_id: item.source_id,
+          section: item.section,
+          snippet: item.matched_evidence,
+        }
+      : null;
+  const reasonClasses = cn(
+    "group relative inline border-b border-dotted border-slate-400 text-left",
+    citation ? "cursor-pointer hover:text-[#371E8F]" : ""
+  );
+
+  return (
+    <p>
+      <button
+        type="button"
+        onClick={() => {
+          if (citation) {
+            onCitationClick(citation);
+          }
+        }}
+        className={reasonClasses}
+      >
+        {item.reason}
+        <span className="pointer-events-none absolute left-0 top-full z-30 mt-2 hidden w-80 max-w-[75vw] rounded-md border border-slate-200 bg-white px-3 py-2 text-xs normal-case leading-5 text-slate-700 shadow-lg group-hover:block">
+          <HighlightedMatchedEvidence
+            label={item.label}
+            text={item.matched_evidence}
+          />
+        </span>
+      </button>
+    </p>
+  );
+}
+
+function HighlightedMatchedEvidence({
+  label,
+  text,
+}: {
+  label: string;
+  text: string;
+}) {
+  if (!label.trim()) {
+    return text;
+  }
+
+  const pattern = new RegExp(`(${escapeRegExp(label)})`, "ig");
+  const parts = text.split(pattern);
+  if (parts.length === 1) {
+    return text;
+  }
+
+  return (
+    <>
+      {parts.map((part, index) =>
+        part.toLowerCase() === label.toLowerCase() ? (
+          <mark
+            key={`${part}-${index}`}
+            className="rounded-sm bg-amber-100 px-0.5 text-slate-800"
+          >
+            {part}
+          </mark>
+        ) : (
+          <span key={`${part}-${index}`}>{part}</span>
+        )
+      )}
+    </>
+  );
+}
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 function AnswerSection({
   children,
   icon,
+  infoText,
   title,
+  tone = "synthesis",
 }: {
   children: ReactNode;
   icon?: ReactNode;
+  infoText?: string;
   title: string;
+  tone?: "synthesis" | "audit";
 }) {
   const [isOpen, setIsOpen] = useState(false);
+  const borderClass = tone === "audit" ? "border-slate-200" : "border-[#D7C8F4]";
+  const backgroundClass = tone === "audit" ? "bg-slate-50" : "bg-[#FBF9FE]";
 
   return (
-    <div className="rounded-md border border-[#D7C8F4] bg-[#FBF9FE]">
+    <div className={cn("rounded-md border", borderClass, backgroundClass)}>
       <button
         type="button"
         onClick={() => setIsOpen((current) => !current)}
@@ -1202,12 +1409,48 @@ function AnswerSection({
         )}
         {icon ? <span className="shrink-0">{icon}</span> : null}
         <span className="text-xs font-medium uppercase">{title}</span>
+        {infoText ? <InfoTooltip text={infoText} /> : null}
       </button>
       {isOpen ? (
-        <div className="border-t border-[#D7C8F4] px-3 py-3">{children}</div>
+        <div className={cn("border-t px-3 py-3", borderClass)}>{children}</div>
       ) : null}
     </div>
   );
+}
+
+const coverageStatusOrder: EvidenceCoverageStatus[] = [
+  "addressed",
+  "not_found_in_evidence",
+  "not_retrieved",
+  "out_of_scope",
+];
+
+const coverageStatusLabels: Record<EvidenceCoverageStatus, string> = {
+  addressed: "Addressed",
+  not_found_in_evidence: "Not found",
+  not_retrieved: "Not retrieved",
+  out_of_scope: "Out of scope",
+};
+
+const coverageStatusClasses: Record<EvidenceCoverageStatus, string> = {
+  addressed: "border-emerald-200 bg-emerald-50 text-emerald-800",
+  not_found_in_evidence: "border-amber-200 bg-amber-50 text-amber-900",
+  not_retrieved: "border-slate-200 bg-slate-50 text-slate-700",
+  out_of_scope: "border-slate-200 bg-slate-50 text-slate-700",
+};
+
+const hiddenCoverageCategories = new Set(["mentioned_drug", "intent"]);
+
+const coverageCategoryLabels: Record<string, string> = {
+  primary_drug: "Primary medication",
+  current_medication: "Current medications",
+  allergy: "Allergies",
+  condition: "Conditions",
+  patient_context: "Patient context",
+};
+
+function displayCoverageCategory(category: string) {
+  return coverageCategoryLabels[category] ?? category.replaceAll("_", " ");
 }
 
 function QueryUnderstandingLoadingState() {
@@ -1276,7 +1519,7 @@ function QueryUnderstandingResult({
           <ParameterGroup title="Medication concepts">
             <ParameterRow
               // emphasize
-              label="Primary drug"
+              label="Primary medication"
               values={result.state.primary_drug ? [result.state.primary_drug] : []}
             />
             <ParameterRow

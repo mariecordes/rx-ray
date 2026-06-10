@@ -1,8 +1,18 @@
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 from src.query_understanding.models import QueryUnderstandingResponse
+
+
+EvidenceCoverageStatus = Literal[
+    "addressed",
+    "not_found_in_evidence",
+    "not_retrieved",
+    "out_of_scope",
+]
 
 
 class EvidenceCitation(BaseModel):
@@ -29,10 +39,30 @@ class EvidenceAnswer(BaseModel):
     safety_note: str
 
 
+class EvidenceCoverageItem(BaseModel):
+    """Deterministic coverage status for one extracted state item."""
+
+    category: str
+    label: str
+    status: EvidenceCoverageStatus
+    reason: str
+    matched_evidence: str | None = None
+    source_id: str | None = None
+    section: str | None = None
+
+
+class EvidenceCoverageReport(BaseModel):
+    """Coverage checklist for the retrieved evidence behind an answer."""
+
+    items: list[EvidenceCoverageItem] = Field(default_factory=list)
+    summary_counts: dict[str, int] = Field(default_factory=dict)
+
+
 class QueryAnswerResponse(BaseModel):
     """Natural-language query understanding plus optional answer synthesis."""
 
     understanding: QueryUnderstandingResponse
     answer: EvidenceAnswer | None = None
+    coverage: EvidenceCoverageReport = Field(default_factory=EvidenceCoverageReport)
     warnings: list[str] = Field(default_factory=list)
     errors: list[str] = Field(default_factory=list)

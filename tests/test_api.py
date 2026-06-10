@@ -23,8 +23,12 @@ from src.dossier.models import (
 from src.dossier.openfda_store import OpenFDALabelStore
 from src.dossier.rxnorm_store import RxNormParquetStore
 from src.query_answer.config import QueryAnswerParameters
+from src.query_answer.coverage import evidence_snippet
+from src.query_answer.models import EvidenceAnswer
+from src.query_answer.service import QueryAnswerService
 from src.query_answer.synthesizer import (
     ANSWER_CITATION_RETRY_PROMPT_KEY,
+    AnswerSynthesisResult,
     EvidenceAnswerSynthesizer,
     SOURCE_LINK_LIMITATION,
     STANDARD_SAFETY_NOTE,
@@ -603,6 +607,149 @@ def test_answer_synthesis_adds_limitation_when_retry_still_has_no_sources(
 
     assert result.answer is not None
     assert SOURCE_LINK_LIMITATION in result.answer.limitations
+
+
+def test_query_answer_response_includes_evidence_coverage() -> None:
+    understanding = response_with_label_evidence()
+    service = QueryAnswerService(
+        builder=offline_builder(),
+        understanding_service=FakeUnderstandingService(understanding),
+        synthesizer=FakeAnswerSynthesizer(),
+    )
+
+    response = service.answer("Can I take aspirin?")
+
+    assert response.coverage.summary_counts["addressed"] >= 1
+    assert any(
+        item.category == "primary_drug"
+        and item.label == "aspirin"
+        and item.status == "addressed"
+        for item in response.coverage.items
+    )
+
+
+def test_evidence_coverage_marks_secondary_and_context_gaps() -> None:
+    understanding = response_with_label_evidence().model_copy(
+        update={
+            "query": "Can I take aspirin with ibuprofen while pregnant?",
+            "state": QueryState(
+                primary_drug="aspirin",
+                all_drugs_mentioned=["aspirin", "ibuprofen"],
+                current_medications=["ibuprofen"],
+                conditions=["migraine"],
+                patient_context=["pregnant"],
+                intent="drug_safety_question",
+            ),
+        }
+    )
+    service = QueryAnswerService(
+        builder=offline_builder(),
+        understanding_service=FakeUnderstandingService(understanding),
+        synthesizer=FakeAnswerSynthesizer(),
+    )
+
+    response = service.answer("Can I take aspirin with ibuprofen while pregnant?")
+
+    coverage_by_label = {item.label: item for item in response.coverage.items}
+    assert coverage_by_label["ibuprofen"].status == "not_found_in_evidence"
+    assert any(
+        item.category == "mentioned_drug"
+        and item.label == "ibuprofen"
+        and item.status == "not_retrieved"
+        for item in response.coverage.items
+    )
+    assert coverage_by_label["migraine"].status == "not_found_in_evidence"
+    assert coverage_by_label["pregnant"].status == "not_found_in_evidence"
+    assert response.answer is not None
+    assert any(
+        "Only the primary medication dossier was retrieved" in item
+        for item in response.answer.limitations
+    )
+    assert any(
+        "ibuprofen was recognized" in item
+        for item in response.answer.limitations
+    )
+    assert any(
+        "did not explicitly mention ibuprofen, migraine, and pregnant" in item
+        for item in response.answer.limitations
+    )
+
+
+def test_evidence_coverage_match_includes_source_reference() -> None:
+    understanding = response_with_label_evidence().model_copy(
+        update={
+            "state": QueryState(
+                primary_drug="aspirin",
+                all_drugs_mentioned=["aspirin"],
+                conditions=["aspirin"],
+            ),
+        }
+    )
+    service = QueryAnswerService(
+        builder=offline_builder(),
+        understanding_service=FakeUnderstandingService(understanding),
+        synthesizer=FakeAnswerSynthesizer(),
+    )
+
+    response = service.answer("Can I take aspirin?")
+
+    condition_item = next(
+        item
+        for item in response.coverage.items
+        if item.category == "condition" and item.label == "aspirin"
+    )
+    assert condition_item.status == "addressed"
+    assert condition_item.source_id == "label-1"
+    assert condition_item.section == "warnings"
+    assert condition_item.matched_evidence is not None
+
+
+def test_evidence_snippet_uses_word_boundaries() -> None:
+    text = (
+        " ".join(f"prefixword{index}" for index in range(20))
+        + " "
+        "People with acne should follow label directions carefully. "
+        "Contact a clinician if symptoms worsen."
+    )
+    match_start = text.index("acne")
+    match_end = match_start + len("acne")
+
+    snippet = evidence_snippet(text, match_start, match_end)
+
+    assert "acne" in snippet
+    assert "with acne should" in snippet
+    assert snippet.startswith("...")
+    assert snippet.endswith("...")
+    assert not snippet.startswith("...ord")
+    assert not snippet.endswith(" ")
+
+
+class FakeUnderstandingService:
+    def __init__(self, response: QueryUnderstandingResponse) -> None:
+        self.response = response
+
+    def understand(
+        self,
+        query: str,
+        openfda_limit: int | None = None,
+    ) -> QueryUnderstandingResponse:
+        return self.response
+
+
+class FakeAnswerSynthesizer:
+    def synthesize(
+        self,
+        query: str,
+        understanding: QueryUnderstandingResponse,
+    ) -> AnswerSynthesisResult:
+        return AnswerSynthesisResult(
+            answer=EvidenceAnswer(
+                summary="Retrieved evidence mentions aspirin warnings.",
+                bullets=[],
+                limitations=[],
+                safety_note=STANDARD_SAFETY_NOTE,
+            )
+        )
 
 
 def response_with_label_evidence() -> "QueryUnderstandingResponse":
