@@ -4,6 +4,7 @@ import logging
 
 from src.dossier.builder import DossierBuilder
 from src.query_answer.config import load_query_answer_parameters
+from src.query_answer.coverage import add_coverage_limitations, build_evidence_coverage
 from src.query_answer.models import QueryAnswerResponse
 from src.query_answer.synthesizer import EvidenceAnswerSynthesizer
 from src.query_understanding.service import QueryUnderstandingService
@@ -40,19 +41,26 @@ class QueryAnswerService:
             openfda_limit=label_limit,
         )
         synthesis = self.synthesizer.synthesize(query, understanding)
+        coverage = build_evidence_coverage(understanding)
+        answer = add_coverage_limitations(
+            synthesis.answer,
+            coverage,
+            understanding,
+        )
         warnings = [*understanding.warnings, *synthesis.warnings]
         errors = [*understanding.errors, *synthesis.errors]
 
         logger.info(
             "Query answer completed: answer_generated=%s warnings=%s errors=%s",
-            synthesis.answer is not None,
+            answer is not None,
             len(warnings),
             len(errors),
         )
 
         return QueryAnswerResponse(
             understanding=understanding,
-            answer=synthesis.answer,
+            answer=answer,
+            coverage=coverage,
             warnings=warnings,
             errors=errors,
         )

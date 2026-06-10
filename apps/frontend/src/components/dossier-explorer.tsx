@@ -30,6 +30,9 @@ import {
   DrugDossier,
   EvidenceAnswer,
   EvidenceCitation,
+  EvidenceCoverageItem,
+  EvidenceCoverageReport,
+  EvidenceCoverageStatus,
   LabelSection,
   OpenFDALabelEvidence,
   OpenFDALabelRecord,
@@ -1044,6 +1047,7 @@ function EvidenceAnswerResult({
   return (
     <EvidenceAnswerCard
       answer={answer}
+      coverage={response.coverage ?? { items: [], summary_counts: {} }}
       errors={synthesisErrors}
       onCitationClick={onCitationClick}
       understanding={understanding}
@@ -1054,12 +1058,14 @@ function EvidenceAnswerResult({
 
 function EvidenceAnswerCard({
   answer,
+  coverage,
   errors,
   onCitationClick,
   understanding,
   warnings,
 }: {
   answer: EvidenceAnswer;
+  coverage: EvidenceCoverageReport;
   errors: string[];
   onCitationClick: (citation: EvidenceCitation) => void;
   understanding: QueryUnderstandingResponse;
@@ -1140,6 +1146,12 @@ function EvidenceAnswerCard({
         </AnswerSection>
       ) : null}
 
+      {coverage?.items.length ? (
+        <AnswerSection title="Evidence coverage">
+          <EvidenceCoverageList coverage={coverage} />
+        </AnswerSection>
+      ) : null}
+
       {answer.limitations.length ? (
         <AnswerSection title="Limitations">
           <div className="space-y-2">
@@ -1177,6 +1189,86 @@ function EvidenceAnswerCard({
   );
 }
 
+function EvidenceCoverageList({
+  coverage,
+}: {
+  coverage: EvidenceCoverageReport;
+}) {
+  const groupedItems = useMemo(() => {
+    const groups = new Map<string, EvidenceCoverageItem[]>();
+    for (const item of coverage.items) {
+      const current = groups.get(item.category) ?? [];
+      current.push(item);
+      groups.set(item.category, current);
+    }
+    return Array.from(groups.entries());
+  }, [coverage.items]);
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap gap-1.5">
+        {coverageStatusOrder.map((status) => {
+          const count = coverage.summary_counts[status] ?? 0;
+          if (count === 0) {
+            return null;
+          }
+          return (
+            <span
+              key={status}
+              className={cn(
+                "inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium",
+                coverageStatusClasses[status]
+              )}
+            >
+              {coverageStatusLabels[status]} {count}
+            </span>
+          );
+        })}
+      </div>
+      <div className="space-y-2">
+        {groupedItems.map(([category, items]) => (
+          <div
+            key={category}
+            className="rounded-md border border-[#D7C8F4] bg-white px-3 py-3"
+          >
+            <div className="mb-2 text-xs font-medium uppercase text-slate-500">
+              {displayCoverageCategory(category)}
+            </div>
+            <div className="space-y-2">
+              {items.map((item) => (
+                <div
+                  key={`${item.category}-${item.label}-${item.status}`}
+                  className="grid gap-2 sm:grid-cols-[minmax(120px,0.32fr)_auto_minmax(0,1fr)] sm:items-start"
+                >
+                  <span className="rounded-md bg-slate-50 px-2 py-1 text-sm font-medium leading-5 text-slate-800">
+                    {item.label}
+                  </span>
+                  <span
+                    className={cn(
+                      "w-fit rounded-md border px-2 py-1 text-xs font-medium",
+                      coverageStatusClasses[item.status]
+                    )}
+                  >
+                    {coverageStatusLabels[item.status]}
+                  </span>
+                  <div className="text-sm leading-5 text-slate-600">
+                    <p>{item.reason}</p>
+                    {item.matched_evidence ? (
+                      <p className="mt-1 text-xs italic text-slate-500">
+                        {item.matched_evidence}
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function AnswerSection({
   children,
   icon,
@@ -1208,6 +1300,31 @@ function AnswerSection({
       ) : null}
     </div>
   );
+}
+
+const coverageStatusOrder: EvidenceCoverageStatus[] = [
+  "addressed",
+  "not_found_in_evidence",
+  "not_retrieved",
+  "out_of_scope",
+];
+
+const coverageStatusLabels: Record<EvidenceCoverageStatus, string> = {
+  addressed: "Addressed",
+  not_found_in_evidence: "Not found",
+  not_retrieved: "Not retrieved",
+  out_of_scope: "Out of scope",
+};
+
+const coverageStatusClasses: Record<EvidenceCoverageStatus, string> = {
+  addressed: "border-emerald-200 bg-emerald-50 text-emerald-800",
+  not_found_in_evidence: "border-amber-200 bg-amber-50 text-amber-900",
+  not_retrieved: "border-slate-200 bg-slate-50 text-slate-700",
+  out_of_scope: "border-violet-200 bg-violet-50 text-violet-800",
+};
+
+function displayCoverageCategory(category: string) {
+  return category.replaceAll("_", " ");
 }
 
 function QueryUnderstandingLoadingState() {

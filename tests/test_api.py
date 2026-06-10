@@ -23,8 +23,11 @@ from src.dossier.models import (
 from src.dossier.openfda_store import OpenFDALabelStore
 from src.dossier.rxnorm_store import RxNormParquetStore
 from src.query_answer.config import QueryAnswerParameters
+from src.query_answer.models import EvidenceAnswer
+from src.query_answer.service import QueryAnswerService
 from src.query_answer.synthesizer import (
     ANSWER_CITATION_RETRY_PROMPT_KEY,
+    AnswerSynthesisResult,
     EvidenceAnswerSynthesizer,
     SOURCE_LINK_LIMITATION,
     STANDARD_SAFETY_NOTE,
@@ -603,6 +606,93 @@ def test_answer_synthesis_adds_limitation_when_retry_still_has_no_sources(
 
     assert result.answer is not None
     assert SOURCE_LINK_LIMITATION in result.answer.limitations
+
+
+def test_query_answer_response_includes_evidence_coverage() -> None:
+    understanding = response_with_label_evidence()
+    service = QueryAnswerService(
+        builder=offline_builder(),
+        understanding_service=FakeUnderstandingService(understanding),
+        synthesizer=FakeAnswerSynthesizer(),
+    )
+
+    response = service.answer("Can I take aspirin?")
+
+    assert response.coverage.summary_counts["addressed"] >= 1
+    assert any(
+        item.category == "primary_drug"
+        and item.label == "aspirin"
+        and item.status == "addressed"
+        for item in response.coverage.items
+    )
+
+
+def test_evidence_coverage_marks_secondary_and_context_gaps() -> None:
+    understanding = response_with_label_evidence().model_copy(
+        update={
+            "query": "Can I take aspirin with ibuprofen while pregnant?",
+            "state": QueryState(
+                primary_drug="aspirin",
+                all_drugs_mentioned=["aspirin", "ibuprofen"],
+                current_medications=["ibuprofen"],
+                conditions=["migraine"],
+                patient_context=["pregnant"],
+                intent="drug_safety_question",
+            ),
+        }
+    )
+    service = QueryAnswerService(
+        builder=offline_builder(),
+        understanding_service=FakeUnderstandingService(understanding),
+        synthesizer=FakeAnswerSynthesizer(),
+    )
+
+    response = service.answer("Can I take aspirin with ibuprofen while pregnant?")
+
+    coverage_by_label = {item.label: item for item in response.coverage.items}
+    assert coverage_by_label["ibuprofen"].status == "not_found_in_evidence"
+    assert any(
+        item.category == "mentioned_drug"
+        and item.label == "ibuprofen"
+        and item.status == "not_retrieved"
+        for item in response.coverage.items
+    )
+    assert coverage_by_label["migraine"].status == "not_found_in_evidence"
+    assert coverage_by_label["pregnant"].status == "not_found_in_evidence"
+    assert response.answer is not None
+    assert any(
+        "additional mentioned medications" in item
+        for item in response.answer.limitations
+    )
+    assert any("ibuprofen" in item for item in response.answer.limitations)
+
+
+class FakeUnderstandingService:
+    def __init__(self, response: QueryUnderstandingResponse) -> None:
+        self.response = response
+
+    def understand(
+        self,
+        query: str,
+        openfda_limit: int | None = None,
+    ) -> QueryUnderstandingResponse:
+        return self.response
+
+
+class FakeAnswerSynthesizer:
+    def synthesize(
+        self,
+        query: str,
+        understanding: QueryUnderstandingResponse,
+    ) -> AnswerSynthesisResult:
+        return AnswerSynthesisResult(
+            answer=EvidenceAnswer(
+                summary="Retrieved evidence mentions aspirin warnings.",
+                bullets=[],
+                limitations=[],
+                safety_note=STANDARD_SAFETY_NOTE,
+            )
+        )
 
 
 def response_with_label_evidence() -> "QueryUnderstandingResponse":
