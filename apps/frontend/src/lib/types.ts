@@ -85,6 +85,7 @@ export type QueryState = {
   conditions: string[];
   patient_context: string[];
   intent?: string | null;
+  intents: string[];
 };
 
 export type DrugMentionRole =

@@ -28,15 +28,19 @@ query_extraction_revision:
         - patient_context (patient descriptors such as age group, pregnancy, breastfeeding, gender, etc.)
           > age groups should be assigned if age is mentioned or can be inferred: infant (0-1), child (2-11), adolescent (12-17), adult (18-64), senior (65+),
           > gender descriptor "male" or "female" if clearly mentioned (e.g., woman, girl, man, boy) or can be inferred (e.g., pregnant or breastfeeding)
-        - intent (the user's intent, such as asking about drug interactions, side effects, safety, etc.)
+        - intent (legacy single primary intent; set this to the first item in intents)
+        - intents (all applicable user intents, ordered by relevance)
 
         main intent categories include:
         - interaction_check (asking about drug interactions)
+          > Include interaction_check whenever the user mentions a current medication plus another medication they are asking about, even if they do not explicitly say "interaction".
+          > Include interaction_check for wording like "can I use A while taking B", "I take A, can I take B", "use A and B together", or "A and B at the same time".
         - patient_context_check (asking about drug safety in a specific patient context, such as pregnancy or breastfeeding)
         - allergy_context_check (asking about drug safety given an allergy)
         - safety_context_check (asking about drug safety in general or given a specific condition)
         - label_context_check (asking about drug information that would be found on the label, such as side effects, dosage, etc.)
         create a new intent category if the user's intent doesn't fit well into these categories.
+        A query can and often should have multiple intents, e.g. an allergy question involving two medications can include both allergy_context_check and interaction_check.
 
         drug_mentions must be a list of objects with text and role.
         Allowed roles are:

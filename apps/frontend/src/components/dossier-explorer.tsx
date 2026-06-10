@@ -730,9 +730,9 @@ function SupportingEvidence({
           <CardContent className="space-y-5">
             <div className="flex flex-wrap items-end gap-1">
               {evidenceTabs.map((tab) => (
-              <button
+                <button
                   key={tab.key}
-                type="button"
+                  type="button"
                   onClick={() => setActiveTabKey(tab.key)}
                   className={cn(
                     "rounded-t-md px-4 py-2 text-sm font-semibold shadow-sm",
@@ -742,17 +742,17 @@ function SupportingEvidence({
                   )}
                 >
                   {tab.label}
-              </button>
+                </button>
               ))}
             </div>
             <div className="-mt-5 rounded-b-md rounded-tr-md border border-slate-200 bg-white p-4 shadow-sm">
               {activeTab.kind === "primary" ? (
-              <DossierResults
-                dossier={dossier}
-                highlightCitation={highlightCitation}
-                variant="embedded"
-                onCitationHandled={onCitationHandled}
-              />
+                <DossierResults
+                  dossier={dossier}
+                  highlightCitation={highlightCitation}
+                  variant="embedded"
+                  onCitationHandled={onCitationHandled}
+                />
               ) : (
                 <SecondaryEvidenceResults
                   evidence={activeTab.evidence}
@@ -1831,7 +1831,12 @@ function QueryUnderstandingResult({
             <ParameterRow
               label="User intent"
               values={
-                result.state.intent ? [displayStateLabel(result.state.intent)] : []
+                (result.state.intents?.length
+                  ? result.state.intents
+                  : result.state.intent
+                    ? [result.state.intent]
+                    : []
+                ).map(displayStateLabel)
               }
             />
           </ParameterGroup>
@@ -2189,18 +2194,18 @@ function LabelEvidencePanel({
           )}
         >
           {showGraphContext ? (
-          <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
-            <div className="mb-2 text-xs font-medium uppercase text-slate-500">
-              Graph selection context
+            <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+              <div className="mb-2 text-xs font-medium uppercase text-slate-500">
+                Graph selection context
+              </div>
+              <LabelEvidenceContextNote
+                displayEvidence={displayEvidence}
+                error={nodeEvidenceError}
+                isLoading={isNodeEvidenceLoading}
+                node={selectedGraphNode}
+                nodeLabelEvidence={nodeLabelEvidence}
+              />
             </div>
-            <LabelEvidenceContextNote
-              displayEvidence={displayEvidence}
-              error={nodeEvidenceError}
-              isLoading={isNodeEvidenceLoading}
-              node={selectedGraphNode}
-              nodeLabelEvidence={nodeLabelEvidence}
-            />
-          </div>
           ) : null}
 
           <div className="grid gap-4 xl:grid-cols-[minmax(240px,0.32fr)_minmax(0,1fr)]">
