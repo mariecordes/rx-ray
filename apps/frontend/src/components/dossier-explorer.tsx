@@ -41,6 +41,7 @@ import {
   RxNormConcept,
   SecondaryDrugEvidence,
 } from "@/lib/types";
+import { requestJsonWithRetry } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 
 const sectionLabels: Record<string, string> = {
@@ -460,24 +461,23 @@ export function AskQuestionExperience() {
     setHighlightCitation(null);
 
     try {
-      const understandingResponse = await fetch("/api/query-understanding", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
+      const understanding = await requestJsonWithRetry<QueryUnderstandingResponse>(
+        "/api/query-understanding",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            query: question,
+          }),
         },
-        body: JSON.stringify({
-          query: question,
-        }),
-      });
-      const understandingPayload = await understandingResponse.json();
+        {
+          userMessage:
+            "The app could not reliably understand the question after several retries.",
+        }
+      );
 
-      if (!understandingResponse.ok) {
-        throw new Error(
-          understandingPayload.detail ?? "Failed to understand query"
-        );
-      }
-
-      const understanding = understandingPayload as QueryUnderstandingResponse;
       if (queryRequestRef.current !== requestId) {
         return;
       }
@@ -495,26 +495,28 @@ export function AskQuestionExperience() {
       setIsUnderstandingLoading(false);
       setIsAnswerLoading(true);
 
-      const answerResponse = await fetch("/api/query-answer", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          query: question,
-        }),
-      });
-      const answerPayload = await answerResponse.json();
+      const queryAnswerResponse =
+        await requestJsonWithRetry<QueryAnswerResponse>(
+          "/api/query-answer",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              query: question,
+            }),
+          },
+          {
+            userMessage:
+              "The app could not reliably generate a response after several retries.",
+          }
+        );
 
       if (queryRequestRef.current !== requestId) {
         return;
       }
 
-      if (!answerResponse.ok) {
-        throw new Error(answerPayload.detail ?? "Failed to generate response");
-      }
-
-      const queryAnswerResponse = answerPayload as QueryAnswerResponse;
       setQueryAnswer(queryAnswerResponse);
       setQueryUnderstanding(queryAnswerResponse.understanding);
       if (queryAnswerResponse.understanding.primary_dossier) {
@@ -541,12 +543,12 @@ export function AskQuestionExperience() {
 
   return (
     <div className="flex flex-col gap-6">
-        <QueryUnderstandingPanel
-          answerResponse={queryAnswer}
-          error={queryError}
-          isAnswerLoading={isAnswerLoading}
-          isUnderstandingLoading={isUnderstandingLoading}
-          onQuestionChange={setQuestion}
+      <QueryUnderstandingPanel
+        answerResponse={queryAnswer}
+        error={queryError}
+        isAnswerLoading={isAnswerLoading}
+        isUnderstandingLoading={isUnderstandingLoading}
+        onQuestionChange={setQuestion}
         onSubmit={handleQuestionSubmit}
         question={question}
         result={queryUnderstanding}
@@ -581,24 +583,26 @@ export function DrugDossierExperience() {
     setError(null);
 
     try {
-      const response = await fetch("/api/dossier", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
+      const payload = await requestJsonWithRetry<DrugDossier>(
+        "/api/dossier",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            drug,
+            depth: 2,
+            max_edges: 400,
+            openfda_limit: openfdaLimit,
+            include_openfda: true,
+          }),
         },
-        body: JSON.stringify({
-          drug,
-          depth: 2,
-          max_edges: 400,
-          openfda_limit: openfdaLimit,
-          include_openfda: true,
-        }),
-      });
-      const payload = await response.json();
-
-      if (!response.ok) {
-        throw new Error(payload.detail ?? "Failed to build dossier");
-      }
+        {
+          userMessage:
+            "The app could not reliably load the drug dossier after several retries.",
+        }
+      );
 
       setDossier(payload);
     } catch (err) {
@@ -1121,22 +1125,24 @@ function DossierResults({
 
     setIsNodeEvidenceLoading(true);
     try {
-      const response = await fetch("/api/label-evidence", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
+      const payload = await requestJsonWithRetry<OpenFDALabelEvidence>(
+        "/api/label-evidence",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            rxcui: node.rxcui,
+            name: node.name,
+            limit: 3,
+          }),
         },
-        body: JSON.stringify({
-          rxcui: node.rxcui,
-          name: node.name,
-          limit: 3,
-        }),
-      });
-      const payload = await response.json();
-
-      if (!response.ok) {
-        throw new Error(payload.detail ?? "Failed to fetch label evidence");
-      }
+        {
+          userMessage:
+            "The app could not reliably load selected-node label evidence after several retries.",
+        }
+      );
 
       if (nodeEvidenceRequestRef.current === requestId) {
         setNodeLabelEvidence(payload);
