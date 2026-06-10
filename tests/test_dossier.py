@@ -1,6 +1,8 @@
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
+import requests
 
 from src.dossier.builder import DossierBuilder
 from src.dossier.openfda_store import OpenFDALabelStore
@@ -175,6 +177,49 @@ def test_openfda_interaction_lookup_targets_drug_interactions() -> None:
     assert evidence.retrieval_mode == "interaction_targeted_lookup"
     assert evidence.labels_found == 1
     assert store.queries == [
-        ('openfda.rxcui:1191+AND+drug_interactions:"ibuprofen"', 3),
-        ('openfda.generic_name:"aspirin"+AND+drug_interactions:"ibuprofen"', 3),
+        ("openfda.rxcui:1191 AND drug_interactions:ibuprofen", 3),
+        ("openfda.generic_name:aspirin AND drug_interactions:ibuprofen", 3),
+    ]
+
+
+def test_openfda_interaction_lookup_falls_back_after_strict_query_error(
+) -> None:
+    class InteractionFallbackOpenFDAStore(OpenFDALabelStore):
+        def __init__(self) -> None:
+            super().__init__(use_cache=False, allow_live=True)
+            self.queries: list[tuple[str, int]] = []
+
+        def _query(self, search: str, limit: int) -> list[dict[str, object]]:
+            self.queries.append((search, limit))
+            if search.startswith("openfda.rxcui:1418"):
+                raise requests.HTTPError("500 Server Error")
+            return [
+                {
+                    **label_fixture("interaction-label"),
+                    "drug_interactions": ["Benzoyl peroxide interaction text."],
+                }
+            ]
+
+    store = InteractionFallbackOpenFDAStore()
+
+    with patch("src.dossier.openfda_store.logger.warning") as warning:
+        evidence = store.get_interaction_label_evidence(
+            "1418",
+            interaction_name="tretinoin",
+            fallback_name="benzoyl peroxide",
+            limit=3,
+        )
+
+    assert evidence.retrieval_mode == "interaction_targeted_lookup"
+    assert evidence.labels_found == 1
+    assert evidence.errors == []
+    warning.assert_called_once()
+    assert "OpenFDA interaction lookup recovered" in warning.call_args.args[0]
+    assert store.queries == [
+        ("openfda.rxcui:1418 AND drug_interactions:tretinoin", 3),
+        (
+            "openfda.generic_name:benzoyl peroxide "
+            "AND drug_interactions:tretinoin",
+            3,
+        ),
     ]

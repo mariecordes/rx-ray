@@ -26,6 +26,7 @@ def configure_api_logging() -> None:
     """Ensure rx-ray API diagnostics are visible in the uvicorn console."""
 
     loggers = [
+        logging.getLogger("src.dossier"),
         logging.getLogger("src.query_understanding"),
         logging.getLogger("src.query_answer"),
     ]

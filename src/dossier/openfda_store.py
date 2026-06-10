@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import logging
+import re
 from pathlib import Path
 from typing import Any
 
@@ -14,6 +16,7 @@ from src.dossier.models import (
 
 
 DEFAULT_BASE_URL = "https://api.fda.gov/drug/label.json"
+logger = logging.getLogger(__name__)
 
 SECTION_ALIASES = {
     "boxed_warning": ("boxed_warning",),
@@ -112,31 +115,52 @@ class OpenFDALabelStore:
         errors: list[str] = []
         labels: list[dict[str, Any]] = []
         retrieval_mode = "none"
-        interaction_query = self._quote_query_value(interaction_name)
+        interaction_query = self._format_query_term(interaction_name)
 
         if self.allow_live and limit > 0 and interaction_query:
-            try:
-                labels = self._query(
-                    f"openfda.rxcui:{rxcui}+AND+drug_interactions:{interaction_query}",
-                    limit=limit,
+            attempt_errors: list[str] = []
+            queries = [
+                f"openfda.rxcui:{rxcui} AND drug_interactions:{interaction_query}"
+            ]
+            fallback_query = self._format_query_term(fallback_name)
+            if fallback_query:
+                queries.append(
+                    f"openfda.generic_name:{fallback_query} "
+                    f"AND drug_interactions:{interaction_query}"
                 )
-                retrieval_mode = "interaction_targeted_lookup" if labels else "none"
-                if not labels and fallback_name:
-                    labels = self._query(
-                        "openfda.generic_name:"
-                        f"{self._quote_query_value(fallback_name)}"
-                        f"+AND+drug_interactions:{interaction_query}",
-                        limit=limit,
+
+            for search in queries:
+                try:
+                    labels = self._query(search, limit=limit)
+                except requests.RequestException as exc:
+                    attempt_errors.append(
+                        f"OpenFDA interaction request failed: {exc}"
                     )
-                    retrieval_mode = (
-                        "interaction_targeted_lookup" if labels else "none"
+                    continue
+                except ValueError as exc:
+                    attempt_errors.append(
+                        f"OpenFDA interaction response could not be parsed: {exc}"
                     )
-            except requests.RequestException as exc:
-                errors.append(f"OpenFDA interaction request failed: {exc}")
-            except ValueError as exc:
-                errors.append(
-                    f"OpenFDA interaction response could not be parsed: {exc}"
-                )
+                    continue
+
+                if labels:
+                    retrieval_mode = "interaction_targeted_lookup"
+                    if attempt_errors:
+                        logger.warning(
+                            "OpenFDA interaction lookup recovered after earlier "
+                            "failed attempt(s). rxcui=%s fallback_name=%s "
+                            "interaction_name=%s successful_query=%s "
+                            "suppressed_errors=%s",
+                            rxcui,
+                            fallback_name,
+                            interaction_name,
+                            search,
+                            attempt_errors,
+                        )
+                    break
+
+            if not labels:
+                errors.extend(attempt_errors)
 
         evidence = self._normalize_labels(
             rxcui,
@@ -152,16 +176,45 @@ class OpenFDALabelStore:
         return evidence
 
     def _query(self, search: str, limit: int) -> list[dict[str, Any]]:
+        logger.info(
+            "OpenFDA request starting: search=%s limit=%s base_url=%s",
+            search,
+            limit,
+            self.base_url,
+        )
         response = self.session.get(
             self.base_url,
             params={"search": search, "limit": limit},
             timeout=self.timeout,
         )
+        logger.info(
+            "OpenFDA request completed: status=%s url=%s",
+            response.status_code,
+            response.url,
+        )
         if response.status_code == 404:
+            logger.info("OpenFDA returned 404/no results for search=%s", search)
             return []
-        response.raise_for_status()
+        try:
+            response.raise_for_status()
+        except requests.HTTPError:
+            logger.warning(
+                "OpenFDA request failed: status=%s url=%s body=%s",
+                response.status_code,
+                response.url,
+                response.text[:500],
+            )
+            raise
         data = response.json()
-        return data.get("results", [])
+        results = data.get("results", [])
+        total = data.get("meta", {}).get("results", {}).get("total")
+        logger.info(
+            "OpenFDA parsed response: search=%s returned=%s total=%s",
+            search,
+            len(results) if isinstance(results, list) else "unknown",
+            total,
+        )
+        return results
 
     def _read_cache(self, rxcui: str) -> list[dict[str, Any]] | None:
         path = self.cache_dir / f"{rxcui}.json"
@@ -283,6 +336,9 @@ class OpenFDALabelStore:
         return [str(value).strip()] if str(value).strip() else []
 
     @staticmethod
-    def _quote_query_value(value: str) -> str:
-        escaped = value.strip().replace('"', '\\"')
-        return f'"{escaped}"' if escaped else ""
+    def _format_query_term(value: str | None) -> str:
+        if not value:
+            return ""
+        cleaned = value.strip().strip('"')
+        parts = [part for part in re.split(r"\s+", cleaned) if part]
+        return " ".join(parts)
