@@ -172,7 +172,7 @@ class QueryUnderstandingService:
                 phrase = " ".join(tokens[start : start + length])
                 if not self._looks_like_drug_phrase(phrase):
                     continue
-                candidates = self._resolve_text(phrase, limit=1)
+                candidates = self._resolve_text(phrase, limit=1, allow_fuzzy=False)
                 if not candidates or candidates[0].score < 80:
                     continue
                 occupied |= indexes
@@ -192,6 +192,12 @@ class QueryUnderstandingService:
             "try",
             "for",
             "with",
+            "the",
+            "this",
+            "that",
+            "same",
+            "time",
+            "problem",
             "against",
             "and",
             "or",
@@ -238,7 +244,13 @@ class QueryUnderstandingService:
             selected_concept=candidates[0].concept if candidates else None,
         )
 
-    def _resolve_text(self, text: str, limit: int = 5) -> list[ResolutionCandidate]:
+    def _resolve_text(
+        self,
+        text: str,
+        limit: int = 5,
+        *,
+        allow_fuzzy: bool = True,
+    ) -> list[ResolutionCandidate]:
         candidates = self.rxnorm_store.resolve(text, limit=limit)
         if candidates:
             return candidates
@@ -251,6 +263,8 @@ class QueryUnderstandingService:
             if candidates:
                 return candidates
 
+        if not allow_fuzzy:
+            return []
         return self._fuzzy_resolve(text, limit=limit)
 
     @staticmethod
