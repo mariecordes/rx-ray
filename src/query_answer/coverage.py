@@ -60,7 +60,6 @@ def build_evidence_coverage(
                             "but no label text was retrieved."
                         )
                     ),
-                    matched_evidence=primary_name,
                 )
             )
         else:
@@ -308,9 +307,7 @@ def find_match(label: str, evidence_text: str) -> str | None:
     pattern = re.compile(re.escape(label), flags=re.IGNORECASE)
     match = pattern.search(evidence_text)
     if match:
-        start = max(0, match.start() - 60)
-        end = min(len(evidence_text), match.end() + 60)
-        return " ".join(evidence_text[start:end].split())
+        return evidence_snippet(evidence_text, match.start(), match.end())
     return label
 
 
@@ -318,6 +315,24 @@ def same_concept(left: str | None, right: str | None) -> bool:
     if not left or not right:
         return False
     return normalize(left) == normalize(right)
+
+
+def evidence_snippet(text: str, match_start: int, match_end: int) -> str:
+    start = max(0, match_start - 90)
+    end = min(len(text), match_end + 90)
+
+    if start > 0:
+        next_space = text.find(" ", start, match_start)
+        if next_space != -1:
+            start = next_space + 1
+
+    if end < len(text):
+        previous_space = text.rfind(" ", match_end, end)
+        if previous_space != -1:
+            end = previous_space
+
+    snippet = " ".join(text[start:end].split())
+    return f"...{snippet}..."
 
 
 def specificity_differs(primary: str, resolved: str) -> bool:

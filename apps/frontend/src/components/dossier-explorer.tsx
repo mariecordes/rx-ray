@@ -1146,12 +1146,6 @@ function EvidenceAnswerCard({
         </AnswerSection>
       ) : null}
 
-      {coverage?.items.length ? (
-        <AnswerSection title="Evidence coverage">
-          <EvidenceCoverageList coverage={coverage} />
-        </AnswerSection>
-      ) : null}
-
       {answer.limitations.length ? (
         <AnswerSection title="Limitations">
           <div className="space-y-2">
@@ -1166,6 +1160,15 @@ function EvidenceAnswerCard({
               </div>
             ))}
           </div>
+        </AnswerSection>
+      ) : null}
+
+      {coverage?.items.length ? (
+        <AnswerSection
+          title="Evidence coverage"
+          infoText="This checklist compares what the system extracted from your question with the retrieved evidence. It shows what was addressed, what was not found in the retrieved labels, what was not retrieved, and what is only used as context. Hover over a reason when available to inspect the matching evidence snippet."
+        >
+          <EvidenceCoverageList coverage={coverage} />
         </AnswerSection>
       ) : null}
 
@@ -1252,12 +1255,7 @@ function EvidenceCoverageList({
                     {coverageStatusLabels[item.status]}
                   </span>
                   <div className="text-sm leading-5 text-slate-600">
-                    <p>{item.reason}</p>
-                    {item.matched_evidence ? (
-                      <p className="mt-1 text-xs italic text-slate-500">
-                        {item.matched_evidence}
-                      </p>
-                    ) : null}
+                    <CoverageReason item={item} />
                   </div>
                 </div>
               ))}
@@ -1269,13 +1267,74 @@ function EvidenceCoverageList({
   );
 }
 
+function CoverageReason({ item }: { item: EvidenceCoverageItem }) {
+  if (!item.matched_evidence) {
+    return <p>{item.reason}</p>;
+  }
+
+  return (
+    <p>
+      <span className="group relative inline border-b border-dotted border-slate-400">
+        {item.reason}
+        <span className="pointer-events-none absolute left-0 top-full z-30 mt-2 hidden w-80 max-w-[75vw] rounded-md border border-slate-200 bg-white px-3 py-2 text-xs normal-case leading-5 text-slate-700 shadow-lg group-hover:block">
+          <HighlightedMatchedEvidence
+            label={item.label}
+            text={item.matched_evidence}
+          />
+        </span>
+      </span>
+    </p>
+  );
+}
+
+function HighlightedMatchedEvidence({
+  label,
+  text,
+}: {
+  label: string;
+  text: string;
+}) {
+  if (!label.trim()) {
+    return text;
+  }
+
+  const pattern = new RegExp(`(${escapeRegExp(label)})`, "ig");
+  const parts = text.split(pattern);
+  if (parts.length === 1) {
+    return text;
+  }
+
+  return (
+    <>
+      {parts.map((part, index) =>
+        part.toLowerCase() === label.toLowerCase() ? (
+          <mark
+            key={`${part}-${index}`}
+            className="rounded-sm bg-amber-100 px-0.5 text-slate-800"
+          >
+            {part}
+          </mark>
+        ) : (
+          <span key={`${part}-${index}`}>{part}</span>
+        )
+      )}
+    </>
+  );
+}
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 function AnswerSection({
   children,
   icon,
+  infoText,
   title,
 }: {
   children: ReactNode;
   icon?: ReactNode;
+  infoText?: string;
   title: string;
 }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -1294,6 +1353,7 @@ function AnswerSection({
         )}
         {icon ? <span className="shrink-0">{icon}</span> : null}
         <span className="text-xs font-medium uppercase">{title}</span>
+        {infoText ? <InfoTooltip text={infoText} /> : null}
       </button>
       {isOpen ? (
         <div className="border-t border-[#D7C8F4] px-3 py-3">{children}</div>
@@ -1320,7 +1380,7 @@ const coverageStatusClasses: Record<EvidenceCoverageStatus, string> = {
   addressed: "border-emerald-200 bg-emerald-50 text-emerald-800",
   not_found_in_evidence: "border-amber-200 bg-amber-50 text-amber-900",
   not_retrieved: "border-slate-200 bg-slate-50 text-slate-700",
-  out_of_scope: "border-violet-200 bg-violet-50 text-violet-800",
+  out_of_scope: "border-slate-200 bg-slate-50 text-slate-700",
 };
 
 function displayCoverageCategory(category: string) {

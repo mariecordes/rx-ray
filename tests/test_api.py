@@ -23,6 +23,7 @@ from src.dossier.models import (
 from src.dossier.openfda_store import OpenFDALabelStore
 from src.dossier.rxnorm_store import RxNormParquetStore
 from src.query_answer.config import QueryAnswerParameters
+from src.query_answer.coverage import evidence_snippet
 from src.query_answer.models import EvidenceAnswer
 from src.query_answer.service import QueryAnswerService
 from src.query_answer.synthesizer import (
@@ -665,6 +666,26 @@ def test_evidence_coverage_marks_secondary_and_context_gaps() -> None:
         for item in response.answer.limitations
     )
     assert any("ibuprofen" in item for item in response.answer.limitations)
+
+
+def test_evidence_snippet_uses_word_boundaries() -> None:
+    text = (
+        " ".join(f"prefixword{index}" for index in range(20))
+        + " "
+        "People with acne should follow label directions carefully. "
+        "Contact a clinician if symptoms worsen."
+    )
+    match_start = text.index("acne")
+    match_end = match_start + len("acne")
+
+    snippet = evidence_snippet(text, match_start, match_end)
+
+    assert "acne" in snippet
+    assert "with acne should" in snippet
+    assert snippet.startswith("...")
+    assert snippet.endswith("...")
+    assert not snippet.startswith("...ord")
+    assert not snippet.endswith(" ")
 
 
 class FakeUnderstandingService:
