@@ -56,12 +56,15 @@ class OpenFDALabelStore:
 
         errors: list[str] = []
         labels: list[dict[str, Any]] = []
+        cached_labels: list[dict[str, Any]] | None = None
         retrieval_mode = "none"
 
         if self.use_cache:
-            cached = self._read_cache(rxcui)
-            if cached is not None:
-                labels = cached
+            cached_labels = self._read_cache(rxcui)
+            if cached_labels is not None and (
+                len(cached_labels) >= limit or not self.allow_live
+            ):
+                labels = cached_labels[:limit]
                 retrieval_mode = "cache"
 
         if not labels and self.allow_live:
@@ -80,6 +83,9 @@ class OpenFDALabelStore:
                 errors.append(f"OpenFDA request failed: {exc}")
             except ValueError as exc:
                 errors.append(f"OpenFDA response could not be parsed: {exc}")
+            if not labels and cached_labels is not None:
+                labels = cached_labels[:limit]
+                retrieval_mode = "cache"
 
         evidence = self._normalize_labels(
             rxcui,
