@@ -53,6 +53,7 @@ class LabelSection(BaseModel):
     source_id: str | None = None
     effective_time: str | None = None
     source: str = "openfda"
+    provenance_tags: list[str] = Field(default_factory=list)
 
 
 class OpenFDALabelRecord(BaseModel):
@@ -73,6 +74,7 @@ class OpenFDALabelRecord(BaseModel):
     routes: list[str] = Field(default_factory=list)
     substance_names: list[str] = Field(default_factory=list)
     rxcuis: list[str] = Field(default_factory=list)
+    provenance_tags: list[str] = Field(default_factory=list)
 
 
 class OpenFDALabelEvidence(BaseModel):

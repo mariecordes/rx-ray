@@ -76,6 +76,8 @@ const nodeSpecificBadgeClasses =
   "border-slate-300 bg-slate-100 text-slate-700";
 const searchSpecificBadgeClasses =
   "border-slate-300 bg-slate-100 text-slate-700";
+const interactionSpecificBadgeClasses =
+  "border-slate-300 bg-slate-100 text-slate-700";
 const sourceNumberBadgeClasses =
   "border-slate-200 bg-white text-slate-800";
 
@@ -175,6 +177,7 @@ function InfoTooltip({ text }: { text: string }) {
 type DisplayLabelSection = LabelSection & {
   displaySourceKey?: string;
   isSelectedNodeEvidence: boolean;
+  isInteractionTargeted: boolean;
 };
 
 type DisplaySourceRecord = {
@@ -183,6 +186,7 @@ type DisplaySourceRecord = {
   sourceNumber: number;
   isSelectedNodeMatch: boolean;
   isSelectedNodeOnly: boolean;
+  isInteractionTargeted: boolean;
 };
 
 type DisplayEvidenceModel = {
@@ -201,7 +205,16 @@ type GroupedLabelSection = {
   text: string;
   chunkCount: number;
   isSelectedNodeEvidence: boolean;
+  isInteractionTargeted: boolean;
 };
+
+function hasInteractionTargetedTag(
+  item: { provenance_tags?: string[] | null }
+) {
+  return Boolean(
+    item.provenance_tags?.includes("interaction_targeted_lookup")
+  );
+}
 
 function recordKey(
   record: OpenFDALabelRecord,
@@ -260,6 +273,7 @@ function buildDisplayEvidenceModel(
     sourceNumber: index + 1,
     isSelectedNodeMatch: false,
     isSelectedNodeOnly: false,
+    isInteractionTargeted: hasInteractionTargetedTag(record),
   }));
   const baselineSectionKeyBySourceId = new Map<string, string>();
   for (const item of baselineItems) {
@@ -290,6 +304,7 @@ function buildDisplayEvidenceModel(
       sourceNumber: 0,
       isSelectedNodeMatch: false,
       isSelectedNodeOnly: true,
+      isInteractionTargeted: hasInteractionTargetedTag(selectedRecord),
     };
     selectedOnlyItems.push(selectedOnlyItem);
     if (selectedRecord.source_id) {
@@ -323,6 +338,7 @@ function buildDisplayEvidenceModel(
         ? baselineSectionKeyBySourceId.get(entry.source_id)
         : undefined,
       isSelectedNodeEvidence: false,
+      isInteractionTargeted: hasInteractionTargetedTag(entry),
     }));
   }
 
@@ -336,6 +352,7 @@ function buildDisplayEvidenceModel(
           ? selectedSectionKeyBySourceId.get(entry.source_id)
           : undefined,
         isSelectedNodeEvidence: true,
+        isInteractionTargeted: hasInteractionTargetedTag(entry),
       }))
       .filter(
         (entry) =>
@@ -376,6 +393,8 @@ function groupLabelSectionsBySource(
       existing.chunkCount += 1;
       existing.isSelectedNodeEvidence =
         existing.isSelectedNodeEvidence || entry.isSelectedNodeEvidence;
+      existing.isInteractionTargeted =
+        existing.isInteractionTargeted || entry.isInteractionTargeted;
       return;
     }
 
@@ -388,6 +407,7 @@ function groupLabelSectionsBySource(
       text: entry.text,
       chunkCount: 1,
       isSelectedNodeEvidence: entry.isSelectedNodeEvidence,
+      isInteractionTargeted: entry.isInteractionTargeted,
     });
   });
 
@@ -2274,6 +2294,11 @@ function LabelEvidencePanel({
                               Node-specific
                             </Badge>
                           ) : null}
+                          {source.isInteractionTargeted ? (
+                            <Badge className={interactionSpecificBadgeClasses}>
+                              Interaction-targeted
+                            </Badge>
+                          ) : null}
                         </div>
                         <div className="mt-1.5 truncate font-medium text-slate-900">
                           {brandName
@@ -2385,6 +2410,11 @@ function LabelEvidencePanel({
                             ) : null}
                             {manufacturerName ? (
                               <span>· {manufacturerName}</span>
+                            ) : null}
+                            {entry.isInteractionTargeted ? (
+                              <Badge className={interactionSpecificBadgeClasses}>
+                                Interaction-targeted
+                              </Badge>
                             ) : null}
                           </div>
                           <p

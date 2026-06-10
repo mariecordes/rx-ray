@@ -50,22 +50,32 @@ def build_secondary_evidence(
             fallback_name=concept.name,
             limit=parameters.secondary_openfda_limit,
         )
+        standard = tag_label_evidence(
+            standard,
+            "standard_secondary_label_lookup",
+        )
         targeted_evidence: list[OpenFDALabelEvidence] = []
         if is_interaction_intent and parameters.interaction_lookup_limit > 0:
             targeted_evidence.append(
-                builder.openfda_store.get_interaction_label_evidence(
-                    concept.rxcui,
-                    interaction_name=primary.name,
-                    fallback_name=concept.name,
-                    limit=parameters.interaction_lookup_limit,
+                tag_label_evidence(
+                    builder.openfda_store.get_interaction_label_evidence(
+                        concept.rxcui,
+                        interaction_name=primary.name,
+                        fallback_name=concept.name,
+                        limit=parameters.interaction_lookup_limit,
+                    ),
+                    "interaction_targeted_lookup",
                 )
             )
             targeted_evidence.append(
-                builder.openfda_store.get_interaction_label_evidence(
-                    primary.rxcui,
-                    interaction_name=concept.name,
-                    fallback_name=primary.name,
-                    limit=parameters.interaction_lookup_limit,
+                tag_label_evidence(
+                    builder.openfda_store.get_interaction_label_evidence(
+                        primary.rxcui,
+                        interaction_name=concept.name,
+                        fallback_name=primary.name,
+                        limit=parameters.interaction_lookup_limit,
+                    ),
+                    "interaction_targeted_lookup",
                 )
             )
 
@@ -222,14 +232,26 @@ def merge_label_evidence(
     seen_keys: set[str] = set()
     included_source_ids: set[str | None] = set()
     seen_section_keys: set[tuple[str, str | None, str]] = set()
+    record_index_by_key: dict[str, int] = {}
+    section_index_by_key: dict[tuple[str, str | None, str], tuple[str, int]] = {}
 
     for evidence in evidences:
         errors.extend(evidence.errors)
         for record in evidence.label_records:
             key = stable_record_key(record)
             if key in seen_keys:
+                existing_index = record_index_by_key[key]
+                records[existing_index] = records[existing_index].model_copy(
+                    update={
+                        "provenance_tags": merge_tags(
+                            records[existing_index].provenance_tags,
+                            record.provenance_tags,
+                        )
+                    }
+                )
                 continue
             seen_keys.add(key)
+            record_index_by_key[key] = len(records)
             included_source_ids.add(record.source_id)
             records.append(record)
         for section_name, entries in evidence.sections.items():
@@ -238,9 +260,28 @@ def merge_label_evidence(
                     continue
                 section_key = (section_name, entry.source_id, entry.text)
                 if section_key in seen_section_keys:
+                    existing_section, existing_index = section_index_by_key[
+                        section_key
+                    ]
+                    existing_entry = sections[existing_section][existing_index]
+                    sections[existing_section][existing_index] = (
+                        existing_entry.model_copy(
+                            update={
+                                "provenance_tags": merge_tags(
+                                    existing_entry.provenance_tags,
+                                    entry.provenance_tags,
+                                )
+                            }
+                        )
+                    )
                     continue
                 seen_section_keys.add(section_key)
-                sections.setdefault(section_name, []).append(entry)
+                section_entries = sections.setdefault(section_name, [])
+                section_index_by_key[section_key] = (
+                    section_name,
+                    len(section_entries),
+                )
+                section_entries.append(entry)
 
     summary_metadata = build_summary_metadata(records)
     return OpenFDALabelEvidence(
@@ -256,6 +297,54 @@ def merge_label_evidence(
         },
         errors=errors,
     )
+
+
+def tag_label_evidence(
+    evidence: OpenFDALabelEvidence,
+    tag: str,
+) -> OpenFDALabelEvidence:
+    if not evidence.labels_found:
+        return evidence
+    return evidence.model_copy(
+        update={
+            "label_records": [
+                record.model_copy(
+                    update={
+                        "provenance_tags": merge_tags(
+                            record.provenance_tags,
+                            [tag],
+                        )
+                    }
+                )
+                for record in evidence.label_records
+            ],
+            "sections": {
+                section_name: [
+                    entry.model_copy(
+                        update={
+                            "provenance_tags": merge_tags(
+                                entry.provenance_tags,
+                                [tag],
+                            )
+                        }
+                    )
+                    for entry in entries
+                ]
+                for section_name, entries in evidence.sections.items()
+            },
+        }
+    )
+
+
+def merge_tags(existing: list[str], new: list[str]) -> list[str]:
+    tags: list[str] = []
+    seen: set[str] = set()
+    for tag in [*existing, *new]:
+        if not tag or tag in seen:
+            continue
+        seen.add(tag)
+        tags.append(tag)
+    return tags
 
 
 def stable_record_key(record: OpenFDALabelRecord) -> str:

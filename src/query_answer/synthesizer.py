@@ -435,6 +435,7 @@ def label_record_payload(
         "routes": record.routes[:3],
         "product_types": record.product_types[:3],
         "rxcuis": record.rxcuis[:5],
+        "provenance_tags": record.provenance_tags,
     }
 
 
@@ -460,6 +461,7 @@ def label_section_payloads(
                     "section": section_name,
                     "source_id": label_section.source_id,
                     "text": truncate_text(label_section.text, MAX_LABEL_TEXT_CHARS),
+                    "provenance_tags": label_section.provenance_tags,
                 }
             )
     return payloads

@@ -743,6 +743,12 @@ def test_secondary_evidence_triggers_interaction_targeted_lookups() -> None:
     assert len(evidence) == 1
     assert evidence[0].label_evidence is not None
     assert evidence[0].label_evidence.labels_found == 1
+    assert evidence[0].label_evidence.label_records[0].provenance_tags == [
+        "interaction_targeted_lookup"
+    ]
+    assert evidence[0].label_evidence.sections["warnings"][0].provenance_tags == [
+        "interaction_targeted_lookup"
+    ]
     assert "interaction_targeted_lookup" in evidence[0].retrieval_modes
     assert evidence[0].rxnorm_context is not None
     assert "terminology" in evidence[0].rxnorm_context.summary.lower()

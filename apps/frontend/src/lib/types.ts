@@ -35,6 +35,7 @@ export type LabelSection = {
   source_id?: string | null;
   effective_time?: string | null;
   source: string;
+  provenance_tags: string[];
 };
 
 export type OpenFDALabelRecord = {
@@ -53,6 +54,7 @@ export type OpenFDALabelRecord = {
   routes: string[];
   substance_names: string[];
   rxcuis: string[];
+  provenance_tags: string[];
 };
 
 export type OpenFDALabelEvidence = {
