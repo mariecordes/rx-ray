@@ -662,10 +662,17 @@ def test_evidence_coverage_marks_secondary_and_context_gaps() -> None:
     assert coverage_by_label["pregnant"].status == "not_found_in_evidence"
     assert response.answer is not None
     assert any(
-        "additional mentioned medications" in item
+        "Only the primary medication dossier was retrieved" in item
         for item in response.answer.limitations
     )
-    assert any("ibuprofen" in item for item in response.answer.limitations)
+    assert any(
+        "ibuprofen was recognized" in item
+        for item in response.answer.limitations
+    )
+    assert any(
+        "did not explicitly mention ibuprofen, migraine, and pregnant" in item
+        for item in response.answer.limitations
+    )
 
 
 def test_evidence_snippet_uses_word_boundaries() -> None:

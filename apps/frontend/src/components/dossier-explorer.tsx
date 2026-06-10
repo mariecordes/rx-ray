@@ -1085,6 +1085,9 @@ function EvidenceAnswerCard({
         )
     );
   }, [understanding.primary_dossier]);
+  const hasVisibleCoverage = coverage.items.some(
+    (item) => !hiddenCoverageCategories.has(item.category)
+  );
 
   return (
     <div className="space-y-3">
@@ -1163,10 +1166,11 @@ function EvidenceAnswerCard({
         </AnswerSection>
       ) : null}
 
-      {coverage?.items.length ? (
+      {hasVisibleCoverage ? (
         <AnswerSection
           title="Evidence coverage"
           infoText="This checklist compares what the system extracted from your question with the retrieved evidence. It shows what was addressed, what was not found in the retrieved labels, what was not retrieved, and what is only used as context. Hover over a reason when available to inspect the matching evidence snippet."
+          tone="audit"
         >
           <EvidenceCoverageList coverage={coverage} />
         </AnswerSection>
@@ -1200,18 +1204,32 @@ function EvidenceCoverageList({
   const groupedItems = useMemo(() => {
     const groups = new Map<string, EvidenceCoverageItem[]>();
     for (const item of coverage.items) {
+      // Hide V1-only bookkeeping rows until secondary-drug retrieval and
+      // intent-specific coverage checks are implemented.
+      if (hiddenCoverageCategories.has(item.category)) {
+        continue;
+      }
       const current = groups.get(item.category) ?? [];
       current.push(item);
       groups.set(item.category, current);
     }
     return Array.from(groups.entries());
   }, [coverage.items]);
+  const visibleSummaryCounts = useMemo(() => {
+    const counts: Partial<Record<EvidenceCoverageStatus, number>> = {};
+    for (const [, items] of groupedItems) {
+      for (const item of items) {
+        counts[item.status] = (counts[item.status] ?? 0) + 1;
+      }
+    }
+    return counts;
+  }, [groupedItems]);
 
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap gap-1.5">
         {coverageStatusOrder.map((status) => {
-          const count = coverage.summary_counts[status] ?? 0;
+          const count = visibleSummaryCounts[status] ?? 0;
           if (count === 0) {
             return null;
           }
@@ -1232,7 +1250,7 @@ function EvidenceCoverageList({
         {groupedItems.map(([category, items]) => (
           <div
             key={category}
-            className="rounded-md border border-[#D7C8F4] bg-white px-3 py-3"
+            className="rounded-md border border-slate-200 bg-white px-3 py-3"
           >
             <div className="mb-2 text-xs font-medium uppercase text-slate-500">
               {displayCoverageCategory(category)}
@@ -1331,16 +1349,20 @@ function AnswerSection({
   icon,
   infoText,
   title,
+  tone = "synthesis",
 }: {
   children: ReactNode;
   icon?: ReactNode;
   infoText?: string;
   title: string;
+  tone?: "synthesis" | "audit";
 }) {
   const [isOpen, setIsOpen] = useState(false);
+  const borderClass = tone === "audit" ? "border-slate-200" : "border-[#D7C8F4]";
+  const backgroundClass = tone === "audit" ? "bg-slate-50" : "bg-[#FBF9FE]";
 
   return (
-    <div className="rounded-md border border-[#D7C8F4] bg-[#FBF9FE]">
+    <div className={cn("rounded-md border", borderClass, backgroundClass)}>
       <button
         type="button"
         onClick={() => setIsOpen((current) => !current)}
@@ -1356,7 +1378,7 @@ function AnswerSection({
         {infoText ? <InfoTooltip text={infoText} /> : null}
       </button>
       {isOpen ? (
-        <div className="border-t border-[#D7C8F4] px-3 py-3">{children}</div>
+        <div className={cn("border-t px-3 py-3", borderClass)}>{children}</div>
       ) : null}
     </div>
   );
@@ -1383,8 +1405,18 @@ const coverageStatusClasses: Record<EvidenceCoverageStatus, string> = {
   out_of_scope: "border-slate-200 bg-slate-50 text-slate-700",
 };
 
+const hiddenCoverageCategories = new Set(["mentioned_drug", "intent"]);
+
+const coverageCategoryLabels: Record<string, string> = {
+  primary_drug: "Primary medication",
+  current_medication: "Current medications",
+  allergy: "Allergies",
+  condition: "Conditions",
+  patient_context: "Patient context",
+};
+
 function displayCoverageCategory(category: string) {
-  return category.replaceAll("_", " ");
+  return coverageCategoryLabels[category] ?? category.replaceAll("_", " ");
 }
 
 function QueryUnderstandingLoadingState() {
@@ -1453,7 +1485,7 @@ function QueryUnderstandingResult({
           <ParameterGroup title="Medication concepts">
             <ParameterRow
               // emphasize
-              label="Primary drug"
+              label="Primary medication"
               values={result.state.primary_drug ? [result.state.primary_drug] : []}
             />
             <ParameterRow

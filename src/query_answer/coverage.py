@@ -12,10 +12,6 @@ from src.query_answer.models import (
 )
 from src.query_understanding.models import QueryUnderstandingResponse
 
-PRIMARY_ONLY_LIMITATION = (
-    "Evidence coverage is limited to the primary resolved medication; additional "
-    "mentioned medications were not retrieved in this version."
-)
 SPECIFICITY_LIMITATION = (
     "The user query may be more specific than the resolved medication concept used "
     "for retrieval."
@@ -97,8 +93,8 @@ def build_evidence_coverage(
                 evidence_text=evidence_text,
                 has_label_text=has_label_text,
                 not_found_reason=(
-                    "The retrieved primary-drug labels did not explicitly "
-                    "mention this current medication."
+                    "The retrieved labels did not explicitly mention the "
+                    f"current medication {drug}."
                 ),
             )
         )
@@ -111,8 +107,8 @@ def build_evidence_coverage(
                 evidence_text=evidence_text,
                 has_label_text=has_label_text,
                 not_found_reason=(
-                    "The retrieved primary-drug labels did not explicitly "
-                    "mention this allergy."
+                    "The retrieved labels did not explicitly mention "
+                    f"the allergy {allergy}."
                 ),
             )
         )
@@ -125,8 +121,8 @@ def build_evidence_coverage(
                 evidence_text=evidence_text,
                 has_label_text=has_label_text,
                 not_found_reason=(
-                    "The retrieved primary-drug labels did not explicitly "
-                    "mention this condition."
+                    "The retrieved labels did not explicitly mention "
+                    f"the condition {condition}."
                 ),
             )
         )
@@ -172,11 +168,16 @@ def add_coverage_limitations(
         return None
 
     limitations = list(answer.limitations)
-    if any(
-        item.category == "mentioned_drug" and item.status == "not_retrieved"
+    non_primary_drugs = [
+        item.label
         for item in coverage.items
-    ):
-        append_once(limitations, PRIMARY_ONLY_LIMITATION)
+        if item.category == "mentioned_drug" and item.status == "not_retrieved"
+    ]
+    if non_primary_drugs:
+        append_once(
+            limitations,
+            secondary_drug_limitation(non_primary_drugs),
+        )
 
     missing_context = [
         item.label
@@ -188,9 +189,8 @@ def add_coverage_limitations(
     if missing_context:
         append_once(
             limitations,
-            "Retrieved evidence did not explicitly cover: "
-            + ", ".join(missing_context[:5])
-            + ".",
+            "The retrieved labels did not explicitly mention "
+            f"{format_human_list(missing_context[:5])}.",
         )
 
     primary = understanding.state.primary_drug
@@ -276,8 +276,8 @@ def patient_context_coverage(
         label=label,
         status="not_found_in_evidence",
         reason=(
-            "The retrieved primary-drug labels did not explicitly mention "
-            "this patient context."
+            "The retrieved labels did not explicitly mention the patient "
+            f"context {label}."
         ),
     )
 
@@ -367,6 +367,29 @@ def unique_values(values: list[str]) -> list[str]:
 def append_once(values: list[str], value: str) -> None:
     if value not in values:
         values.append(value)
+
+
+def format_human_list(values: list[str]) -> str:
+    if not values:
+        return ""
+    if len(values) == 1:
+        return values[0]
+    if len(values) == 2:
+        return f"{values[0]} and {values[1]}"
+    return ", ".join(values[:-1]) + f", and {values[-1]}"
+
+
+def secondary_drug_limitation(values: list[str]) -> str:
+    if len(values) == 1:
+        return (
+            "Only the primary medication dossier was retrieved; "
+            f"{values[0]} was recognized but not retrieved in this version."
+        )
+    return (
+        "Only the primary medication dossier was retrieved; "
+        f"{format_human_list(values)} were recognized but not retrieved "
+        "in this version."
+    )
 
 
 def coverage_statuses() -> tuple[EvidenceCoverageStatus, ...]:
