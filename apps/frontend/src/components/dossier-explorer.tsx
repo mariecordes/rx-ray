@@ -4,25 +4,11 @@ import {
   FormEvent,
   type RefObject,
   type ReactNode,
-  useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
 } from "react";
-import {
-  Background,
-  Controls,
-  Handle,
-  MarkerType,
-  MiniMap,
-  Position,
-  ReactFlow,
-  type Edge,
-  type Node,
-  type NodeProps,
-  type NodeTypes,
-} from "@xyflow/react";
 import {
   AlertTriangle,
   ChevronDown,
@@ -35,6 +21,7 @@ import {
   TriangleAlert,
 } from "lucide-react";
 
+import { EvidenceMapSection } from "@/components/question-evidence-map-section";
 import { RxNormKnowledgeGraph } from "@/components/rxnorm-knowledge-graph";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -50,9 +37,6 @@ import {
   LabelSection,
   OpenFDALabelEvidence,
   OpenFDALabelRecord,
-  QuestionEvidenceMap,
-  QuestionEvidenceMapEdge,
-  QuestionEvidenceMapNode,
   QueryAnswerResponse,
   QueryUnderstandingResponse,
   RxNormConcept,
@@ -622,7 +606,7 @@ export function AskQuestionExperience() {
       queryAnswer?.question_evidence_map?.nodes.length &&
       !isAnswerLoading &&
       !isUnderstandingLoading ? (
-        <EvidenceMapCard
+        <EvidenceMapSection
           map={queryAnswer.question_evidence_map}
           onCitationClick={handleAnswerCitationClick}
           onRxcuiClick={handleCoverageTargetClick}
@@ -932,324 +916,6 @@ function labelEvidenceSourceIds(evidence: OpenFDALabelEvidence | null) {
       .map((record) => record.source_id)
       .filter((sourceId): sourceId is string => Boolean(sourceId))
   );
-}
-
-function EvidenceMapCard({
-  map,
-  onCitationClick,
-  onRxcuiClick,
-}: {
-  map: QuestionEvidenceMap;
-  onCitationClick: (citation: EvidenceCitation) => void;
-  onRxcuiClick: (target: EvidenceCoverageTarget) => void;
-}) {
-  return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center gap-2">
-          <CardTitle>Evidence Map</CardTitle>
-          <InfoTooltip text="This map connects extracted question concepts, RxNorm medication resolution, public FDA label evidence, and RxNorm terminology context. Label-text edges show what was retrieved or mentioned in labels; they are not clinical interaction claims." />
-        </div>
-        <p className="mt-1 text-sm leading-6 text-slate-500">
-          A question-level view of how the retrieved evidence connects to what
-          the system understood. Click medication or label-section nodes to jump
-          into the supporting evidence below.
-        </p>
-      </CardHeader>
-      <CardContent>
-        <QuestionEvidenceMapPanel
-          map={map}
-          onCitationClick={onCitationClick}
-          onRxcuiClick={onRxcuiClick}
-        />
-      </CardContent>
-    </Card>
-  );
-}
-
-function QuestionEvidenceMapPanel({
-  map,
-  onCitationClick,
-  onRxcuiClick,
-}: {
-  map: QuestionEvidenceMap;
-  onCitationClick: (citation: EvidenceCitation) => void;
-  onRxcuiClick: (target: EvidenceCoverageTarget) => void;
-}) {
-  const handleNodeClick = useCallback(
-    (node: QuestionEvidenceMapNode) => {
-      if (node.source_id && node.section) {
-        onCitationClick({
-          source_id: node.source_id,
-          section: node.section,
-        });
-        return;
-      }
-      if (node.rxcui) {
-        onRxcuiClick({ rxcui: node.rxcui });
-      }
-    },
-    [onCitationClick, onRxcuiClick]
-  );
-  const { edges, nodes } = useMemo(
-    () => buildEvidenceFlowElements(map, handleNodeClick),
-    [handleNodeClick, map]
-  );
-
-  return (
-    <div className="h-[560px] overflow-hidden rounded-md border border-slate-200 bg-white">
-      <ReactFlow
-        key={evidenceMapSignature(map)}
-        colorMode="light"
-        defaultEdges={edges}
-        defaultNodes={nodes}
-        edgesFocusable
-        fitView
-        fitViewOptions={{ maxZoom: 1.2, padding: 0.18 }}
-        maxZoom={1.8}
-        minZoom={0.35}
-        nodeTypes={evidenceMapNodeTypes}
-        nodesConnectable={false}
-        nodesDraggable
-        panOnScroll
-        proOptions={{ hideAttribution: true }}
-      >
-        <Background color="#E2D8F4" gap={20} size={1} />
-        <MiniMap
-          nodeColor={(node) =>
-            evidenceMapMiniMapColor(String(node.data?.kind ?? ""))
-          }
-          pannable
-          zoomable
-        />
-        <Controls showInteractive={false} />
-      </ReactFlow>
-    </div>
-  );
-}
-
-type EvidenceFlowNodeData = Record<string, unknown> & {
-  kind: string;
-  mapNode: QuestionEvidenceMapNode;
-  onSelect: (node: QuestionEvidenceMapNode) => void;
-};
-
-type EvidenceFlowNode = Node<EvidenceFlowNodeData, "evidence">;
-
-const evidenceMapNodeTypes: NodeTypes = {
-  evidence: EvidenceMapFlowNode,
-};
-
-function EvidenceMapFlowNode({ data }: NodeProps<EvidenceFlowNode>) {
-  const node = data.mapNode;
-  const isClickable = Boolean((node.source_id && node.section) || node.rxcui);
-  return (
-    <button
-      type="button"
-      disabled={!isClickable}
-      onClick={() => data.onSelect(node)}
-      title={node.subtitle ?? node.label}
-      className={cn(
-        "relative w-[190px] rounded-md border px-3 py-2 text-left shadow-sm transition disabled:cursor-default",
-        evidenceMapNodeClasses(node.kind),
-        isClickable ? "hover:border-[#C7B4EF] hover:bg-[#FBF9FE]" : "",
-        node.kind === "question" && "w-[210px]",
-        node.kind === "label_section" && "w-[170px]"
-      )}
-    >
-      <Handle
-        className="!h-2 !w-2 !border-white !bg-slate-400"
-        position={Position.Left}
-        type="target"
-      />
-      <Handle
-        className="!h-2 !w-2 !border-white !bg-slate-400"
-        position={Position.Right}
-        type="source"
-      />
-      <div className="flex flex-wrap items-center gap-1.5">
-        <Badge className="border-slate-200 bg-white text-slate-700">
-          {displayEvidenceMapNodeKind(node)}
-        </Badge>
-        {node.evidence_scope ? (
-          <Badge className="border-slate-200 bg-white text-slate-700">
-            {sentenceCase(node.evidence_scope)}
-          </Badge>
-        ) : null}
-        {node.tags.includes("interaction_targeted_lookup") ? (
-          <Badge className={interactionSpecificBadgeClasses}>
-            Interaction-specific
-          </Badge>
-        ) : null}
-      </div>
-      <div className="mt-2 truncate text-sm font-semibold text-slate-900">
-        {node.kind === "resolved_medication"
-          ? displayGraphNodeName(node.label)
-          : node.label}
-      </div>
-      {node.subtitle ? (
-        <div className="mt-1 line-clamp-2 text-xs leading-5 text-slate-500">
-          {node.subtitle}
-        </div>
-      ) : null}
-      {node.rxcui ? (
-        <div className="mt-1 text-xs text-slate-400">RXCUI {node.rxcui}</div>
-      ) : null}
-    </button>
-  );
-}
-
-function buildEvidenceFlowElements(
-  map: QuestionEvidenceMap,
-  onNodeSelect: (node: QuestionEvidenceMapNode) => void
-): { nodes: EvidenceFlowNode[]; edges: Edge[] } {
-  const visibleNodes = map.nodes.filter((node) => node.kind !== "question");
-  const queryNode = map.nodes.find((node) => node.kind === "question");
-  const nodesByColumn = new Map<number, QuestionEvidenceMapNode[]>();
-  for (const node of visibleNodes) {
-    const column = evidenceMapColumn(node.kind);
-    nodesByColumn.set(column, [...(nodesByColumn.get(column) ?? []), node]);
-  }
-  const flowNodes: EvidenceFlowNode[] = [];
-  if (queryNode) {
-    flowNodes.push(evidenceFlowNode(queryNode, 20, 210, onNodeSelect));
-  }
-  for (const [column, columnNodes] of Array.from(nodesByColumn.entries()).sort(
-    ([left], [right]) => left - right
-  )) {
-    columnNodes.forEach((node, index) => {
-      flowNodes.push(
-        evidenceFlowNode(
-          node,
-          280 + column * 250,
-          40 + index * 118,
-          onNodeSelect
-        )
-      );
-    });
-  }
-  const visibleNodeIds = new Set(flowNodes.map((node) => node.id));
-  const flowEdges = map.edges
-    .filter(
-      (edge) => visibleNodeIds.has(edge.source) && visibleNodeIds.has(edge.target)
-    )
-    .map((edge) => evidenceFlowEdge(edge));
-  return { nodes: flowNodes, edges: flowEdges };
-}
-
-function evidenceFlowNode(
-  node: QuestionEvidenceMapNode,
-  x: number,
-  y: number,
-  onNodeSelect: (node: QuestionEvidenceMapNode) => void
-): EvidenceFlowNode {
-  return {
-    id: node.id,
-    type: "evidence",
-    position: { x, y },
-    data: {
-      kind: node.kind,
-      mapNode: node,
-      onSelect: onNodeSelect,
-    },
-  };
-}
-
-function evidenceFlowEdge(edge: QuestionEvidenceMapEdge): Edge {
-  const isInteraction = edge.kind === "mentions_in_interaction_section";
-  const isTerminology = edge.kind === "has_terminology_context";
-  return {
-    id: edge.id,
-    source: edge.source,
-    target: edge.target,
-    type: "smoothstep",
-    animated: isInteraction,
-    label: displayEvidenceMapEdgeLabel(edge),
-    markerEnd: {
-      type: MarkerType.ArrowClosed,
-      color: isInteraction ? "#371E8F" : isTerminology ? "#92400e" : "#94a3b8",
-    },
-    style: {
-      stroke: isInteraction ? "#371E8F" : isTerminology ? "#d97706" : "#94a3b8",
-      strokeWidth: isInteraction ? 2 : 1.4,
-    },
-    labelBgBorderRadius: 6,
-    labelBgPadding: [6, 3],
-    labelStyle: {
-      fill: "#475569",
-      fontSize: 11,
-      fontWeight: 600,
-      textTransform: "uppercase",
-    },
-  };
-}
-
-function evidenceMapColumn(kind: string) {
-  const columns: Record<string, number> = {
-    query_concept: 0,
-    resolved_medication: 1,
-    label_source: 2,
-    label_section: 3,
-    rxnorm_context: 3,
-  };
-  return columns[kind] ?? 0;
-}
-
-function evidenceMapMiniMapColor(kind: string) {
-  const colors: Record<string, string> = {
-    question: "#F8FAFC",
-    query_concept: "#FFFFFF",
-    resolved_medication: "#E8DDF9",
-    label_source: "#F8FAFC",
-    label_section: "#E2E8F0",
-    rxnorm_context: "#FEF3C7",
-  };
-  return colors[kind] ?? "#F8FAFC";
-}
-
-function evidenceMapSignature(map: QuestionEvidenceMap) {
-  return `${map.nodes.map((node) => node.id).join("|")}::${map.edges
-    .map((edge) => edge.id)
-    .join("|")}`;
-}
-
-function evidenceMapNodeClasses(kind: string) {
-  const classes: Record<string, string> = {
-    question: "border-slate-200 bg-white",
-    query_concept: "border-slate-200 bg-white",
-    resolved_medication: "border-[#D7C8F4] bg-[#FBF9FE]",
-    label_source: "border-slate-200 bg-white",
-    label_section: "border-slate-200 bg-slate-50",
-    rxnorm_context: "border-amber-200 bg-amber-50",
-  };
-  return classes[kind] ?? "border-slate-200 bg-white";
-}
-
-function displayEvidenceMapNodeKind(node: QuestionEvidenceMapNode) {
-  if (node.role) {
-    return displayMentionRole(node.role);
-  }
-  const labels: Record<string, string> = {
-    question: "Question",
-    query_concept: "Question concept",
-    resolved_medication: "Medication",
-    label_source: "Label source",
-    label_section: "Label section",
-    rxnorm_context: "Terminology context",
-  };
-  return labels[node.kind] ?? sentenceCase(node.kind.replaceAll("_", " "));
-}
-
-function displayEvidenceMapEdgeLabel(edge: QuestionEvidenceMapEdge) {
-  const labels: Record<string, string> = {
-    resolved_as: "resolved as",
-    has_role: "extracted as",
-    has_label_source: "label source",
-    has_label_section: "label section",
-    mentions_in_interaction_section: "label mentions",
-    has_terminology_context: "terminology context",
-  };
-  return labels[edge.kind] ?? edge.label;
 }
 
 function SecondaryEvidenceResults({
