@@ -43,6 +43,10 @@ class QueryUnderstandingService:
     ) -> QueryUnderstandingResponse:
         extraction = self.extractor.extract(query)
         resolved_drugs = self._resolve_extraction(query, extraction)
+        if extraction.mode == "deterministic":
+            extraction.state.all_drugs_mentioned = self._state_drug_mentions(
+                resolved_drugs
+            )
         unresolved_mentions = self._unresolved_mention_texts(resolved_drugs)
 
         if unresolved_mentions:
@@ -126,6 +130,22 @@ class QueryUnderstandingService:
             if mention.selected_concept is None
         ]
 
+    @staticmethod
+    def _state_drug_mentions(
+        resolved_drugs: list[ResolvedDrugMention],
+    ) -> list[str]:
+        values: list[str] = []
+        seen: set[str] = set()
+        for mention in resolved_drugs:
+            if mention.role == "allergy" or mention.selected_concept is None:
+                continue
+            key = mention.text.casefold()
+            if key in seen:
+                continue
+            seen.add(key)
+            values.append(mention.text)
+        return values
+
     def _complete_mentions(
         self,
         query: str,
@@ -152,7 +172,7 @@ class QueryUnderstandingService:
                 phrase = " ".join(tokens[start : start + length])
                 if not self._looks_like_drug_phrase(phrase):
                     continue
-                candidates = self._resolve_text(phrase, limit=1)
+                candidates = self._resolve_text(phrase, limit=1, allow_fuzzy=False)
                 if not candidates or candidates[0].score < 80:
                     continue
                 occupied |= indexes
@@ -172,6 +192,12 @@ class QueryUnderstandingService:
             "try",
             "for",
             "with",
+            "the",
+            "this",
+            "that",
+            "same",
+            "time",
+            "problem",
             "against",
             "and",
             "or",
@@ -218,7 +244,13 @@ class QueryUnderstandingService:
             selected_concept=candidates[0].concept if candidates else None,
         )
 
-    def _resolve_text(self, text: str, limit: int = 5) -> list[ResolutionCandidate]:
+    def _resolve_text(
+        self,
+        text: str,
+        limit: int = 5,
+        *,
+        allow_fuzzy: bool = True,
+    ) -> list[ResolutionCandidate]:
         candidates = self.rxnorm_store.resolve(text, limit=limit)
         if candidates:
             return candidates
@@ -231,6 +263,8 @@ class QueryUnderstandingService:
             if candidates:
                 return candidates
 
+        if not allow_fuzzy:
+            return []
         return self._fuzzy_resolve(text, limit=limit)
 
     @staticmethod

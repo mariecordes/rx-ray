@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from src.dossier.models import (
     DrugDossier,
@@ -28,6 +28,17 @@ class QueryState(BaseModel):
     conditions: list[str] = Field(default_factory=list)
     patient_context: list[str] = Field(default_factory=list)
     intent: str | None = None
+    intents: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def sync_intent_fields(self) -> "QueryState":
+        """Keep legacy single-intent and new multi-intent fields in sync."""
+
+        if self.intent and self.intent not in self.intents:
+            self.intents = [self.intent, *self.intents]
+        if self.intents and not self.intent:
+            self.intent = self.intents[0]
+        return self
 
 
 class ExtractedDrugMention(BaseModel):

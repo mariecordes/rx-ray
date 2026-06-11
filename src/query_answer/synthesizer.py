@@ -12,6 +12,7 @@ from src.query_answer.models import (
     EvidenceAnswer,
     EvidenceBullet,
     EvidenceCitation,
+    SecondaryDrugEvidence,
 )
 from src.query_understanding.models import QueryUnderstandingResponse
 from src.utils import load_prompts
@@ -76,6 +77,7 @@ class EvidenceAnswerSynthesizer:
         self,
         query: str,
         understanding: QueryUnderstandingResponse,
+        secondary_evidence: list[SecondaryDrugEvidence] | None = None,
     ) -> AnswerSynthesisResult:
         if understanding.primary_dossier is None:
             return AnswerSynthesisResult(
@@ -93,7 +95,10 @@ class EvidenceAnswerSynthesizer:
             )
 
         prompt_config = self._load_prompt()
-        evidence_packet = self.build_evidence_packet(understanding)
+        evidence_packet = self.build_evidence_packet(
+            understanding,
+            secondary_evidence=secondary_evidence or [],
+        )
         messages = self._format_messages(
             prompt_config.get("messages", []),
             query=query,
@@ -217,12 +222,45 @@ class EvidenceAnswerSynthesizer:
     @staticmethod
     def build_evidence_packet(
         understanding: QueryUnderstandingResponse,
+        secondary_evidence: list[SecondaryDrugEvidence] | None = None,
     ) -> dict[str, Any]:
         dossier = understanding.primary_dossier
         if dossier is None:
             return {}
 
         label_evidence = dossier.label_evidence
+        secondary_evidence = secondary_evidence or []
+        primary_sources = [
+            label_record_payload(record, evidence_scope="primary")
+            for record in (label_evidence.label_records if label_evidence else [])
+        ]
+        secondary_sources = [
+            label_record_payload(
+                record,
+                evidence_scope="secondary",
+                drug_name=item.resolved_concept.name,
+                rxcui=item.resolved_concept.rxcui,
+            )
+            for item in secondary_evidence
+            for record in (
+                item.label_evidence.label_records if item.label_evidence else []
+            )
+        ]
+        primary_sections = label_section_payloads(
+            label_evidence.sections if label_evidence else {},
+            evidence_scope="primary",
+        )
+        secondary_sections = [
+            payload
+            for item in secondary_evidence
+            for payload in label_section_payloads(
+                item.label_evidence.sections if item.label_evidence else {},
+                evidence_scope="secondary",
+                drug_name=item.resolved_concept.name,
+                rxcui=item.resolved_concept.rxcui,
+                retrieval_modes=item.retrieval_modes,
+            )
+        ]
         return {
             "query": understanding.query,
             "state": understanding.state.model_dump(),
@@ -230,13 +268,11 @@ class EvidenceAnswerSynthesizer:
                 dossier.resolved_drug.model_dump() if dossier.resolved_drug else None
             ),
             "rxnorm_relationship_summary": rxnorm_relationship_summary(dossier),
-            "label_sources": [
-                label_record_payload(record)
-                for record in (label_evidence.label_records if label_evidence else [])
+            "secondary_drug_evidence": [
+                secondary_evidence_payload(item) for item in secondary_evidence
             ],
-            "label_sections": label_section_payloads(
-                label_evidence.sections if label_evidence else {}
-            ),
+            "label_sources": [*primary_sources, *secondary_sources],
+            "label_sections": [*primary_sections, *secondary_sections],
             "retrieval_notes": dossier.notes,
         }
 
@@ -381,8 +417,17 @@ def rxnorm_edge_payload(edge: RxNormEdge) -> dict[str, Any]:
     }
 
 
-def label_record_payload(record: OpenFDALabelRecord) -> dict[str, Any]:
+def label_record_payload(
+    record: OpenFDALabelRecord,
+    *,
+    evidence_scope: str,
+    drug_name: str | None = None,
+    rxcui: str | None = None,
+) -> dict[str, Any]:
     return {
+        "evidence_scope": evidence_scope,
+        "drug_name": drug_name,
+        "rxcui": rxcui,
         "source_id": record.source_id,
         "brand_names": record.brand_names[:3],
         "generic_names": record.generic_names[:3],
@@ -390,11 +435,17 @@ def label_record_payload(record: OpenFDALabelRecord) -> dict[str, Any]:
         "routes": record.routes[:3],
         "product_types": record.product_types[:3],
         "rxcuis": record.rxcuis[:5],
+        "provenance_tags": record.provenance_tags,
     }
 
 
 def label_section_payloads(
     sections: dict[str, list[LabelSection]],
+    *,
+    evidence_scope: str,
+    drug_name: str | None = None,
+    rxcui: str | None = None,
+    retrieval_modes: list[str] | None = None,
 ) -> list[dict[str, Any]]:
     payloads: list[dict[str, Any]] = []
     for section_name in PRIORITIZED_SECTIONS:
@@ -403,12 +454,36 @@ def label_section_payloads(
                 return payloads
             payloads.append(
                 {
+                    "evidence_scope": evidence_scope,
+                    "drug_name": drug_name,
+                    "rxcui": rxcui,
+                    "retrieval_modes": retrieval_modes or [],
                     "section": section_name,
                     "source_id": label_section.source_id,
                     "text": truncate_text(label_section.text, MAX_LABEL_TEXT_CHARS),
+                    "provenance_tags": label_section.provenance_tags,
                 }
             )
     return payloads
+
+
+def secondary_evidence_payload(item: SecondaryDrugEvidence) -> dict[str, Any]:
+    label_evidence = item.label_evidence
+    return {
+        "mention_text": item.mention_text,
+        "role": item.role,
+        "resolved_concept": item.resolved_concept.model_dump(),
+        "retrieval_modes": item.retrieval_modes,
+        "labels_found": label_evidence.labels_found if label_evidence else 0,
+        "interaction_labels_found": (
+            item.interaction_label_evidence.labels_found
+            if item.interaction_label_evidence
+            else 0
+        ),
+        "rxnorm_context": (
+            item.rxnorm_context.model_dump() if item.rxnorm_context else None
+        ),
+    }
 
 
 def truncate_text(text: str, max_chars: int) -> str:
@@ -423,13 +498,19 @@ def parse_citations(value: Any) -> list[EvidenceCitation]:
     for item in list_value(value):
         source_id = str(item.get("source_id", "")).strip()
         section = str(item.get("section", "")).strip()
+        snippet_value = item.get("snippet")
+        snippet = (
+            str(snippet_value).strip()
+            if snippet_value is not None
+            else None
+        )
         if not source_id or not section:
             continue
         citations.append(
             EvidenceCitation(
                 source_id=source_id,
                 section=section,
-                snippet=str(item.get("snippet", "")).strip() or None,
+                snippet=snippet or None,
             )
         )
     return citations

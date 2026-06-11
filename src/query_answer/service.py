@@ -6,6 +6,7 @@ from src.dossier.builder import DossierBuilder
 from src.query_answer.config import load_query_answer_parameters
 from src.query_answer.coverage import add_coverage_limitations, build_evidence_coverage
 from src.query_answer.models import QueryAnswerResponse
+from src.query_answer.secondary import build_secondary_evidence
 from src.query_answer.synthesizer import EvidenceAnswerSynthesizer
 from src.query_understanding.service import QueryUnderstandingService
 
@@ -21,6 +22,7 @@ class QueryAnswerService:
         understanding_service: QueryUnderstandingService | None = None,
         synthesizer: EvidenceAnswerSynthesizer | None = None,
     ) -> None:
+        self.builder = builder
         self.understanding_service = understanding_service or QueryUnderstandingService(
             builder=builder
         )
@@ -31,17 +33,30 @@ class QueryAnswerService:
         query: str,
         openfda_limit: int | None = None,
     ) -> QueryAnswerResponse:
+        parameters = load_query_answer_parameters()
         label_limit = (
             openfda_limit
             if openfda_limit is not None
-            else load_query_answer_parameters().default_openfda_limit
+            else parameters.default_openfda_limit
         )
         understanding = self.understanding_service.understand(
             query,
             openfda_limit=label_limit,
         )
-        synthesis = self.synthesizer.synthesize(query, understanding)
-        coverage = build_evidence_coverage(understanding)
+        secondary_evidence = build_secondary_evidence(
+            understanding,
+            self.builder,
+            parameters,
+        )
+        synthesis = self.synthesizer.synthesize(
+            query,
+            understanding,
+            secondary_evidence=secondary_evidence,
+        )
+        coverage = build_evidence_coverage(
+            understanding,
+            secondary_evidence=secondary_evidence,
+        )
         answer = add_coverage_limitations(
             synthesis.answer,
             coverage,
@@ -60,6 +75,7 @@ class QueryAnswerService:
         return QueryAnswerResponse(
             understanding=understanding,
             answer=answer,
+            secondary_evidence=secondary_evidence,
             coverage=coverage,
             warnings=warnings,
             errors=errors,

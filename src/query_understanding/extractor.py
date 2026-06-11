@@ -131,7 +131,7 @@ class HybridQueryExtractor:
         state = QueryState(
             conditions=self._extract_terms(normalized, CONDITION_PATTERNS),
             patient_context=self._extract_patient_context(query),
-            intent=self._infer_intent(normalized),
+            intents=self._infer_intents(normalized),
         )
         mentions: list[ExtractedDrugMention] = []
 
@@ -357,16 +357,34 @@ class HybridQueryExtractor:
         return deduped
 
     @staticmethod
-    def _infer_intent(normalized_query: str) -> str | None:
-        if re.search(r"\binteract(?:ion|ions)?\b|\btogether\b", normalized_query):
-            return "interaction_check"
+    @classmethod
+    def _infer_intent(cls, normalized_query: str) -> str | None:
+        intents = cls._infer_intents(normalized_query)
+        return intents[0] if intents else None
+
+    @staticmethod
+    def _infer_intents(normalized_query: str) -> list[str]:
+        intents: list[str] = []
+        if re.search(
+            r"\binteract(?:ion|ions)?\b|\btogether\b|\bat the same time\b",
+            normalized_query,
+        ):
+            intents.append("interaction_check")
+        if re.search(
+            r"\b(?:taking|take|use|using|on)\b.*\b(?:can|should|could|safe|ok|okay)\b"
+            r"|\b(?:can|should|could|safe|ok|okay)\b.*\b(?:taking|take|use|using|on)\b",
+            normalized_query,
+        ):
+            intents.append("interaction_check")
         if re.search(r"\bpregnan(?:t|cy)\b|\bbreastfeeding\b", normalized_query):
-            return "patient_context_check"
+            intents.append("patient_context_check")
         if re.search(r"\ballerg(?:y|ies|ic)\b", normalized_query):
-            return "allergy_context_check"
+            intents.append("allergy_context_check")
         if re.search(r"\b(can|should|could)\s+i\b|\bsafe\b|\bokay\b", normalized_query):
-            return "safety_context_check"
-        return "label_context_check" if normalized_query.strip() else None
+            intents.append("safety_context_check")
+        if normalized_query.strip():
+            intents.append("label_context_check")
+        return HybridQueryExtractor._dedupe_strings(intents)
 
     @staticmethod
     def _clean_drug_fragment(fragment: str) -> str:
@@ -438,7 +456,15 @@ class HybridQueryExtractor:
             conditions=self._string_list(value.get("conditions")),
             patient_context=self._string_list(value.get("patient_context")),
             intent=self._optional_string(value.get("intent")),
+            intents=self._state_intents(value),
         )
+
+    def _state_intents(self, value: dict[str, Any]) -> list[str]:
+        intents = self._string_list(value.get("intents"))
+        legacy_intent = self._optional_string(value.get("intent"))
+        if legacy_intent:
+            intents = [legacy_intent, *intents]
+        return self._dedupe_strings(intents)
 
     @classmethod
     def _string_list(cls, value: Any) -> list[str]:

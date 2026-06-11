@@ -24,7 +24,8 @@ from src.dossier.openfda_store import OpenFDALabelStore
 from src.dossier.rxnorm_store import RxNormParquetStore
 from src.query_answer.config import QueryAnswerParameters
 from src.query_answer.coverage import evidence_snippet
-from src.query_answer.models import EvidenceAnswer
+from src.query_answer.models import EvidenceAnswer, SecondaryDrugEvidence
+from src.query_answer.secondary import build_secondary_evidence
 from src.query_answer.service import QueryAnswerService
 from src.query_answer.synthesizer import (
     ANSWER_CITATION_RETRY_PROMPT_KEY,
@@ -38,6 +39,7 @@ from src.query_understanding.models import (
     ExtractedDrugMention,
     QueryState,
     QueryUnderstandingResponse,
+    ResolvedDrugMention,
 )
 from src.query_understanding.service import QueryUnderstandingService
 from src.utils import load_parameters
@@ -397,6 +399,7 @@ def test_query_understanding_does_not_rewrite_hybrid_state_parameters() -> None:
     assert response.state.conditions == ["custom condition"]
     assert response.state.patient_context == ["custom patient context"]
     assert response.state.intent == "custom intent"
+    assert response.state.intents == ["custom intent"]
     assert response.primary_dossier is not None
 
 
@@ -455,7 +458,8 @@ async def test_query_answer_unresolved_primary_returns_no_answer(
 
 def test_answer_synthesis_filters_citations_to_supplied_evidence() -> None:
     packet = EvidenceAnswerSynthesizer.build_evidence_packet(
-        response_with_label_evidence()
+        response_with_label_evidence(),
+        secondary_evidence=[secondary_evidence_fixture()],
     )
     answer = EvidenceAnswerSynthesizer.parse_answer_data(
         {
@@ -474,6 +478,11 @@ def test_answer_synthesis_filters_citations_to_supplied_evidence() -> None:
                             "section": "warnings",
                             "snippet": "invented",
                         },
+                        {
+                            "source_id": "label-2",
+                            "section": "warnings",
+                            "snippet": None,
+                        },
                     ],
                 }
             ],
@@ -488,7 +497,12 @@ def test_answer_synthesis_filters_citations_to_supplied_evidence() -> None:
             "source_id": "label-1",
             "section": "warnings",
             "snippet": "warning text",
-        }
+        },
+        {
+            "source_id": "label-2",
+            "section": "warnings",
+            "snippet": None,
+        },
     ]
     assert answer.safety_note == STANDARD_SAFETY_NOTE
 
@@ -497,6 +511,9 @@ def test_query_answer_parameters_load_from_yaml() -> None:
     parameters = load_parameters()
 
     assert parameters["query_answer"]["default_openfda_limit"] == 10
+    assert parameters["query_answer"]["secondary_openfda_limit"] == 3
+    assert parameters["query_answer"]["max_secondary_drugs"] == 3
+    assert parameters["query_answer"]["interaction_lookup_limit"] == 3
     assert parameters["query_answer"]["max_synthesis_retries"] == 1
     assert parameters["query_answer"]["require_citations_when_evidence_exists"] is True
 
@@ -521,6 +538,25 @@ def test_answer_citation_retry_prompt_template_loads() -> None:
     assert "Validation feedback" in message["content"]
     assert "label-1" in message["content"]
     assert "warnings" in message["content"]
+
+
+def test_evidence_packet_includes_secondary_evidence() -> None:
+    packet = EvidenceAnswerSynthesizer.build_evidence_packet(
+        response_with_label_evidence(),
+        secondary_evidence=[secondary_evidence_fixture()],
+    )
+
+    assert packet["secondary_drug_evidence"][0]["resolved_concept"]["name"] == (
+        "ibuprofen"
+    )
+    assert any(
+        section["source_id"] == "label-2"
+        and section["evidence_scope"] == "secondary"
+        for section in packet["label_sections"]
+    )
+    assert ("label-2", "warnings") in EvidenceAnswerSynthesizer.allowed_citations(
+        packet
+    )
 
 
 def test_answer_synthesis_retries_when_sources_are_missing(
@@ -628,6 +664,142 @@ def test_query_answer_response_includes_evidence_coverage() -> None:
     )
 
 
+def test_query_answer_response_includes_secondary_evidence() -> None:
+    understanding = response_with_secondary_mention()
+    service = QueryAnswerService(
+        builder=fake_secondary_builder(),
+        understanding_service=FakeUnderstandingService(understanding),
+        synthesizer=FakeAnswerSynthesizer(),
+    )
+
+    response = service.answer("Can I take aspirin with ibuprofen?")
+
+    assert len(response.secondary_evidence) == 1
+    secondary = response.secondary_evidence[0]
+    assert secondary.resolved_concept.name == "ibuprofen"
+    assert secondary.label_evidence is not None
+    assert secondary.label_evidence.labels_found == 1
+    assert "standard_secondary_label_lookup" in secondary.retrieval_modes
+
+
+def test_secondary_evidence_triggers_interaction_targeted_lookups() -> None:
+    class TrackingOpenFDAStore(OpenFDALabelStore):
+        def __init__(self) -> None:
+            super().__init__(allow_live=False, use_cache=False)
+            self.standard_calls: list[tuple[str, str | None, int]] = []
+            self.interaction_calls: list[tuple[str, str, str | None, int]] = []
+
+        def get_label_evidence(
+            self,
+            rxcui: str,
+            fallback_name: str | None = None,
+            limit: int = 5,
+        ) -> OpenFDALabelEvidence:
+            self.standard_calls.append((rxcui, fallback_name, limit))
+            return OpenFDALabelEvidence(rxcui=rxcui, label_limit=limit)
+
+        def get_interaction_label_evidence(
+            self,
+            rxcui: str,
+            interaction_name: str,
+            fallback_name: str | None = None,
+            limit: int = 3,
+        ) -> OpenFDALabelEvidence:
+            self.interaction_calls.append(
+                (rxcui, interaction_name, fallback_name, limit)
+            )
+            if rxcui == "5640":
+                evidence = secondary_evidence_fixture().label_evidence
+                assert evidence is not None
+                return evidence.model_copy(
+                    update={
+                        "retrieval_mode": "interaction_targeted_lookup",
+                        "label_limit": limit,
+                    }
+                )
+            return OpenFDALabelEvidence(rxcui=rxcui, label_limit=limit)
+
+    store = TrackingOpenFDAStore()
+    builder = DossierBuilder(
+        rxnorm_store=RxNormParquetStore(),
+        openfda_store=store,
+    )
+
+    evidence = build_secondary_evidence(
+        response_with_secondary_mention(),
+        builder,
+        QueryAnswerParameters(
+            secondary_openfda_limit=2,
+            interaction_lookup_limit=4,
+            max_secondary_drugs=3,
+        ),
+    )
+
+    assert store.standard_calls == [("5640", "ibuprofen", 2)]
+    assert store.interaction_calls == [
+        ("5640", "aspirin", "ibuprofen", 4),
+        ("1191", "ibuprofen", "aspirin", 4),
+    ]
+    assert len(evidence) == 1
+    assert evidence[0].label_evidence is not None
+    assert evidence[0].label_evidence.labels_found == 1
+    assert evidence[0].label_evidence.label_records[0].provenance_tags == [
+        "interaction_targeted_lookup"
+    ]
+    assert evidence[0].label_evidence.sections["warnings"][0].provenance_tags == [
+        "interaction_targeted_lookup"
+    ]
+    assert "interaction_targeted_lookup" in evidence[0].retrieval_modes
+    assert evidence[0].rxnorm_context is not None
+    assert "terminology" in evidence[0].rxnorm_context.summary.lower()
+
+
+def test_secondary_evidence_uses_multi_intent_interaction_signal() -> None:
+    understanding = response_with_secondary_mention().model_copy(
+        update={
+            "state": QueryState(
+                primary_drug="aspirin",
+                all_drugs_mentioned=["aspirin", "ibuprofen"],
+                current_medications=["ibuprofen"],
+                intents=["safety_context_check", "interaction_check"],
+            )
+        }
+    )
+
+    class TrackingOpenFDAStore(OpenFDALabelStore):
+        def __init__(self) -> None:
+            super().__init__(allow_live=False, use_cache=False)
+            self.interaction_calls = 0
+
+        def get_label_evidence(
+            self,
+            rxcui: str,
+            fallback_name: str | None = None,
+            limit: int = 5,
+        ) -> OpenFDALabelEvidence:
+            return OpenFDALabelEvidence(rxcui=rxcui, label_limit=limit)
+
+        def get_interaction_label_evidence(
+            self,
+            rxcui: str,
+            interaction_name: str,
+            fallback_name: str | None = None,
+            limit: int = 3,
+        ) -> OpenFDALabelEvidence:
+            self.interaction_calls += 1
+            return OpenFDALabelEvidence(rxcui=rxcui, label_limit=limit)
+
+    store = TrackingOpenFDAStore()
+
+    build_secondary_evidence(
+        understanding,
+        DossierBuilder(rxnorm_store=RxNormParquetStore(), openfda_store=store),
+        QueryAnswerParameters(),
+    )
+
+    assert store.interaction_calls == 2
+
+
 def test_evidence_coverage_marks_secondary_and_context_gaps() -> None:
     understanding = response_with_label_evidence().model_copy(
         update={
@@ -673,6 +845,91 @@ def test_evidence_coverage_marks_secondary_and_context_gaps() -> None:
         "did not explicitly mention ibuprofen, migraine, and pregnant" in item
         for item in response.answer.limitations
     )
+
+
+def test_evidence_coverage_marks_secondary_as_addressed() -> None:
+    understanding = response_with_secondary_mention()
+    service = QueryAnswerService(
+        builder=fake_secondary_builder(),
+        understanding_service=FakeUnderstandingService(understanding),
+        synthesizer=FakeAnswerSynthesizer(),
+    )
+
+    response = service.answer("Can I take aspirin with ibuprofen?")
+
+    mentioned_item = next(
+        item
+        for item in response.coverage.items
+        if item.category == "mentioned_drug" and item.label == "ibuprofen"
+    )
+    medication_item = next(
+        item
+        for item in response.coverage.items
+        if item.category == "current_medication" and item.label == "ibuprofen"
+    )
+    assert mentioned_item.status == "addressed"
+    assert mentioned_item.target_rxcui == "5640"
+    assert mentioned_item.source_id is None
+    assert mentioned_item.section is None
+    assert mentioned_item.matched_evidence is None
+    assert medication_item.status == "addressed"
+    assert medication_item.target_rxcui == "5640"
+    assert medication_item.source_id is None
+    assert medication_item.section is None
+    assert medication_item.matched_evidence is None
+    assert response.answer is not None
+    assert not any(
+        "ibuprofen was recognized but not retrieved" in item
+        for item in response.answer.limitations
+    )
+
+
+def test_secondary_evidence_ignores_resolved_mentions_outside_final_state() -> None:
+    understanding = response_with_secondary_mention()
+    stray_concept = RxNormConcept(
+        rxcui="999",
+        name="eyes alive lubricating",
+        tty="BN",
+    )
+    understanding = understanding.model_copy(
+        update={
+            "resolved_drugs": [
+                *understanding.resolved_drugs,
+                ResolvedDrugMention(
+                    text="eyes",
+                    role="mentioned_drug",
+                    selected_concept=stray_concept,
+                ),
+            ]
+        }
+    )
+
+    class TrackingOpenFDAStore(OpenFDALabelStore):
+        def __init__(self) -> None:
+            super().__init__(allow_live=False, use_cache=False)
+            self.standard_calls: list[tuple[str, str | None, int]] = []
+
+        def get_label_evidence(
+            self,
+            rxcui: str,
+            fallback_name: str | None = None,
+            limit: int = 5,
+        ) -> OpenFDALabelEvidence:
+            self.standard_calls.append((rxcui, fallback_name, limit))
+            return OpenFDALabelEvidence(rxcui=rxcui, label_limit=limit)
+
+    store = TrackingOpenFDAStore()
+    evidence = build_secondary_evidence(
+        understanding,
+        DossierBuilder(
+            rxnorm_store=RxNormParquetStore(),
+            openfda_store=store,
+        ),
+        QueryAnswerParameters(interaction_lookup_limit=0),
+    )
+
+    assert [item.resolved_concept.rxcui for item in evidence] == ["5640"]
+    assert store.standard_calls == [("5640", "ibuprofen", 3)]
 
 
 def test_evidence_coverage_match_includes_source_reference() -> None:
@@ -741,6 +998,7 @@ class FakeAnswerSynthesizer:
         self,
         query: str,
         understanding: QueryUnderstandingResponse,
+        secondary_evidence: list[SecondaryDrugEvidence] | None = None,
     ) -> AnswerSynthesisResult:
         return AnswerSynthesisResult(
             answer=EvidenceAnswer(
@@ -750,6 +1008,38 @@ class FakeAnswerSynthesizer:
                 safety_note=STANDARD_SAFETY_NOTE,
             )
         )
+
+
+def fake_secondary_builder() -> DossierBuilder:
+    class FakeSecondaryOpenFDAStore(OpenFDALabelStore):
+        def __init__(self) -> None:
+            super().__init__(allow_live=False, use_cache=False)
+
+        def get_label_evidence(
+            self,
+            rxcui: str,
+            fallback_name: str | None = None,
+            limit: int = 5,
+        ) -> OpenFDALabelEvidence:
+            if rxcui == "5640":
+                evidence = secondary_evidence_fixture().label_evidence
+                assert evidence is not None
+                return evidence.model_copy(update={"label_limit": limit})
+            return OpenFDALabelEvidence(rxcui=rxcui, label_limit=limit)
+
+        def get_interaction_label_evidence(
+            self,
+            rxcui: str,
+            interaction_name: str,
+            fallback_name: str | None = None,
+            limit: int = 3,
+        ) -> OpenFDALabelEvidence:
+            return OpenFDALabelEvidence(rxcui=rxcui, label_limit=limit)
+
+    return DossierBuilder(
+        rxnorm_store=RxNormParquetStore(),
+        openfda_store=FakeSecondaryOpenFDAStore(),
+    )
 
 
 def response_with_label_evidence() -> "QueryUnderstandingResponse":
@@ -781,6 +1071,79 @@ def response_with_label_evidence() -> "QueryUnderstandingResponse":
                 },
             ),
         ),
+    )
+
+
+def response_with_secondary_mention() -> QueryUnderstandingResponse:
+    aspirin_concept = RxNormConcept(rxcui="1191", name="aspirin", tty="IN")
+    ibuprofen_concept = RxNormConcept(rxcui="5640", name="ibuprofen", tty="IN")
+    understanding = response_with_label_evidence()
+    return understanding.model_copy(
+        update={
+            "query": "Can I take aspirin with ibuprofen?",
+            "state": QueryState(
+                primary_drug="aspirin",
+                all_drugs_mentioned=["aspirin", "ibuprofen"],
+                current_medications=["ibuprofen"],
+                intent="interaction_check",
+            ),
+            "resolved_drugs": [
+                ResolvedDrugMention(
+                    text="aspirin",
+                    role="primary_drug",
+                    selected_concept=aspirin_concept,
+                ),
+                ResolvedDrugMention(
+                    text="ibuprofen",
+                    role="mentioned_drug",
+                    selected_concept=ibuprofen_concept,
+                ),
+                ResolvedDrugMention(
+                    text="ibuprofen",
+                    role="current_medication",
+                    selected_concept=ibuprofen_concept,
+                ),
+            ],
+        }
+    )
+
+
+def secondary_evidence_fixture() -> SecondaryDrugEvidence:
+    return SecondaryDrugEvidence(
+        mention_text="ibuprofen",
+        role="mentioned_drug",
+        resolved_concept=RxNormConcept(rxcui="5640", name="ibuprofen", tty="IN"),
+        label_evidence=OpenFDALabelEvidence(
+            rxcui="5640",
+            labels_found=1,
+            label_limit=3,
+            retrieval_mode="standard_secondary_label_lookup",
+            label_records=[
+                OpenFDALabelRecord(
+                    source_id="label-2",
+                    brand_names=["Ibuprofen"],
+                    generic_names=["IBUPROFEN"],
+                    manufacturer_names=["Example Manufacturer"],
+                )
+            ],
+            sections={
+                "warnings": [
+                    LabelSection(
+                        section="warnings",
+                        text="Ibuprofen warning text.",
+                        source_id="label-2",
+                    )
+                ],
+                "drug_interactions": [
+                    LabelSection(
+                        section="drug_interactions",
+                        text="Ibuprofen interaction text.",
+                        source_id="label-2",
+                    )
+                ],
+            },
+        ),
+        retrieval_modes=["standard_secondary_label_lookup"],
     )
 
 
@@ -821,3 +1184,26 @@ def test_query_extraction_extracts_multiple_patient_context_items() -> None:
     )
 
     assert result.state.patient_context == ["breastfeeding", "female", "adult"]
+
+
+def test_query_understanding_scanner_does_not_fuzzy_match_stop_words(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("QUERY_EXTRACTION_OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("QUERY_EXTRACTION_OPENAI_MODEL", raising=False)
+    service = QueryUnderstandingService(builder=offline_builder())
+
+    response = service.understand(
+        "is it a problem to use tretinoin and Benzoyl peroxide "
+        "for my acne at the same time?",
+        openfda_limit=1,
+    )
+
+    resolved_names = {
+        mention.selected_concept.name
+        for mention in response.resolved_drugs
+        if mention.selected_concept
+    }
+    assert resolved_names == {"tretinoin", "benzoyl peroxide"}
+    assert response.state.all_drugs_mentioned == ["Benzoyl peroxide", "tretinoin"]
+    assert response.state.intents == ["interaction_check", "label_context_check"]

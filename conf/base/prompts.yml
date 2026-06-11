@@ -28,15 +28,19 @@ query_extraction_revision:
         - patient_context (patient descriptors such as age group, pregnancy, breastfeeding, gender, etc.)
           > age groups should be assigned if age is mentioned or can be inferred: infant (0-1), child (2-11), adolescent (12-17), adult (18-64), senior (65+),
           > gender descriptor "male" or "female" if clearly mentioned (e.g., woman, girl, man, boy) or can be inferred (e.g., pregnant or breastfeeding)
-        - intent (the user's intent, such as asking about drug interactions, side effects, safety, etc.)
+        - intent (legacy single primary intent; set this to the first item in intents)
+        - intents (all applicable user intents, ordered by relevance)
 
         main intent categories include:
         - interaction_check (asking about drug interactions)
+          > Include interaction_check whenever the user mentions a current medication plus another medication they are asking about, even if they do not explicitly say "interaction".
+          > Include interaction_check for wording like "can I use A while taking B", "I take A, can I take B", "use A and B together", or "A and B at the same time".
         - patient_context_check (asking about drug safety in a specific patient context, such as pregnancy or breastfeeding)
         - allergy_context_check (asking about drug safety given an allergy)
         - safety_context_check (asking about drug safety in general or given a specific condition)
         - label_context_check (asking about drug information that would be found on the label, such as side effects, dosage, etc.)
         create a new intent category if the user's intent doesn't fit well into these categories.
+        A query can and often should have multiple intents, e.g. an allergy question involving two medications can include both allergy_context_check and interaction_check.
 
         drug_mentions must be a list of objects with text and role.
         Allowed roles are:
@@ -62,7 +66,8 @@ evidence_answer_synthesis:
       content: |
         You write concise educational medication evidence summaries for rx-ray.
         You are given a user query and a compact evidence packet containing extracted state,
-        RxNorm relationship context, and public FDA label text.
+        RxNorm relationship context, public FDA label text, and optional secondary-drug
+        evidence for other mentioned medications.
 
         Do not provide medical advice. Do not say that a drug is safe, unsafe, allowed,
         or recommended for the user. Do not make a yes/no decision about whether the user
@@ -71,10 +76,12 @@ evidence_answer_synthesis:
 
         Use only the provided evidence packet. If the evidence packet is missing relevant
         label text, clearly say that the retrieved evidence is limited. If the question
-        mentions multiple drugs, but the evidence packet only contains the primary drug,
-        clearly say that the answer is limited to the primary-drug evidence. Clearly refer
-        to the evidence packet as retrieved evidence or retrieved drug labels but do not refer
-        to it as "evidence packet" in the final answer.
+        mentions multiple drugs, distinguish primary-drug evidence from secondary-drug
+        evidence. If interaction-targeted label text is supplied, describe it only as
+        retrieved label text mentioning the other medication; do not claim that a clinical
+        interaction exists unless the supplied label text explicitly says so. Clearly refer
+        to the evidence packet as retrieved evidence or retrieved drug labels but do not
+        refer to it as "evidence packet" in the final answer.
 
         Return JSON only with this exact shape:
         {
@@ -98,6 +105,8 @@ evidence_answer_synthesis:
         - Include 2 to 5 bullets if relevant evidence exists.
         - Cite only source_id and section pairs that appear in label_sections.
         - Do not invent citations, labels, studies, contraindications, interactions, or patient-specific advice.
+        - Do not treat RxNorm terminology relationships as clinical interaction evidence.
+        - When secondary-drug evidence is supplied, cite primary and secondary label sections as appropriate.
         - Keep snippets short and quote-like, but do not copy long passages.
         - If no relevant label text exists, return an empty bullets array and explain the limitation.
     - role: user

@@ -35,6 +35,7 @@ export type LabelSection = {
   source_id?: string | null;
   effective_time?: string | null;
   source: string;
+  provenance_tags: string[];
 };
 
 export type OpenFDALabelRecord = {
@@ -53,6 +54,7 @@ export type OpenFDALabelRecord = {
   routes: string[];
   substance_names: string[];
   rxcuis: string[];
+  provenance_tags: string[];
 };
 
 export type OpenFDALabelEvidence = {
@@ -85,6 +87,7 @@ export type QueryState = {
   conditions: string[];
   patient_context: string[];
   intent?: string | null;
+  intents: string[];
 };
 
 export type DrugMentionRole =
@@ -142,6 +145,7 @@ export type EvidenceCoverageItem = {
   matched_evidence?: string | null;
   source_id?: string | null;
   section?: string | null;
+  target_rxcui?: string | null;
 };
 
 export type EvidenceCoverageReport = {
@@ -149,9 +153,29 @@ export type EvidenceCoverageReport = {
   summary_counts: Record<string, number>;
 };
 
+export type RxNormPairContext = {
+  primary_rxcui: string;
+  secondary_rxcui: string;
+  status: string;
+  summary: string;
+  direct_edges: RxNormEdge[];
+  shared_neighbors: RxNormConcept[];
+};
+
+export type SecondaryDrugEvidence = {
+  mention_text: string;
+  role: string;
+  resolved_concept: RxNormConcept;
+  label_evidence?: OpenFDALabelEvidence | null;
+  interaction_label_evidence?: OpenFDALabelEvidence | null;
+  retrieval_modes: string[];
+  rxnorm_context?: RxNormPairContext | null;
+};
+
 export type QueryAnswerResponse = {
   understanding: QueryUnderstandingResponse;
   answer?: EvidenceAnswer | null;
+  secondary_evidence: SecondaryDrugEvidence[];
   coverage: EvidenceCoverageReport;
   warnings: string[];
   errors: string[];

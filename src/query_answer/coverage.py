@@ -10,6 +10,7 @@ from src.query_answer.models import (
     EvidenceCoverageItem,
     EvidenceCoverageReport,
     EvidenceCoverageStatus,
+    SecondaryDrugEvidence,
 )
 from src.query_understanding.models import QueryUnderstandingResponse
 
@@ -17,13 +18,33 @@ SPECIFICITY_LIMITATION = (
     "The user query may be more specific than the resolved medication concept used "
     "for retrieval."
 )
+SECONDARY_MATCH_SECTION_PRIORITY = (
+    "drug_interactions",
+    "boxed_warning",
+    "contraindications",
+    "warnings",
+    "pregnancy",
+    "lactation",
+    "pregnancy_or_breast_feeding",
+    "indications_and_usage",
+    "adverse_reactions",
+    "use_in_specific_populations",
+)
 
 
 def build_evidence_coverage(
     understanding: QueryUnderstandingResponse,
+    secondary_evidence: list[SecondaryDrugEvidence] | None = None,
 ) -> EvidenceCoverageReport:
     """Build deterministic coverage metadata from extracted state and evidence."""
 
+    secondary_evidence = secondary_evidence or []
+    secondary_by_name = {
+        normalize(item.resolved_concept.name): item for item in secondary_evidence
+    }
+    secondary_by_mention = {
+        normalize(item.mention_text): item for item in secondary_evidence
+    }
     dossier = understanding.primary_dossier
     sections = (
         dossier.label_evidence.sections
@@ -74,6 +95,25 @@ def build_evidence_coverage(
             drug, primary_name
         ):
             continue
+        secondary = find_secondary_evidence(
+            drug,
+            secondary_by_name,
+            secondary_by_mention,
+        )
+        if secondary and has_secondary_label_text(secondary):
+            items.append(
+                EvidenceCoverageItem(
+                    category="mentioned_drug",
+                    label=drug,
+                    status="addressed",
+                    reason=(
+                        "Secondary label evidence was retrieved for "
+                        f"{secondary.resolved_concept.name}."
+                    ),
+                    target_rxcui=secondary.resolved_concept.rxcui,
+                )
+            )
+            continue
         items.append(
             EvidenceCoverageItem(
                 category="mentioned_drug",
@@ -87,6 +127,25 @@ def build_evidence_coverage(
         )
 
     for drug in unique_values(understanding.state.current_medications):
+        secondary = find_secondary_evidence(
+            drug,
+            secondary_by_name,
+            secondary_by_mention,
+        )
+        if secondary and has_secondary_label_text(secondary):
+            items.append(
+                EvidenceCoverageItem(
+                    category="current_medication",
+                    label=drug,
+                    status="addressed",
+                    reason=(
+                        "Secondary label evidence was retrieved for the "
+                        f"current medication {secondary.resolved_concept.name}."
+                    ),
+                    target_rxcui=secondary.resolved_concept.rxcui,
+                )
+            )
+            continue
         items.append(
             coverage_from_text(
                 category="current_medication",
@@ -138,16 +197,32 @@ def build_evidence_coverage(
             )
         )
 
-    if understanding.state.intent:
+    for intent in unique_values(understanding.state.intents):
+        intent_status: EvidenceCoverageStatus = "out_of_scope"
+        intent_reason = (
+            "Intent is recognized for context, but V1 does not yet "
+            "check whether the retrieved evidence fully addresses it."
+        )
+        if intent == "interaction_check":
+            if has_interaction_evidence(sections, secondary_evidence):
+                intent_status = "addressed"
+                intent_reason = (
+                    "Drug-interactions label text was retrieved for at least "
+                    "one mentioned medication. This is evidence coverage, not "
+                    "a clinical interaction conclusion."
+                )
+            else:
+                intent_status = "not_found_in_evidence"
+                intent_reason = (
+                    "No drug-interactions label text was retrieved for the "
+                    "mentioned medication pair."
+                )
         items.append(
             EvidenceCoverageItem(
                 category="intent",
-                label=understanding.state.intent,
-                status="out_of_scope",
-                reason=(
-                    "Intent is recognized for context, but V1 does not yet "
-                    "check whether the retrieved evidence fully addresses it."
-                ),
+                label=intent,
+                status=intent_status,
+                reason=intent_reason,
             )
         )
 
@@ -207,6 +282,64 @@ def add_coverage_limitations(
         )
 
     return answer.model_copy(update={"limitations": limitations})
+
+
+def find_secondary_evidence(
+    label: str,
+    secondary_by_name: dict[str, SecondaryDrugEvidence],
+    secondary_by_mention: dict[str, SecondaryDrugEvidence],
+) -> SecondaryDrugEvidence | None:
+    key = normalize(label)
+    return secondary_by_mention.get(key) or secondary_by_name.get(key)
+
+
+def has_secondary_label_text(item: SecondaryDrugEvidence) -> bool:
+    evidence = item.label_evidence
+    if evidence is None:
+        return False
+    return any(entries for entries in evidence.sections.values())
+
+
+def first_secondary_label_match(
+    item: SecondaryDrugEvidence,
+) -> CoverageEvidenceMatch | None:
+    evidence = item.label_evidence
+    if evidence is None:
+        return None
+    section_names = [
+        *SECONDARY_MATCH_SECTION_PRIORITY,
+        *[
+            name
+            for name in evidence.sections
+            if name not in SECONDARY_MATCH_SECTION_PRIORITY
+        ],
+    ]
+    for section_name in section_names:
+        entry = next(iter(evidence.sections.get(section_name, [])), None)
+        if entry is None:
+            continue
+        return CoverageEvidenceMatch(
+            snippet=section_preview(entry.text),
+            source_id=entry.source_id,
+            section=section_name,
+        )
+    return None
+
+
+def has_interaction_evidence(
+    primary_sections: dict[str, list[LabelSection]],
+    secondary_evidence: list[SecondaryDrugEvidence],
+) -> bool:
+    if primary_sections.get("drug_interactions"):
+        return True
+    for item in secondary_evidence:
+        evidence = item.label_evidence
+        if evidence and evidence.sections.get("drug_interactions"):
+            return True
+        interaction = item.interaction_label_evidence
+        if interaction and interaction.sections.get("drug_interactions"):
+            return True
+    return False
 
 
 def coverage_from_text(
@@ -390,6 +523,16 @@ def evidence_snippet(text: str, match_start: int, match_end: int) -> str:
 
     snippet = " ".join(text[start:end].split())
     return f"...{snippet}..."
+
+
+def section_preview(text: str, max_chars: int = 180) -> str:
+    cleaned = " ".join(text.split())
+    if len(cleaned) <= max_chars:
+        return f"...{cleaned}..."
+    end = cleaned.rfind(" ", 0, max_chars)
+    if end == -1:
+        end = max_chars
+    return f"...{cleaned[:end].strip()}..."
 
 
 def specificity_differs(primary: str, resolved: str) -> bool:

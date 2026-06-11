@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
+import { proxyJsonResponse } from "@/app/api/_proxy";
 
 const backendUrl = process.env.BACKEND_URL ?? "http://localhost:8000";
 
@@ -13,11 +14,5 @@ export async function POST(request: NextRequest) {
     cache: "no-store",
   });
 
-  const payload = await response.json();
-
-  if (!response.ok) {
-    return NextResponse.json(payload, { status: response.status });
-  }
-
-  return NextResponse.json(payload);
+  return proxyJsonResponse(response);
 }
