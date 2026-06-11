@@ -145,6 +145,7 @@ export type EvidenceCoverageItem = {
   matched_evidence?: string | null;
   source_id?: string | null;
   section?: string | null;
+  target_rxcui?: string | null;
 };
 
 export type EvidenceCoverageReport = {

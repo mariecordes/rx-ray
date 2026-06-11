@@ -868,17 +868,68 @@ def test_evidence_coverage_marks_secondary_as_addressed() -> None:
         if item.category == "current_medication" and item.label == "ibuprofen"
     )
     assert mentioned_item.status == "addressed"
-    assert mentioned_item.source_id == "label-2"
-    assert mentioned_item.section == "drug_interactions"
-    assert mentioned_item.matched_evidence is not None
+    assert mentioned_item.target_rxcui == "5640"
+    assert mentioned_item.source_id is None
+    assert mentioned_item.section is None
+    assert mentioned_item.matched_evidence is None
     assert medication_item.status == "addressed"
-    assert medication_item.source_id == "label-2"
-    assert medication_item.section == "drug_interactions"
+    assert medication_item.target_rxcui == "5640"
+    assert medication_item.source_id is None
+    assert medication_item.section is None
+    assert medication_item.matched_evidence is None
     assert response.answer is not None
     assert not any(
         "ibuprofen was recognized but not retrieved" in item
         for item in response.answer.limitations
     )
+
+
+def test_secondary_evidence_ignores_resolved_mentions_outside_final_state() -> None:
+    understanding = response_with_secondary_mention()
+    stray_concept = RxNormConcept(
+        rxcui="999",
+        name="eyes alive lubricating",
+        tty="BN",
+    )
+    understanding = understanding.model_copy(
+        update={
+            "resolved_drugs": [
+                *understanding.resolved_drugs,
+                ResolvedDrugMention(
+                    text="eyes",
+                    role="mentioned_drug",
+                    selected_concept=stray_concept,
+                ),
+            ]
+        }
+    )
+
+    class TrackingOpenFDAStore(OpenFDALabelStore):
+        def __init__(self) -> None:
+            super().__init__(allow_live=False, use_cache=False)
+            self.standard_calls: list[tuple[str, str | None, int]] = []
+
+        def get_label_evidence(
+            self,
+            rxcui: str,
+            fallback_name: str | None = None,
+            limit: int = 5,
+        ) -> OpenFDALabelEvidence:
+            self.standard_calls.append((rxcui, fallback_name, limit))
+            return OpenFDALabelEvidence(rxcui=rxcui, label_limit=limit)
+
+    store = TrackingOpenFDAStore()
+    evidence = build_secondary_evidence(
+        understanding,
+        DossierBuilder(
+            rxnorm_store=RxNormParquetStore(),
+            openfda_store=store,
+        ),
+        QueryAnswerParameters(interaction_lookup_limit=0),
+    )
+
+    assert [item.resolved_concept.rxcui for item in evidence] == ["5640"]
+    assert store.standard_calls == [("5640", "ibuprofen", 3)]
 
 
 def test_evidence_coverage_match_includes_source_reference() -> None:

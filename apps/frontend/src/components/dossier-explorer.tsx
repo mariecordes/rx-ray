@@ -199,6 +199,10 @@ type DisplayEvidenceModel = {
   selectedNodeMatchCount: number;
 };
 
+type EvidenceCoverageTarget = {
+  rxcui: string;
+};
+
 type GroupedLabelSection = {
   key: string;
   sourceKey?: string;
@@ -215,6 +219,15 @@ function hasInteractionTargetedTag(
   return Boolean(
     item.provenance_tags?.includes("interaction_targeted_lookup")
   );
+}
+
+function sortEvidenceSources(records: DisplaySourceRecord[]) {
+  return [...records].sort((left, right) => {
+    if (left.isSelectedNodeOnly !== right.isSelectedNodeOnly) {
+      return left.isSelectedNodeOnly ? -1 : 1;
+    }
+    return left.sourceNumber - right.sourceNumber;
+  });
 }
 
 function recordKey(
@@ -313,13 +326,13 @@ function buildDisplayEvidenceModel(
     }
   });
 
-  const records = [
+  const records = sortEvidenceSources([
     ...selectedOnlyItems,
     ...baselineItems.map((item) => ({
       ...item,
       isSelectedNodeMatch: matchedBaselineKeys.has(item.key),
     })),
-  ].map((item, index) => ({
+  ]).map((item, index) => ({
     ...item,
     sourceNumber: index + 1,
   }));
@@ -412,7 +425,14 @@ function groupLabelSectionsBySource(
     });
   });
 
-  return Array.from(groups.values());
+  return Array.from(groups.values()).sort((left, right) => {
+    const leftSourceNumber = left.source?.sourceNumber ?? Number.MAX_SAFE_INTEGER;
+    const rightSourceNumber = right.source?.sourceNumber ?? Number.MAX_SAFE_INTEGER;
+    if (leftSourceNumber !== rightSourceNumber) {
+      return leftSourceNumber - rightSourceNumber;
+    }
+    return left.key.localeCompare(right.key);
+  });
 }
 
 export function DossierExplorer() {
@@ -433,11 +453,26 @@ export function AskQuestionExperience() {
   const [isEvidenceOpen, setIsEvidenceOpen] = useState(false);
   const [highlightCitation, setHighlightCitation] =
     useState<EvidenceCitation | null>(null);
+  const [highlightEvidenceRxcui, setHighlightEvidenceRxcui] =
+    useState<string | null>(null);
   const supportingEvidenceRef = useRef<HTMLDivElement>(null);
   const queryRequestRef = useRef(0);
 
   function handleAnswerCitationClick(citation: EvidenceCitation) {
     setHighlightCitation(citation);
+    setHighlightEvidenceRxcui(null);
+    setIsEvidenceOpen(true);
+    window.requestAnimationFrame(() => {
+      supportingEvidenceRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    });
+  }
+
+  function handleCoverageTargetClick(target: EvidenceCoverageTarget) {
+    setHighlightEvidenceRxcui(target.rxcui);
+    setHighlightCitation(null);
     setIsEvidenceOpen(true);
     window.requestAnimationFrame(() => {
       supportingEvidenceRef.current?.scrollIntoView({
@@ -459,6 +494,7 @@ export function AskQuestionExperience() {
     setDossier(null);
     setIsEvidenceOpen(false);
     setHighlightCitation(null);
+    setHighlightEvidenceRxcui(null);
 
     try {
       const understanding = await requestJsonWithRetry<QueryUnderstandingResponse>(
@@ -486,6 +522,7 @@ export function AskQuestionExperience() {
         setDossier(understanding.primary_dossier);
         setIsEvidenceOpen(false);
         setHighlightCitation(null);
+        setHighlightEvidenceRxcui(null);
       } else {
         setIsUnderstandingLoading(false);
         setIsAnswerLoading(false);
@@ -525,6 +562,7 @@ export function AskQuestionExperience() {
         setDossier(null);
         setIsEvidenceOpen(false);
         setHighlightCitation(null);
+        setHighlightEvidenceRxcui(null);
       }
     } catch (err) {
       if (queryRequestRef.current !== requestId) {
@@ -553,6 +591,7 @@ export function AskQuestionExperience() {
         question={question}
         result={queryUnderstanding}
         onAnswerCitationClick={handleAnswerCitationClick}
+        onCoverageTargetClick={handleCoverageTargetClick}
       />
 
       {dossier && queryAnswer && !isAnswerLoading && !isUnderstandingLoading ? (
@@ -560,10 +599,12 @@ export function AskQuestionExperience() {
           dossier={dossier}
           evidenceRef={supportingEvidenceRef}
           highlightCitation={highlightCitation}
+          highlightRxcui={highlightEvidenceRxcui}
           isOpen={isEvidenceOpen}
           secondaryEvidence={queryAnswer.secondary_evidence ?? []}
           onOpenChange={setIsEvidenceOpen}
           onCitationHandled={() => setHighlightCitation(null)}
+          onRxcuiHandled={() => setHighlightEvidenceRxcui(null)}
         />
       ) : null}
     </div>
@@ -678,18 +719,22 @@ function SupportingEvidence({
   dossier,
   evidenceRef,
   highlightCitation,
+  highlightRxcui,
   isOpen,
   secondaryEvidence,
   onCitationHandled,
   onOpenChange,
+  onRxcuiHandled,
 }: {
   dossier: DrugDossier;
   evidenceRef: RefObject<HTMLDivElement | null>;
   highlightCitation: EvidenceCitation | null;
+  highlightRxcui: string | null;
   isOpen: boolean;
   secondaryEvidence: SecondaryDrugEvidence[];
   onCitationHandled: () => void;
   onOpenChange: (isOpen: boolean) => void;
+  onRxcuiHandled: () => void;
 }) {
   const evidenceTabs = useMemo(
     () => buildSupportingEvidenceTabs(dossier, secondaryEvidence),
@@ -712,6 +757,17 @@ function SupportingEvidence({
       setActiveTabKey(matchingTab.key);
     }
   }, [evidenceTabs, highlightCitation]);
+
+  useEffect(() => {
+    if (!highlightRxcui) {
+      return;
+    }
+    const matchingTab = evidenceTabs.find((tab) => tab.rxcui === highlightRxcui);
+    if (matchingTab) {
+      setActiveTabKey(matchingTab.key);
+    }
+    onRxcuiHandled();
+  }, [evidenceTabs, highlightRxcui, onRxcuiHandled]);
 
   const activeTab = evidenceTabs.find((tab) => tab.key === activeTabKey)
     ?? evidenceTabs[0];
@@ -797,12 +853,14 @@ type SupportingEvidenceTab =
       key: "primary";
       kind: "primary";
       label: string;
+      rxcui?: string;
       sourceIds: Set<string>;
     }
   | {
       key: string;
       kind: "secondary";
       label: string;
+      rxcui?: string;
       sourceIds: Set<string>;
       evidence: SecondaryDrugEvidence;
     };
@@ -819,12 +877,14 @@ function buildSupportingEvidenceTabs(
       key: "primary",
       kind: "primary",
       label: primaryLabel,
+      rxcui: dossier.resolved_drug?.rxcui,
       sourceIds: labelEvidenceSourceIds(dossier.label_evidence ?? null),
     },
     ...secondaryEvidence.map((evidence) => ({
       key: `secondary-${evidence.resolved_concept.rxcui}`,
       kind: "secondary" as const,
       label: displayGraphNodeName(evidence.resolved_concept.name),
+      rxcui: evidence.resolved_concept.rxcui,
       sourceIds: labelEvidenceSourceIds(evidence.label_evidence ?? null),
       evidence,
     })),
@@ -1211,6 +1271,7 @@ function QueryUnderstandingPanel({
   isUnderstandingLoading,
   onQuestionChange,
   onAnswerCitationClick,
+  onCoverageTargetClick,
   onSubmit,
   question,
   result,
@@ -1221,6 +1282,7 @@ function QueryUnderstandingPanel({
   isUnderstandingLoading: boolean;
   onQuestionChange: (value: string) => void;
   onAnswerCitationClick: (citation: EvidenceCitation) => void;
+  onCoverageTargetClick: (target: EvidenceCoverageTarget) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   question: string;
   result: QueryUnderstandingResponse | null;
@@ -1304,6 +1366,7 @@ function QueryUnderstandingPanel({
               <EvidenceAnswerResult
                 response={answerResponse}
                 onCitationClick={onAnswerCitationClick}
+                onCoverageTargetClick={onCoverageTargetClick}
               />
             ) : null}
           </CardContent>
@@ -1315,9 +1378,11 @@ function QueryUnderstandingPanel({
 
 function EvidenceAnswerResult({
   onCitationClick,
+  onCoverageTargetClick,
   response,
 }: {
   onCitationClick: (citation: EvidenceCitation) => void;
+  onCoverageTargetClick: (target: EvidenceCoverageTarget) => void;
   response: QueryAnswerResponse;
 }) {
   const { answer, understanding } = response;
@@ -1354,6 +1419,7 @@ function EvidenceAnswerResult({
       coverage={response.coverage ?? { items: [], summary_counts: {} }}
       errors={synthesisErrors}
       onCitationClick={onCitationClick}
+      onCoverageTargetClick={onCoverageTargetClick}
       secondaryEvidence={response.secondary_evidence ?? []}
       understanding={understanding}
       warnings={synthesisWarnings}
@@ -1366,6 +1432,7 @@ function EvidenceAnswerCard({
   coverage,
   errors,
   onCitationClick,
+  onCoverageTargetClick,
   secondaryEvidence,
   understanding,
   warnings,
@@ -1374,6 +1441,7 @@ function EvidenceAnswerCard({
   coverage: EvidenceCoverageReport;
   errors: string[];
   onCitationClick: (citation: EvidenceCitation) => void;
+  onCoverageTargetClick: (target: EvidenceCoverageTarget) => void;
   secondaryEvidence: SecondaryDrugEvidence[];
   understanding: QueryUnderstandingResponse;
   warnings: string[];
@@ -1486,6 +1554,7 @@ function EvidenceAnswerCard({
           <EvidenceCoverageList
             coverage={coverage}
             onCitationClick={onCitationClick}
+            onCoverageTargetClick={onCoverageTargetClick}
           />
         </AnswerSection>
       ) : null}
@@ -1513,9 +1582,11 @@ function EvidenceAnswerCard({
 function EvidenceCoverageList({
   coverage,
   onCitationClick,
+  onCoverageTargetClick,
 }: {
   coverage: EvidenceCoverageReport;
   onCitationClick: (citation: EvidenceCitation) => void;
+  onCoverageTargetClick: (target: EvidenceCoverageTarget) => void;
 }) {
   const groupedItems = useMemo(() => {
     const groups = new Map<string, EvidenceCoverageItem[]>();
@@ -1592,6 +1663,7 @@ function EvidenceCoverageList({
                     <CoverageReason
                       item={item}
                       onCitationClick={onCitationClick}
+                      onCoverageTargetClick={onCoverageTargetClick}
                     />
                   </div>
                 </div>
@@ -1607,10 +1679,26 @@ function EvidenceCoverageList({
 function CoverageReason({
   item,
   onCitationClick,
+  onCoverageTargetClick,
 }: {
   item: EvidenceCoverageItem;
   onCitationClick: (citation: EvidenceCitation) => void;
+  onCoverageTargetClick: (target: EvidenceCoverageTarget) => void;
 }) {
+  if (!item.matched_evidence && item.target_rxcui) {
+    return (
+      <p>
+        <button
+          type="button"
+          onClick={() => onCoverageTargetClick({ rxcui: item.target_rxcui! })}
+          className="inline border-b border-dotted border-slate-400 text-left hover:text-[#371E8F]"
+        >
+          {item.reason}
+        </button>
+      </p>
+    );
+  }
+
   if (!item.matched_evidence) {
     return <p>{item.reason}</p>;
   }
@@ -2041,6 +2129,9 @@ function Overview({
               <div className="flex flex-wrap gap-2">
                 <Badge>RXCUI {dossier.resolved_drug.rxcui}</Badge>
                 <Badge>{displayRxNormType(dossier.resolved_drug.tty)}</Badge>
+                {variant === "embedded" ? (
+                  <Badge>{displayMentionRole("primary_drug")}</Badge>
+                ) : null}
               </div>
             </div>
           ) : (
@@ -2291,7 +2382,7 @@ function LabelEvidencePanel({
                           </Badge>
                           {!source.isSelectedNodeOnly ? (
                             <Badge className={searchSpecificBadgeClasses}>
-                              Search-specific
+                              Medication-specific
                             </Badge>
                           ) : null}
                           {source.isSelectedNodeOnly ||
@@ -2302,7 +2393,7 @@ function LabelEvidencePanel({
                           ) : null}
                           {source.isInteractionTargeted ? (
                             <Badge className={interactionSpecificBadgeClasses}>
-                              Interaction-targeted
+                              Interaction-specific
                             </Badge>
                           ) : null}
                         </div>
@@ -2416,11 +2507,6 @@ function LabelEvidencePanel({
                             ) : null}
                             {manufacturerName ? (
                               <span>· {manufacturerName}</span>
-                            ) : null}
-                            {entry.isInteractionTargeted ? (
-                              <Badge className={interactionSpecificBadgeClasses}>
-                                Interaction-targeted
-                              </Badge>
                             ) : null}
                           </div>
                           <p

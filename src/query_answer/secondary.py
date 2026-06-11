@@ -11,6 +11,7 @@ from src.dossier.models import (
 from src.query_answer.config import QueryAnswerParameters
 from src.query_answer.models import RxNormPairContext, SecondaryDrugEvidence
 from src.query_understanding.models import (
+    QueryState,
     QueryUnderstandingResponse,
     ResolvedDrugMention,
 )
@@ -34,6 +35,7 @@ def build_secondary_evidence(
 
     secondary_mentions = select_secondary_mentions(
         understanding.resolved_drugs,
+        understanding.state,
         primary,
         max_items=parameters.max_secondary_drugs,
     )
@@ -109,15 +111,19 @@ def build_secondary_evidence(
 
 def select_secondary_mentions(
     resolved_drugs: list[ResolvedDrugMention],
+    state: QueryState,
     primary: RxNormConcept,
     *,
     max_items: int,
 ) -> list[ResolvedDrugMention]:
     selected: list[ResolvedDrugMention] = []
     seen: set[str] = {primary.rxcui}
+    allowed_mentions = state_drug_keys(state)
     for mention in resolved_drugs:
         concept = mention.selected_concept
         if mention.role not in SECONDARY_ROLES or concept is None:
+            continue
+        if not mention_matches_state(mention, allowed_mentions):
             continue
         if concept.rxcui in seen:
             continue
@@ -126,6 +132,30 @@ def select_secondary_mentions(
         if len(selected) >= max_items:
             break
     return selected
+
+
+def state_drug_keys(state: QueryState) -> set[str]:
+    return {
+        normalized
+        for value in [*state.all_drugs_mentioned, *state.current_medications]
+        if (normalized := normalize_drug_key(value))
+    }
+
+
+def mention_matches_state(
+    mention: ResolvedDrugMention,
+    allowed_mentions: set[str],
+) -> bool:
+    concept = mention.selected_concept
+    candidates = [
+        mention.text,
+        concept.name if concept else "",
+    ]
+    return any(normalize_drug_key(value) in allowed_mentions for value in candidates)
+
+
+def normalize_drug_key(value: str) -> str:
+    return " ".join(value.casefold().replace("-", " ").split())
 
 
 def rxnorm_pair_context(

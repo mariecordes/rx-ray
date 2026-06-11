@@ -101,7 +101,6 @@ def build_evidence_coverage(
             secondary_by_mention,
         )
         if secondary and has_secondary_label_text(secondary):
-            match = first_secondary_label_match(secondary)
             items.append(
                 EvidenceCoverageItem(
                     category="mentioned_drug",
@@ -111,9 +110,7 @@ def build_evidence_coverage(
                         "Secondary label evidence was retrieved for "
                         f"{secondary.resolved_concept.name}."
                     ),
-                    matched_evidence=match.snippet if match else None,
-                    source_id=match.source_id if match else None,
-                    section=match.section if match else None,
+                    target_rxcui=secondary.resolved_concept.rxcui,
                 )
             )
             continue
@@ -136,7 +133,6 @@ def build_evidence_coverage(
             secondary_by_mention,
         )
         if secondary and has_secondary_label_text(secondary):
-            match = first_secondary_label_match(secondary)
             items.append(
                 EvidenceCoverageItem(
                     category="current_medication",
@@ -146,9 +142,7 @@ def build_evidence_coverage(
                         "Secondary label evidence was retrieved for the "
                         f"current medication {secondary.resolved_concept.name}."
                     ),
-                    matched_evidence=match.snippet if match else None,
-                    source_id=match.source_id if match else None,
-                    section=match.section if match else None,
+                    target_rxcui=secondary.resolved_concept.rxcui,
                 )
             )
             continue

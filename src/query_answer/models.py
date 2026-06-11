@@ -50,6 +50,7 @@ class EvidenceCoverageItem(BaseModel):
     matched_evidence: str | None = None
     source_id: str | None = None
     section: str | None = None
+    target_rxcui: str | None = None
 
 
 class EvidenceCoverageReport(BaseModel):
