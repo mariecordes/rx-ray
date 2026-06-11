@@ -23,6 +23,10 @@ import {
 
 import { EvidenceMapSection } from "@/components/question-evidence-map-section";
 import { RxNormKnowledgeGraph } from "@/components/rxnorm-knowledge-graph";
+import {
+  DEMO_QUERY,
+  demoQueryAnswer,
+} from "@/components/demo-query-answer-fixture";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -459,6 +463,7 @@ export function AskQuestionExperience() {
   const [queryError, setQueryError] = useState<string | null>(null);
   const [dossier, setDossier] = useState<DrugDossier | null>(null);
   const [isEvidenceOpen, setIsEvidenceOpen] = useState(false);
+  const [isDemoMode, setIsDemoMode] = useState(false);
   const [highlightCitation, setHighlightCitation] =
     useState<EvidenceCitation | null>(null);
   const [highlightEvidenceRxcui, setHighlightEvidenceRxcui] =
@@ -503,6 +508,21 @@ export function AskQuestionExperience() {
     setIsEvidenceOpen(false);
     setHighlightCitation(null);
     setHighlightEvidenceRxcui(null);
+
+    if (isDemoMode) {
+      setQuestion(DEMO_QUERY);
+      window.setTimeout(() => {
+        if (queryRequestRef.current !== requestId) {
+          return;
+        }
+        setQueryUnderstanding(demoQueryAnswer.understanding);
+        setQueryAnswer(demoQueryAnswer);
+        setDossier(demoQueryAnswer.understanding.primary_dossier ?? null);
+        setIsUnderstandingLoading(false);
+        setIsAnswerLoading(false);
+      }, 250);
+      return;
+    }
 
     try {
       const understanding = await requestJsonWithRetry<QueryUnderstandingResponse>(
@@ -595,9 +615,16 @@ export function AskQuestionExperience() {
         isAnswerLoading={isAnswerLoading}
         isUnderstandingLoading={isUnderstandingLoading}
         onQuestionChange={setQuestion}
+        onDemoModeChange={(enabled) => {
+          setIsDemoMode(enabled);
+          if (enabled) {
+            setQuestion(DEMO_QUERY);
+          }
+        }}
         onSubmit={handleQuestionSubmit}
         question={question}
         result={queryUnderstanding}
+        isDemoMode={isDemoMode}
         onAnswerCitationClick={handleAnswerCitationClick}
         onCoverageTargetClick={handleCoverageTargetClick}
       />
@@ -1286,22 +1313,26 @@ function DossierResults({
 function QueryUnderstandingPanel({
   answerResponse,
   error,
+  isDemoMode,
   isAnswerLoading,
   isUnderstandingLoading,
   onQuestionChange,
   onAnswerCitationClick,
   onCoverageTargetClick,
+  onDemoModeChange,
   onSubmit,
   question,
   result,
 }: {
   answerResponse: QueryAnswerResponse | null;
   error: string | null;
+  isDemoMode: boolean;
   isAnswerLoading: boolean;
   isUnderstandingLoading: boolean;
   onQuestionChange: (value: string) => void;
   onAnswerCitationClick: (citation: EvidenceCitation) => void;
   onCoverageTargetClick: (target: EvidenceCoverageTarget) => void;
+  onDemoModeChange: (enabled: boolean) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   question: string;
   result: QueryUnderstandingResponse | null;
@@ -1351,6 +1382,21 @@ function QueryUnderstandingPanel({
               )}
             </Button>
           </form>
+          <div className="mx-auto mt-3 flex max-w-4xl flex-wrap items-center justify-between gap-2 text-sm text-slate-500">
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={isDemoMode}
+                onChange={(event) => onDemoModeChange(event.target.checked)}
+                className="size-4 rounded border-slate-300 text-[#371E8F] focus:ring-[#371E8F]"
+              />
+              Demo mode
+            </label>
+            <span className="text-xs leading-5">
+              Uses a local fixture for the cetirizine, ibuprofen, and aspirin
+              query. No LLM or live API calls.
+            </span>
+          </div>
         </CardContent>
       </Card>
 
