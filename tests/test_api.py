@@ -24,7 +24,12 @@ from src.dossier.openfda_store import OpenFDALabelStore
 from src.dossier.rxnorm_store import RxNormParquetStore
 from src.query_answer.config import QueryAnswerParameters
 from src.query_answer.coverage import evidence_snippet
-from src.query_answer.models import EvidenceAnswer, SecondaryDrugEvidence
+from src.query_answer.evidence_map import build_question_evidence_map
+from src.query_answer.models import (
+    EvidenceAnswer,
+    RxNormPairContext,
+    SecondaryDrugEvidence,
+)
 from src.query_answer.secondary import build_secondary_evidence
 from src.query_answer.service import QueryAnswerService
 from src.query_answer.synthesizer import (
@@ -664,6 +669,25 @@ def test_query_answer_response_includes_evidence_coverage() -> None:
     )
 
 
+def test_query_answer_response_includes_question_evidence_map() -> None:
+    understanding = response_with_label_evidence()
+    service = QueryAnswerService(
+        builder=offline_builder(),
+        understanding_service=FakeUnderstandingService(understanding),
+        synthesizer=FakeAnswerSynthesizer(),
+    )
+
+    response = service.answer("Can I take aspirin?")
+
+    node_kinds = {node.kind for node in response.question_evidence_map.nodes}
+    edge_kinds = {edge.kind for edge in response.question_evidence_map.edges}
+    assert {"question", "query_concept", "resolved_medication", "label_source"} <= (
+        node_kinds
+    )
+    assert {"has_role", "resolved_as", "has_label_source"} <= edge_kinds
+    assert response.question_evidence_map.summary_counts["nodes"] >= 4
+
+
 def test_query_answer_response_includes_secondary_evidence() -> None:
     understanding = response_with_secondary_mention()
     service = QueryAnswerService(
@@ -680,6 +704,87 @@ def test_query_answer_response_includes_secondary_evidence() -> None:
     assert secondary.label_evidence is not None
     assert secondary.label_evidence.labels_found == 1
     assert "standard_secondary_label_lookup" in secondary.retrieval_modes
+    assert any(
+        node.kind == "resolved_medication" and node.rxcui == "5640"
+        for node in response.question_evidence_map.nodes
+    )
+
+
+def test_question_evidence_map_marks_interaction_targeted_label_sections() -> None:
+    fixture = secondary_evidence_fixture()
+    assert fixture.label_evidence is not None
+    tagged_evidence = fixture.label_evidence.model_copy(
+        update={
+            "label_records": [
+                record.model_copy(
+                    update={"provenance_tags": ["interaction_targeted_lookup"]}
+                )
+                for record in fixture.label_evidence.label_records
+            ],
+            "sections": {
+                "drug_interactions": [
+                    section.model_copy(
+                        update={"provenance_tags": ["interaction_targeted_lookup"]}
+                    )
+                    for section in fixture.label_evidence.sections[
+                        "drug_interactions"
+                    ]
+                ]
+            },
+        }
+    )
+    secondary = fixture.model_copy(
+        update={
+            "label_evidence": tagged_evidence,
+            "retrieval_modes": ["interaction_targeted_lookup"],
+        }
+    )
+
+    evidence_map = build_question_evidence_map(
+        response_with_secondary_mention(),
+        secondary_evidence=[secondary],
+    )
+
+    interaction_edges = [
+        edge
+        for edge in evidence_map.edges
+        if edge.kind == "mentions_in_interaction_section"
+    ]
+    assert interaction_edges
+    assert all(edge.section == "drug_interactions" for edge in interaction_edges)
+    edge_text = " ".join(
+        value for edge in evidence_map.edges for value in [edge.kind, edge.label]
+    )
+    assert "interacts_with" not in edge_text
+    assert "clinical interaction" not in edge_text.lower()
+
+
+def test_question_evidence_map_includes_rxnorm_context_without_clinical_claim() -> None:
+    secondary = secondary_evidence_fixture().model_copy(
+        update={
+            "rxnorm_context": RxNormPairContext(
+                primary_rxcui="1191",
+                secondary_rxcui="5640",
+                status="shared_neighbor",
+                summary=(
+                    "The primary and secondary concepts share nearby RxNorm "
+                    "terminology neighbors. This is terminology context, not "
+                    "clinical interaction evidence."
+                ),
+            )
+        }
+    )
+    evidence_map = build_question_evidence_map(
+        response_with_secondary_mention(),
+        secondary_evidence=[secondary],
+    )
+
+    context_edges = [
+        edge for edge in evidence_map.edges if edge.kind == "has_terminology_context"
+    ]
+    assert context_edges
+    assert all(edge.label == "Terminology context only" for edge in context_edges)
+    assert all(edge.kind != "interacts_with" for edge in evidence_map.edges)
 
 
 def test_secondary_evidence_triggers_interaction_targeted_lookups() -> None:

@@ -71,6 +71,44 @@ class RxNormPairContext(BaseModel):
     shared_neighbors: list[RxNormConcept] = Field(default_factory=list)
 
 
+class QuestionEvidenceMapNode(BaseModel):
+    """A node in the question-level evidence map."""
+
+    id: str
+    kind: str
+    label: str
+    subtitle: str | None = None
+    role: str | None = None
+    rxcui: str | None = None
+    source_id: str | None = None
+    section: str | None = None
+    evidence_scope: str | None = None
+    tags: list[str] = Field(default_factory=list)
+
+
+class QuestionEvidenceMapEdge(BaseModel):
+    """A careful provenance edge in the question-level evidence map."""
+
+    id: str
+    source: str
+    target: str
+    kind: str
+    label: str
+    rxcui: str | None = None
+    source_id: str | None = None
+    section: str | None = None
+    evidence_scope: str | None = None
+    tags: list[str] = Field(default_factory=list)
+
+
+class QuestionEvidenceMap(BaseModel):
+    """Request-time map connecting extracted state to retrieved evidence."""
+
+    nodes: list[QuestionEvidenceMapNode] = Field(default_factory=list)
+    edges: list[QuestionEvidenceMapEdge] = Field(default_factory=list)
+    summary_counts: dict[str, int] = Field(default_factory=dict)
+
+
 class SecondaryDrugEvidence(BaseModel):
     """Compact evidence bundle for a non-primary resolved medication."""
 
@@ -89,6 +127,9 @@ class QueryAnswerResponse(BaseModel):
     understanding: QueryUnderstandingResponse
     answer: EvidenceAnswer | None = None
     secondary_evidence: list[SecondaryDrugEvidence] = Field(default_factory=list)
+    question_evidence_map: QuestionEvidenceMap = Field(
+        default_factory=QuestionEvidenceMap
+    )
     coverage: EvidenceCoverageReport = Field(default_factory=EvidenceCoverageReport)
     warnings: list[str] = Field(default_factory=list)
     errors: list[str] = Field(default_factory=list)
