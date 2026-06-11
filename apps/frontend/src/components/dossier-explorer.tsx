@@ -94,6 +94,13 @@ function displayGenericName(name: string) {
   return sentenceCase(name);
 }
 
+function displayProductType(value: string) {
+  if (value.toLowerCase() === "human otc drug") {
+    return "Human OTC Drug";
+  }
+  return sentenceCase(value);
+}
+
 function sentenceCase(value: string) {
   return value
     .toLowerCase()
@@ -1300,9 +1307,9 @@ function QueryUnderstandingPanel({
             <CardTitle>Ask a Question</CardTitle>
             <InfoTooltip text="This extracts a structured medication state from your question, resolves drug mentions through RxNorm, and loads the primary drug into the explorer below. It does not generate medical advice." />
           </div>
-          <p className="mx-auto mt-1 max-w-2xl text-sm leading-6 text-slate-500">
+          <p className="mx-auto mt-1 max-w-1xl text-center text-sm leading-6 text-slate-500">
             What can we help you explore? Ask in plain language, then inspect
-            what the system understood.
+            the generated response and its evidence.
           </p>
           <form
             onSubmit={onSubmit}
@@ -2417,7 +2424,7 @@ function LabelEvidencePanel({
                             ) : null}
                             {route && productType ? <span> · </span> : null}
                             {productType ? (
-                              <span>{sentenceCase(productType)}</span>
+                              <span>{displayProductType(productType)}</span>
                             ) : null}
                           </div>
                         ) : null}
