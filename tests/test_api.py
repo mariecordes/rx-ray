@@ -710,7 +710,7 @@ def test_query_answer_response_includes_secondary_evidence() -> None:
     )
 
 
-def test_question_evidence_map_marks_interaction_targeted_label_sections() -> None:
+def test_question_evidence_map_marks_interaction_targeted_label_sources() -> None:
     fixture = secondary_evidence_fixture()
     assert fixture.label_evidence is not None
     tagged_evidence = fixture.label_evidence.model_copy(
@@ -748,15 +748,79 @@ def test_question_evidence_map_marks_interaction_targeted_label_sections() -> No
     interaction_edges = [
         edge
         for edge in evidence_map.edges
-        if edge.kind == "mentions_in_interaction_section"
+        if edge.kind == "interaction_lookup_source"
     ]
     assert interaction_edges
-    assert all(edge.section == "drug_interactions" for edge in interaction_edges)
+    assert all(edge.source_id == "label-2" for edge in interaction_edges)
+    assert all(edge.section is None for edge in interaction_edges)
+    assert any(
+        edge.kind == "has_label_section" and edge.section == "drug_interactions"
+        for edge in evidence_map.edges
+    )
     edge_text = " ".join(
         value for edge in evidence_map.edges for value in [edge.kind, edge.label]
     )
     assert "interacts_with" not in edge_text
     assert "clinical interaction" not in edge_text.lower()
+
+
+def test_question_evidence_map_shares_interaction_label_source_across_medications() -> None:
+    interaction_evidence = OpenFDALabelEvidence(
+        rxcui="5640",
+        labels_found=1,
+        label_limit=3,
+        retrieval_mode="interaction_targeted_lookup",
+        label_records=[
+            OpenFDALabelRecord(
+                source_id="label-1",
+                brand_names=["Aspirin"],
+                generic_names=["ASPIRIN"],
+                provenance_tags=["interaction_targeted_lookup"],
+            )
+        ],
+        sections={
+            "drug_interactions": [
+                LabelSection(
+                    section="drug_interactions",
+                    text="Aspirin label text mentioning ibuprofen.",
+                    source_id="label-1",
+                    provenance_tags=["interaction_targeted_lookup"],
+                )
+            ]
+        },
+    )
+    secondary = secondary_evidence_fixture().model_copy(
+        update={
+            "label_evidence": interaction_evidence,
+            "interaction_label_evidence": interaction_evidence,
+            "retrieval_modes": ["interaction_targeted_lookup"],
+        }
+    )
+
+    evidence_map = build_question_evidence_map(
+        response_with_secondary_mention(),
+        secondary_evidence=[secondary],
+    )
+
+    label_source_nodes = [
+        node
+        for node in evidence_map.nodes
+        if node.kind == "label_source" and node.source_id == "label-1"
+    ]
+    assert len(label_source_nodes) == 1
+    label_source_id = label_source_nodes[0].id
+    assert any(
+        edge.kind == "has_label_source"
+        and edge.source == "rxnorm:1191"
+        and edge.target == label_source_id
+        for edge in evidence_map.edges
+    )
+    assert any(
+        edge.kind == "interaction_lookup_source"
+        and edge.source == "rxnorm:5640"
+        and edge.target == label_source_id
+        for edge in evidence_map.edges
+    )
 
 
 def test_question_evidence_map_includes_rxnorm_context_without_clinical_claim() -> None:

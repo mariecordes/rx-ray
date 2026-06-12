@@ -796,9 +796,9 @@ function SupportingEvidence({
     if (!highlightCitation) {
       return;
     }
-    const matchingTab = evidenceTabs.find((tab) =>
-      tab.sourceIds.has(highlightCitation.source_id)
-    );
+    const matchingTab = highlightCitation.rxcui
+      ? evidenceTabs.find((tab) => tab.rxcui === highlightCitation.rxcui)
+      : evidenceTabs.find((tab) => tab.sourceIds.has(highlightCitation.source_id));
     if (matchingTab) {
       setActiveTabKey(matchingTab.key);
     }

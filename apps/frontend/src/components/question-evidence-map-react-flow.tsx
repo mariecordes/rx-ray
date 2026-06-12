@@ -368,6 +368,7 @@ function EvidenceMapDetailPanel({
                   onCitationClick({
                     source_id: node.source_id,
                     section: node.section,
+                    rxcui: node.rxcui,
                   });
                   return;
                 }
@@ -529,6 +530,7 @@ function evidenceMapLinkDistance(kind: string) {
     resolved_as: 90,
     has_role: 110,
     has_label_source: 95,
+    interaction_lookup_source: 92,
     has_label_section: 58,
     mentions_in_interaction_section: 86,
     has_terminology_context: 120,
@@ -570,7 +572,9 @@ function evidenceFlowEdge(
   edge: QuestionEvidenceMapEdge,
   selectedNodeId: string | null
 ): Edge {
-  const isInteraction = edge.kind === "mentions_in_interaction_section";
+  const isInteraction =
+    edge.kind === "mentions_in_interaction_section" ||
+    edge.kind === "interaction_lookup_source";
   const isTerminology = edge.kind === "has_terminology_context";
   const isSelectedIncident =
     selectedNodeId && (edge.source === selectedNodeId || edge.target === selectedNodeId);

@@ -40,6 +40,7 @@ def build_question_evidence_map(
     )
     _add_state_nodes(builder, understanding)
     _add_resolved_drug_nodes(builder, understanding)
+    resolved_concepts = _resolved_concepts(understanding, secondary_evidence)
 
     primary = (
         understanding.primary_dossier.resolved_drug
@@ -57,6 +58,7 @@ def build_question_evidence_map(
             evidence=understanding.primary_dossier.label_evidence,
             scope="primary",
             source_concept_node_id=rxnorm_node_id(primary.rxcui),
+            resolved_concepts=resolved_concepts,
         )
 
     for item in secondary_evidence:
@@ -68,6 +70,7 @@ def build_question_evidence_map(
             evidence=item.label_evidence,
             scope="secondary",
             source_concept_node_id=concept_node_id,
+            resolved_concepts=resolved_concepts,
         )
         if item.rxnorm_context and primary:
             _add_rxnorm_context(
@@ -234,6 +237,7 @@ def _add_label_evidence(
     evidence: OpenFDALabelEvidence | None,
     scope: str,
     source_concept_node_id: str,
+    resolved_concepts: list[RxNormConcept],
 ) -> None:
     if evidence is None:
         return
@@ -243,32 +247,57 @@ def _add_label_evidence(
         source_id = record.source_id
         if not source_id:
             continue
-        source_node_id = label_source_node_id(scope, concept.rxcui, source_id)
+        source_node_id = label_source_node_id(source_id)
+        owner_concepts = matching_label_owner_concepts(record, resolved_concepts)
+        if not owner_concepts:
+            owner_concepts = [concept]
+        owner_rxcui = owner_concepts[0].rxcui if owner_concepts else concept.rxcui
         builder.add_node(
             QuestionEvidenceMapNode(
                 id=source_node_id,
                 kind="label_source",
                 label=source_label(record),
                 subtitle=source_subtitle(record),
-                rxcui=concept.rxcui,
+                rxcui=owner_rxcui,
                 source_id=source_id,
                 evidence_scope=scope,
                 tags=record.provenance_tags,
             )
         )
-        builder.add_edge(
-            QuestionEvidenceMapEdge(
-                id=f"{source_concept_node_id}->{source_node_id}:has_label_source",
-                source=source_concept_node_id,
-                target=source_node_id,
-                kind="has_label_source",
-                label="Label source retrieved",
-                rxcui=concept.rxcui,
-                source_id=source_id,
-                evidence_scope=scope,
-                tags=record.provenance_tags,
+
+        for owner in owner_concepts:
+            builder.add_edge(
+                QuestionEvidenceMapEdge(
+                    id=f"{rxnorm_node_id(owner.rxcui)}->{source_node_id}:has_label_source",
+                    source=rxnorm_node_id(owner.rxcui),
+                    target=source_node_id,
+                    kind="has_label_source",
+                    label="Label source belongs to medication concept",
+                    rxcui=owner.rxcui,
+                    source_id=source_id,
+                    evidence_scope=scope,
+                    tags=record.provenance_tags,
+                )
             )
-        )
+
+        is_interaction_targeted_record = INTERACTION_TARGETED_TAG in record.provenance_tags
+        if is_interaction_targeted_record:
+            builder.add_edge(
+                QuestionEvidenceMapEdge(
+                    id=(
+                        f"{source_concept_node_id}->{source_node_id}:"
+                        "interaction_lookup_source"
+                    ),
+                    source=source_concept_node_id,
+                    target=source_node_id,
+                    kind="interaction_lookup_source",
+                    label="Interaction-specific lookup returned this label source",
+                    rxcui=concept.rxcui,
+                    source_id=source_id,
+                    evidence_scope=scope,
+                    tags=merge_tags(record.provenance_tags, [INTERACTION_TARGETED_TAG]),
+                )
+            )
 
         for section_name, entries in sections_by_source.get(source_id, {}).items():
             section_tags = merge_tags(
@@ -276,8 +305,6 @@ def _add_label_evidence(
                 [tag for entry in entries for tag in entry.provenance_tags],
             )
             section_node_id = label_section_node_id(
-                scope,
-                concept.rxcui,
                 source_id,
                 section_name,
             )
@@ -291,30 +318,21 @@ def _add_label_evidence(
                     kind="label_section",
                     label=section_name.replace("_", " "),
                     subtitle=subtitle,
-                    rxcui=concept.rxcui,
+                    rxcui=owner_rxcui,
                     source_id=source_id,
                     section=section_name,
                     evidence_scope=scope,
                     tags=section_tags,
                 )
             )
-            is_interaction_targeted = INTERACTION_TARGETED_TAG in section_tags
             builder.add_edge(
                 QuestionEvidenceMapEdge(
                     id=f"{source_node_id}->{section_node_id}:{section_name}",
                     source=source_node_id,
                     target=section_node_id,
-                    kind=(
-                        "mentions_in_interaction_section"
-                        if is_interaction_targeted
-                        else "has_label_section"
-                    ),
-                    label=(
-                        "Label interaction section mentions another medication"
-                        if is_interaction_targeted
-                        else "Label section retrieved"
-                    ),
-                    rxcui=concept.rxcui,
+                    kind="has_label_section",
+                    label="Label section belongs to label source",
+                    rxcui=owner_rxcui,
                     source_id=source_id,
                     section=section_name,
                     evidence_scope=scope,
@@ -368,6 +386,54 @@ def _sections_by_source(
     return sections_by_source
 
 
+def _resolved_concepts(
+    understanding: QueryUnderstandingResponse,
+    secondary_evidence: list[SecondaryDrugEvidence],
+) -> list[RxNormConcept]:
+    concepts: list[RxNormConcept] = []
+    seen: set[str] = set()
+    for mention in understanding.resolved_drugs:
+        if mention.selected_concept:
+            _append_concept(concepts, seen, mention.selected_concept)
+    if understanding.primary_dossier and understanding.primary_dossier.resolved_drug:
+        _append_concept(concepts, seen, understanding.primary_dossier.resolved_drug)
+    for item in secondary_evidence:
+        _append_concept(concepts, seen, item.resolved_concept)
+    return concepts
+
+
+def _append_concept(
+    concepts: list[RxNormConcept],
+    seen: set[str],
+    concept: RxNormConcept,
+) -> None:
+    if concept.rxcui in seen:
+        return
+    seen.add(concept.rxcui)
+    concepts.append(concept)
+
+
+def matching_label_owner_concepts(
+    record: OpenFDALabelRecord,
+    concepts: list[RxNormConcept],
+) -> list[RxNormConcept]:
+    record_rxcuis = {value for value in record.rxcuis if value}
+    record_names = {
+        slug(value)
+        for value in [
+            *record.brand_names,
+            *record.generic_names,
+            *record.substance_names,
+        ]
+        if value
+    }
+    matches: list[RxNormConcept] = []
+    for concept in concepts:
+        if concept.rxcui in record_rxcuis or slug(concept.name) in record_names:
+            matches.append(concept)
+    return matches
+
+
 def state_node_id(role: str, value: str) -> str:
     return f"query-concept:{role}:{slug(value)}"
 
@@ -376,17 +442,15 @@ def rxnorm_node_id(rxcui: str) -> str:
     return f"rxnorm:{rxcui}"
 
 
-def label_source_node_id(scope: str, rxcui: str, source_id: str) -> str:
-    return f"label-source:{scope}:{rxcui}:{source_id}"
+def label_source_node_id(source_id: str) -> str:
+    return f"label-source:{source_id}"
 
 
 def label_section_node_id(
-    scope: str,
-    rxcui: str,
     source_id: str,
     section: str,
 ) -> str:
-    return f"label-section:{scope}:{rxcui}:{source_id}:{section}"
+    return f"label-section:{source_id}:{section}"
 
 
 def source_label(record: OpenFDALabelRecord) -> str:

@@ -45,6 +45,7 @@ const edgeRelationshipLabels: Record<string, string> = {
   has_role: "Question extraction",
   resolved_as: "RxNorm resolution",
   has_label_source: "Label source retrieval",
+  interaction_lookup_source: "Interaction-specific lookup",
   has_label_section: "Label section retrieval",
   mentions_in_interaction_section: "Interaction-text evidence",
   has_terminology_context: "RxNorm terminology context",
@@ -704,6 +705,7 @@ function EvidenceMapSidePanel({
                   onCitationClick({
                     source_id: selectedNode.source_id as string,
                     section: selectedNode.section as string,
+                    rxcui: selectedNode.rxcui,
                   })
                 }
               >
@@ -852,6 +854,7 @@ function evidenceMapLinkDistance(kind: string) {
     resolved_as: 90,
     has_role: 100,
     has_label_source: 76,
+    interaction_lookup_source: 84,
     has_label_section: 36,
     mentions_in_interaction_section: 70,
     has_terminology_context: 110,
@@ -891,7 +894,10 @@ function evidenceNodeStyle(nodeOrKind: QuestionEvidenceMapNode | string) {
 }
 
 function edgeStroke(kind: string) {
-  if (kind === "mentions_in_interaction_section") {
+  if (
+    kind === "mentions_in_interaction_section" ||
+    kind === "interaction_lookup_source"
+  ) {
     return "#371E8F";
   }
   if (kind === "has_terminology_context") {
@@ -904,10 +910,14 @@ function edgeTooltipContent(link: VisualLink) {
   const source = displayEvidenceMapEdgeNode(link.sourceNode);
   const target = displayEvidenceMapEdgeNode(link.targetNode);
   const sectionName = displaySectionName(link.section ?? link.targetNode.section ?? target);
+  const title =
+    edgeRelationshipLabels[link.kind] ??
+    sentenceCase(link.kind.replaceAll("_", " "));
 
   switch (link.kind) {
     case "has_role":
       return {
+        title,
         body: (
           <>
             The {displayMentionRole(link.targetNode.role ?? "query_concept").toLowerCase()}{" "}
@@ -917,6 +927,7 @@ function edgeTooltipContent(link: VisualLink) {
       };
     case "resolved_as":
       return {
+        title,
         body: (
           <>
             The mentioned medication <strong>{source}</strong> was resolved through RxNorm
@@ -927,30 +938,48 @@ function edgeTooltipContent(link: VisualLink) {
       };
     case "has_label_source":
       return {
+        title,
         body: (
           <>
-            Public FDA label evidence was retrieved for the medication <strong>{source.toUpperCase()}</strong> from the label of <strong>{target}</strong>.
+            The label source <strong>{target}</strong> belongs to the medication{" "}
+            <strong>{source.toUpperCase()}</strong>.
+          </>
+        ),
+      };
+    case "interaction_lookup_source":
+      return {
+        title,
+        body: (
+          <>
+            An interaction-specific lookup for <strong>{source.toUpperCase()}</strong>{" "}
+            returned the label source <strong>{target}</strong>. The returned source may
+            be the label for another mentioned medication.
           </>
         ),
       };
     case "has_label_section":
       return {
+        title,
         body: (
           <>
-            Within the <strong>{source}</strong> label, the section <strong>{sentenceCase(sectionName)}</strong> was identified.
+            The section <strong>{sentenceCase(sectionName)}</strong> belongs to the{" "}
+            <strong>{source}</strong> label.
           </>
         ),
       };
     case "mentions_in_interaction_section":
       return {
+        title,
         body: (
           <>
-            Within the <strong>{source}</strong> label, the section <strong>{sentenceCase(sectionName)}</strong> was retrieved from the evidence. This section mentioned another medication but does not represent a standalone clinical interaction claim.
+            The section <strong>{sentenceCase(sectionName)}</strong> belongs to the{" "}
+            <strong>{source}</strong> label.
           </>
         ),
       };
     case "has_terminology_context":
       return {
+        title,
         body: (
           <>
             The medication <strong>{source.toUpperCase()}</strong> is associated with the terminology context <strong>{target}</strong>.
@@ -959,6 +988,7 @@ function edgeTooltipContent(link: VisualLink) {
       };
     default:
       return {
+        title,
         body: (
           <>
             {link.label && <>{link.label}<br /></>}

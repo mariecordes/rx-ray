@@ -117,6 +117,7 @@ export type EvidenceCitation = {
   source_id: string;
   section: string;
   snippet?: string | null;
+  rxcui?: string | null;
 };
 
 export type EvidenceBullet = {
