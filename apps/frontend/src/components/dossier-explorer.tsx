@@ -629,29 +629,28 @@ export function AskQuestionExperience() {
         onCoverageTargetClick={handleCoverageTargetClick}
       />
 
-      {dossier &&
-      queryAnswer?.question_evidence_map?.nodes.length &&
-      !isAnswerLoading &&
-      !isUnderstandingLoading ? (
-        <EvidenceMapD3
-          map={queryAnswer.question_evidence_map}
-          onCitationClick={handleAnswerCitationClick}
-          onRxcuiClick={handleCoverageTargetClick}
-        />
-      ) : null}
-
       {dossier && queryAnswer && !isAnswerLoading && !isUnderstandingLoading ? (
-        <SupportingEvidence
-          dossier={dossier}
+        <EvidenceReveal
           evidenceRef={supportingEvidenceRef}
-          highlightCitation={highlightCitation}
-          highlightRxcui={highlightEvidenceRxcui}
           isOpen={isEvidenceOpen}
-          secondaryEvidence={queryAnswer.secondary_evidence ?? []}
           onOpenChange={setIsEvidenceOpen}
-          onCitationHandled={() => setHighlightCitation(null)}
-          onRxcuiHandled={() => setHighlightEvidenceRxcui(null)}
-        />
+        >
+          {queryAnswer.question_evidence_map?.nodes.length ? (
+            <EvidenceMapD3
+              map={queryAnswer.question_evidence_map}
+              onCitationClick={handleAnswerCitationClick}
+              onRxcuiClick={handleCoverageTargetClick}
+            />
+          ) : null}
+          <SupportingEvidence
+            dossier={dossier}
+            highlightCitation={highlightCitation}
+            highlightRxcui={highlightEvidenceRxcui}
+            secondaryEvidence={queryAnswer.secondary_evidence ?? []}
+            onCitationHandled={() => setHighlightCitation(null)}
+            onRxcuiHandled={() => setHighlightEvidenceRxcui(null)}
+          />
+        </EvidenceReveal>
       ) : null}
     </div>
   );
@@ -761,25 +760,53 @@ export function DrugDossierExperience() {
   );
 }
 
+function EvidenceReveal({
+  children,
+  evidenceRef,
+  isOpen,
+  onOpenChange,
+}: {
+  children: ReactNode;
+  evidenceRef: RefObject<HTMLDivElement | null>;
+  isOpen: boolean;
+  onOpenChange: (isOpen: boolean) => void;
+}) {
+  return (
+    <div ref={evidenceRef} className="scroll-mt-6">
+      <div className="relative flex items-center py-4">
+        <div className="flex-1 border-t border-[#D7C8F4]" />
+        <Button
+          type="button"
+          className="mx-4 rounded-full px-5"
+          onClick={() => onOpenChange(!isOpen)}
+        >
+          {isOpen ? "Collapse evidence" : "Explore evidence"}
+          {isOpen ? (
+            <ChevronDown className="size-4" />
+          ) : (
+            <ChevronRight className="size-4" />
+          )}
+        </Button>
+        <div className="flex-1 border-t border-[#D7C8F4]" />
+      </div>
+      {isOpen ? <div className="space-y-6">{children}</div> : null}
+    </div>
+  );
+}
+
 function SupportingEvidence({
   dossier,
-  evidenceRef,
   highlightCitation,
   highlightRxcui,
-  isOpen,
   secondaryEvidence,
   onCitationHandled,
-  onOpenChange,
   onRxcuiHandled,
 }: {
   dossier: DrugDossier;
-  evidenceRef: RefObject<HTMLDivElement | null>;
   highlightCitation: EvidenceCitation | null;
   highlightRxcui: string | null;
-  isOpen: boolean;
   secondaryEvidence: SecondaryDrugEvidence[];
   onCitationHandled: () => void;
-  onOpenChange: (isOpen: boolean) => void;
   onRxcuiHandled: () => void;
 }) {
   const evidenceTabs = useMemo(
@@ -819,78 +846,49 @@ function SupportingEvidence({
     ?? evidenceTabs[0];
 
   return (
-    <div ref={evidenceRef} className="scroll-mt-6">
-      {!isOpen ? (
-        <div className="relative flex items-center py-4">
-          <div className="flex-1 border-t border-[#D7C8F4]" />
-          <Button
-            type="button"
-            className="mx-4 rounded-full px-5"
-            onClick={() => onOpenChange(true)}
-          >
-            Explore supporting evidence
-            <ChevronRight className="size-4" />
-          </Button>
-          <div className="flex-1 border-t border-[#D7C8F4]" />
-        </div>
-      ) : (
-        <Card className="border-[#C7B4EF] shadow-md">
-          <CardHeader className="flex flex-row items-start justify-between gap-3">
-            <div>
-              <CardTitle>Supporting Evidence</CardTitle>
-              <p className="mt-1 text-sm leading-6 text-slate-500">
-                Inspect the retrieved dossier behind the generated response.
-              </p>
-            </div>
-            <Button
+    <Card className="border-[#C7B4EF] shadow-md">
+      <CardHeader>
+        <CardTitle>Supporting Evidence</CardTitle>
+        <p className="mt-1 text-sm leading-6 text-slate-500">
+          Inspect the retrieved dossier behind the generated response.
+        </p>
+      </CardHeader>
+      <CardContent className="space-y-5">
+        <div className="flex flex-wrap items-end gap-1">
+          {evidenceTabs.map((tab) => (
+            <button
+              key={tab.key}
               type="button"
-              variant="ghost"
-              className="h-auto px-0 py-0 font-semibold uppercase tracking-wide text-slate-600 hover:bg-transparent hover:text-slate-900"
-              style={{ fontSize: "14px", lineHeight: "20px" }}
-              onClick={() => onOpenChange(false)}
-            >
-              <ChevronDown className="size-4" />
-              Collapse
-            </Button>
-          </CardHeader>
-          <CardContent className="space-y-5">
-            <div className="flex flex-wrap items-end gap-1">
-              {evidenceTabs.map((tab) => (
-                <button
-                  key={tab.key}
-                  type="button"
-                  onClick={() => setActiveTabKey(tab.key)}
-                  className={cn(
-                    "rounded-t-md px-4 py-2 text-sm font-semibold shadow-sm",
-                    activeTab.key === tab.key
-                      ? "bg-[#371E8F] text-white"
-                      : "border border-slate-200 bg-slate-50 text-slate-700"
-                  )}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </div>
-            <div className="-mt-5 rounded-b-md rounded-tr-md border border-slate-200 bg-white p-4 shadow-sm">
-              {activeTab.kind === "primary" ? (
-                <DossierResults
-                  dossier={dossier}
-                  highlightCitation={highlightCitation}
-                  variant="embedded"
-                  onCitationHandled={onCitationHandled}
-                />
-              ) : (
-                <SecondaryEvidenceResults
-                  evidence={activeTab.evidence}
-                  highlightCitation={highlightCitation}
-                  onCitationHandled={onCitationHandled}
-                />
+              onClick={() => setActiveTabKey(tab.key)}
+              className={cn(
+                "rounded-t-md px-4 py-2 text-sm font-semibold shadow-sm",
+                activeTab.key === tab.key
+                  ? "bg-[#371E8F] text-white"
+                  : "border border-slate-200 bg-slate-50 text-slate-700"
               )}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-    </div>
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+        <div className="-mt-5 rounded-b-md rounded-tr-md border border-slate-200 bg-white p-4 shadow-sm">
+          {activeTab.kind === "primary" ? (
+            <DossierResults
+              dossier={dossier}
+              highlightCitation={highlightCitation}
+              variant="embedded"
+              onCitationHandled={onCitationHandled}
+            />
+          ) : (
+            <SecondaryEvidenceResults
+              evidence={activeTab.evidence}
+              highlightCitation={highlightCitation}
+              onCitationHandled={onCitationHandled}
+            />
+          )}
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
