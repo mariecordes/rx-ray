@@ -903,8 +903,7 @@ function edgeStroke(kind: string) {
 function edgeTooltipContent(link: VisualLink) {
   const source = displayEvidenceMapEdgeNode(link.sourceNode);
   const target = displayEvidenceMapEdgeNode(link.targetNode);
-  const relationship =
-    edgeRelationshipLabels[link.kind] ?? sentenceCase(link.kind.replaceAll("_", " "));
+  const sectionName = displaySectionName(link.section ?? link.targetNode.section ?? target);
 
   switch (link.kind) {
     case "has_role":
@@ -918,33 +917,54 @@ function edgeTooltipContent(link: VisualLink) {
       };
     case "resolved_as":
       return {
-        title: relationship,
-        body: `The extracted item was linked to an RxNorm medication concept.\nExtracted item: ${source}\nMatched concept: ${target}${link.rxcui ? `\nRXCUI: ${link.rxcui}` : ""}`,
+        body: (
+          <>
+            The mentioned medication <strong>{source}</strong> was resolved through RxNorm
+            and matched the concept <strong>{target.toUpperCase()}</strong>
+            {link.rxcui ? ` (RXCUI: ${link.rxcui})` : ""}.
+          </>
+        ),
       };
     case "has_label_source":
       return {
-        title: relationship,
-        body: `Public FDA label evidence was retrieved for this medication concept.\nMedication: ${source}\nLabel source: ${target}`,
+        body: (
+          <>
+            Public FDA label evidence was retrieved for the medication <strong>{source.toUpperCase()}</strong> from the label of <strong>{target}</strong>.
+          </>
+        ),
       };
     case "has_label_section":
       return {
-        title: relationship,
-        body: `This retrieved label source contains text in this section.\nSource: ${source}\nSection: ${displaySectionName(link.section ?? link.targetNode.section ?? target)}`,
+        body: (
+          <>
+            Within the <strong>{source}</strong> label, the section <strong>{sentenceCase(sectionName)}</strong> was identified.
+          </>
+        ),
       };
     case "mentions_in_interaction_section":
       return {
-        title: relationship,
-        body: `This section came from an interaction-targeted label lookup. It means the retrieved label text mentioned another medication; it is not a standalone clinical interaction claim.\nSource: ${source}\nSection: ${displaySectionName(link.section ?? link.targetNode.section ?? target)}`,
+        body: (
+          <>
+            Within the <strong>{source}</strong> label, the section <strong>{sentenceCase(sectionName)}</strong> was retrieved from the evidence. This section mentioned another medication but does not represent a standalone clinical interaction claim.
+          </>
+        ),
       };
     case "has_terminology_context":
       return {
-        title: relationship,
-        body: `This connects a medication to RxNorm terminology context for the mentioned drugs. RxNorm describes medication terminology, not clinical interaction safety.\nMedication: ${source}\nContext: ${target}`,
+        body: (
+          <>
+            The medication <strong>{source.toUpperCase()}</strong> is associated with the terminology context <strong>{target}</strong>.
+          </>
+        ),
       };
     default:
       return {
-        title: relationship,
-        body: link.label ? `${link.label}\n${source} -> ${target}` : `${source} -> ${target}`,
+        body: (
+          <>
+            {link.label && <>{link.label}<br /></>}
+            <strong>{source.toUpperCase()}</strong> is related to <strong>{target.toUpperCase()}</strong>.
+          </>
+        ),
       };
   }
 }
