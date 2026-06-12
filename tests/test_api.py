@@ -823,7 +823,7 @@ def test_question_evidence_map_shares_interaction_label_source_across_medication
     )
 
 
-def test_question_evidence_map_includes_rxnorm_context_without_clinical_claim() -> None:
+def test_question_evidence_map_omits_rxnorm_context_for_visual_clarity() -> None:
     secondary = secondary_evidence_fixture().model_copy(
         update={
             "rxnorm_context": RxNormPairContext(
@@ -843,11 +843,8 @@ def test_question_evidence_map_includes_rxnorm_context_without_clinical_claim() 
         secondary_evidence=[secondary],
     )
 
-    context_edges = [
-        edge for edge in evidence_map.edges if edge.kind == "has_terminology_context"
-    ]
-    assert context_edges
-    assert all(edge.label == "Terminology context only" for edge in context_edges)
+    assert all(node.kind != "rxnorm_context" for node in evidence_map.nodes)
+    assert all(edge.kind != "has_terminology_context" for edge in evidence_map.edges)
     assert all(edge.kind != "interacts_with" for edge in evidence_map.edges)
 
 

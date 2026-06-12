@@ -9,7 +9,7 @@ import {
   forceX,
   forceY,
 } from "d3-force";
-import { Info, Maximize2, Minus, Plus } from "lucide-react";
+import { Maximize2, Minus, Plus } from "lucide-react";
 import type { MouseEvent, PointerEvent, WheelEvent } from "react";
 import { useMemo, useRef, useState } from "react";
 
@@ -85,6 +85,8 @@ const nodeStyles: Record<
     stroke: "#64748B",
     radius: 5,
   },
+  // Hidden from the evidence-map UI for now; kept here in case we reintroduce
+  // terminology context as a clearer visual layer later.
   rxnorm_context: {
     label: "Terminology context",
     fill: "#FEF3C7",
@@ -115,17 +117,6 @@ type HoverTooltip = {
   title?: string | React.ReactNode;
   body?: string | React.ReactNode;
 };
-
-function InfoTooltip({ text }: { text: string }) {
-  return (
-    <span className="group relative inline-flex">
-      <Info className="size-3.5 text-slate-400" />
-      <span className="pointer-events-none absolute left-0 top-full z-20 mt-2 hidden w-72 rounded-md border border-slate-200 bg-white px-3 py-2 text-xs normal-case leading-5 text-slate-700 shadow-lg group-hover:block">
-        {text}
-      </span>
-    </span>
-  );
-}
 
 export function EvidenceMapD3({
   map,
@@ -158,9 +149,10 @@ export function EvidenceMapD3({
     Map<string, { x: number; y: number }>
   >(new Map());
 
+  const visibleMap = useMemo(() => withoutTerminologyContext(map), [map]);
   const graph = useMemo(
-    () => buildD3EvidenceGraph(map, layoutIteration),
-    [layoutIteration, map]
+    () => buildD3EvidenceGraph(visibleMap, layoutIteration),
+    [layoutIteration, visibleMap]
   );
   const positionedNodes = useMemo(() => {
     return graph.nodes.map((node) => {
@@ -444,9 +436,7 @@ export function EvidenceMapD3({
                     x2={endpoints.x2}
                     y2={endpoints.y2}
                     stroke={edgeStroke(link.kind)}
-                    strokeDasharray={
-                      link.kind === "has_terminology_context" ? "4 4" : undefined
-                    }
+                    strokeDasharray={edgeDashArray(link.kind)}
                     strokeOpacity={isDimmed ? 0.18 : 0.78}
                     strokeWidth={isSelectedIncident ? 2 : 1.15}
                     pointerEvents="none"
@@ -509,7 +499,14 @@ export function EvidenceMapD3({
                     r={style.radius}
                     fill={style.fill}
                     stroke={isSelected ? "#371E8F" : style.stroke}
-                    strokeDasharray={isSelected ? "3 2" : undefined}
+                    strokeDasharray={
+                      isSelected
+                        ? "3 2"
+                        : node.kind === "label_source" &&
+                            node.tags.includes("interaction_targeted_lookup")
+                          ? "4 3"
+                          : undefined
+                    }
                     strokeWidth={isSelected ? 2.2 : 1.4}
                   />
                   {showLabel ? (
@@ -613,58 +610,61 @@ function EvidenceMapSidePanel({
   zoom: number;
 }) {
   return (
-    <aside className="space-y-3 rounded-md border border-slate-200 bg-slate-50 p-3">
+    <aside className="space-y-3">
       <div className="rounded-md border border-slate-200 bg-white p-3">
-        <div className="mb-2 text-xs font-medium uppercase text-slate-500">
-          Graph controls
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div className="text-xs font-medium uppercase text-slate-500">
+            Graph controls
+          </div>
+          <div className="flex gap-1">
+            <button
+              type="button"
+              onClick={onZoomOut}
+              className="grid size-8 place-items-center rounded-md border border-slate-200 text-slate-700 hover:bg-slate-50"
+              title="Zoom out"
+            >
+              <Minus className="size-4" />
+            </button>
+            <button
+              type="button"
+              onClick={onResetView}
+              className="grid size-8 place-items-center rounded-md border border-slate-200 text-slate-700 hover:bg-slate-50"
+              title="Reset view"
+            >
+              <Maximize2 className="size-4" />
+            </button>
+            <button
+              type="button"
+              onClick={onZoomIn}
+              className="grid size-8 place-items-center rounded-md border border-slate-200 text-slate-700 hover:bg-slate-50"
+              title="Zoom in"
+            >
+              <Plus className="size-4" />
+            </button>
+          </div>
         </div>
-        <div className="flex gap-1">
-          <button
-            type="button"
-            onClick={onZoomOut}
-            className="rounded border border-slate-200 bg-white p-1.5 text-slate-600 hover:bg-slate-50"
-            title="Zoom out"
-          >
-            <Minus className="size-3.5" />
-          </button>
-          <button
-            type="button"
-            onClick={onResetView}
-            className="rounded border border-slate-200 bg-white p-1.5 text-slate-600 hover:bg-slate-50"
-            title="Reset view"
-          >
-            <Maximize2 className="size-3.5" />
-          </button>
-          <button
-            type="button"
-            onClick={onZoomIn}
-            className="rounded border border-slate-200 bg-white p-1.5 text-slate-600 hover:bg-slate-50"
-            title="Zoom in"
-          >
-            <Plus className="size-3.5" />
-          </button>
-          <Button
-            type="button"
-            className="ml-auto px-2 py-1.5 text-[10px]"
-            onClick={onSpreadLayout}
-            title="Rerun the force layout with more separation"
-          >
-            Spread
-          </Button>
-        </div>
-        <div className="mt-2 text-xs leading-5 text-slate-500">
+        <Button
+          type="button"
+          variant="secondary"
+          className="h-8 w-full px-2 py-1.5 text-xs"
+          onClick={onSpreadLayout}
+          title="Rerun the force layout with more separation"
+        >
+          Spread layout
+        </Button>
+        <div className="mt-3 text-xs leading-5 text-slate-500">
           Zoom {zoom.toFixed(2)} · Showing {filteredNodeCount} of{" "}
           {totalNodeCount} nodes and {filteredLinkCount} of {totalLinkCount}{" "}
           links.
         </div>
       </div>
 
-      <div className="min-h-[132px] rounded-md border border-slate-200 bg-white p-3">
+      <div className="h-40 rounded-md border border-slate-200 bg-slate-50 p-3">
         <div className="mb-2 text-xs font-medium uppercase text-slate-500">
           Selected node
         </div>
         {selectedNode ? (
-          <div className="space-y-3">
+          <div className="grid h-[112px] grid-rows-[48px_24px_24px] gap-2">
             <div>
               <div className="flex flex-wrap gap-1.5">
                 <Badge className="border-slate-200 bg-white text-slate-700">
@@ -676,24 +676,23 @@ function EvidenceMapSidePanel({
                   </Badge>
                 ) : null}
               </div>
-              <div className="mt-2 text-sm font-semibold leading-6 text-slate-950">
+              <div className="mt-2 line-clamp-2 font-semibold leading-6 text-slate-950">
                 {selectedNode.kind === "resolved_medication"
                   ? displayGraphNodeName(selectedNode.label)
                   : selectedNode.label}
               </div>
-              {selectedNode.subtitle ? (
-                <p className="mt-1 text-sm leading-6 text-slate-600">
-                  {selectedNode.subtitle}
-                </p>
-              ) : null}
             </div>
 
-            <div className="space-y-1 text-sm leading-6 text-slate-600">
+            <div className="flex min-w-0 gap-2 overflow-hidden">
               {selectedNode.rxcui ? (
-                <div>RXCUI {selectedNode.rxcui}</div>
+                <Badge className="max-w-[56%] shrink-0 truncate overflow-hidden">
+                  RXCUI {selectedNode.rxcui}
+                </Badge>
               ) : null}
               {selectedNode.section ? (
-                <div>Section {displaySectionName(selectedNode.section)}</div>
+                <Badge className="min-w-0 truncate">
+                  {displaySectionName(selectedNode.section)}
+                </Badge>
               ) : null}
             </div>
 
@@ -722,57 +721,63 @@ function EvidenceMapSidePanel({
             ) : null}
           </div>
         ) : (
-          <p className="text-sm leading-6 text-slate-600">
-            Select a bubble to inspect the extracted concept, medication,
-            source, label section, or terminology context.
-          </p>
+          <div className="grid h-[112px] grid-rows-[48px_24px] gap-2">
+            <p className="line-clamp-2 min-h-12 text-sm leading-6 text-slate-600">
+              Select a bubble to inspect the extracted concept, medication,
+              source, or label section.
+            </p>
+          </div>
         )}
       </div>
 
       <div className="rounded-md border border-slate-200 bg-white p-3">
-        <div className="mb-2 flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <div className="text-xs font-medium uppercase text-slate-500">
-              Node types
-            </div>
-            <InfoTooltip text="Filter the visualization by node type. Select one or more types to show only those nodes and their connections." />
+        <div className="flex items-center justify-between gap-3">
+          <div className="text-xs font-medium uppercase text-slate-500">
+            Node types
           </div>
-          {selectedTypes.size > 0 ? (
-            <button
-              type="button"
-              onClick={onClearTypes}
-              className="text-xs font-medium uppercase text-slate-400 hover:text-slate-700"
-            >
-              Clear
-            </button>
-          ) : null}
+          <button
+            type="button"
+            className={[
+              "w-10 text-right font-medium transition",
+              selectedTypes.size > 0
+                ? "text-slate-600 hover:text-slate-950"
+                : "pointer-events-none text-transparent",
+            ].join(" ")}
+            style={{ fontSize: "12px", lineHeight: "14px" }}
+            onClick={onClearTypes}
+          >
+            Clear
+          </button>
         </div>
-        <div className="space-y-2">
+        <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
           {nodeTypes.map((kind) => {
             const style = evidenceNodeStyle(kind);
             const isActive = selectedTypes.has(kind);
             return (
-              <label
+              <button
                 key={kind}
-                className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 hover:bg-slate-50"
+                type="button"
+                className={[
+                  "flex min-w-0 items-center gap-2 rounded-md border px-2 py-1 text-left transition",
+                  isActive
+                    ? "border-slate-400 bg-slate-100 text-slate-950"
+                    : "border-transparent text-slate-700 hover:border-slate-200 hover:bg-slate-50",
+                ].join(" ")}
+                style={{ fontSize: "12px", lineHeight: "13px" }}
+                onClick={() => onSelectType(kind)}
               >
-                <input
-                  type="checkbox"
-                  checked={isActive}
-                  onChange={() => onSelectType(kind)}
-                  className="size-4 cursor-pointer"
-                />
                 <span
-                  className="size-2.5 shrink-0 rounded-full border"
+                  className={[
+                    "size-3 shrink-0 rounded-full border",
+                    kind === "label_source" ? "border-dashed" : "",
+                  ].join(" ")}
                   style={{
                     backgroundColor: style.fill,
                     borderColor: style.stroke,
                   }}
                 />
-                <span className="min-w-0 truncate text-[11px] uppercase leading-4 text-slate-600">
-                  {style.label}
-                </span>
-              </label>
+                <span className="truncate">{style.label}</span>
+              </button>
             );
           })}
         </div>
@@ -835,6 +840,24 @@ function buildD3EvidenceGraph(map: QuestionEvidenceMap, layoutIteration: number)
     .filter((link): link is VisualLink => Boolean(link));
 
   return { nodes, links };
+}
+
+function withoutTerminologyContext(map: QuestionEvidenceMap): QuestionEvidenceMap {
+  const visibleNodeIds = new Set(
+    map.nodes
+      .filter((node) => node.kind !== "rxnorm_context")
+      .map((node) => node.id)
+  );
+  return {
+    ...map,
+    nodes: map.nodes.filter((node) => visibleNodeIds.has(node.id)),
+    edges: map.edges.filter(
+      (edge) =>
+        edge.kind !== "has_terminology_context" &&
+        visibleNodeIds.has(edge.source) &&
+        visibleNodeIds.has(edge.target)
+    ),
+  };
 }
 
 function evidenceMapAnchor(kind: string) {
@@ -904,6 +927,16 @@ function edgeStroke(kind: string) {
     return "#D97706";
   }
   return "#94A3B8";
+}
+
+function edgeDashArray(kind: string) {
+  if (kind === "interaction_lookup_source") {
+    return "5 4";
+  }
+  if (kind === "has_terminology_context") {
+    return "4 4";
+  }
+  return undefined;
 }
 
 function edgeTooltipContent(link: VisualLink) {

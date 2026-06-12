@@ -72,13 +72,17 @@ def build_question_evidence_map(
             source_concept_node_id=concept_node_id,
             resolved_concepts=resolved_concepts,
         )
-        if item.rxnorm_context and primary:
-            _add_rxnorm_context(
-                builder,
-                primary=primary,
-                secondary=concept,
-                context=item.rxnorm_context,
-            )
+        # Keep RxNorm pair context available on SecondaryDrugEvidence, but do not
+        # render it into the question-level evidence map for now. In practice it
+        # reads like terminology diagnostics rather than user-facing evidence and
+        # clutters the graph.
+        # if item.rxnorm_context and primary:
+        #     _add_rxnorm_context(
+        #         builder,
+        #         primary=primary,
+        #         secondary=concept,
+        #         context=item.rxnorm_context,
+        #     )
 
     return builder.build()
 

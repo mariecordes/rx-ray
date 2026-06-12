@@ -32,12 +32,14 @@ export function EvidenceMapSection({
   onCitationClick,
   onRxcuiClick,
 }: EvidenceMapSectionProps) {
+  const displayMap = withoutTerminologyContext(map);
+
   return (
     <Card>
       <CardHeader>
         <div className="flex items-center gap-2">
           <CardTitle>Evidence Map</CardTitle>
-          <InfoTooltip text="This map connects extracted question concepts, RxNorm medication resolution, public FDA label evidence, and RxNorm terminology context. Label-text edges show what was retrieved or mentioned in labels; they are not clinical interaction claims." />
+          <InfoTooltip text="This map connects extracted question concepts, RxNorm medication resolution, public FDA label sources, and retrieved label sections. Interaction-specific edges show retrieval paths, not clinical interaction claims." />
         </div>
         <p className="mt-1 text-sm leading-6 text-slate-500">
           Two visual experiments for the same question-level evidence graph. Use
@@ -51,7 +53,7 @@ export function EvidenceMapSection({
             Alternative A · D3 force evidence map
           </div>
           <EvidenceMapD3
-            map={map}
+            map={displayMap}
             onCitationClick={onCitationClick}
             onRxcuiClick={onRxcuiClick}
           />
@@ -61,7 +63,7 @@ export function EvidenceMapSection({
             Alternative B · React Flow evidence map
           </div>
           <EvidenceMapReactFlow
-            map={map}
+            map={displayMap}
             onCitationClick={onCitationClick}
             onRxcuiClick={onRxcuiClick}
           />
@@ -69,4 +71,22 @@ export function EvidenceMapSection({
       </CardContent>
     </Card>
   );
+}
+
+function withoutTerminologyContext(map: QuestionEvidenceMap): QuestionEvidenceMap {
+  const visibleNodeIds = new Set(
+    map.nodes
+      .filter((node) => node.kind !== "rxnorm_context")
+      .map((node) => node.id)
+  );
+  return {
+    ...map,
+    nodes: map.nodes.filter((node) => visibleNodeIds.has(node.id)),
+    edges: map.edges.filter(
+      (edge) =>
+        edge.kind !== "has_terminology_context" &&
+        visibleNodeIds.has(edge.source) &&
+        visibleNodeIds.has(edge.target)
+    ),
+  };
 }
