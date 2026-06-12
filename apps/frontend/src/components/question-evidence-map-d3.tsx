@@ -11,7 +11,7 @@ import {
 } from "d3-force";
 import { Info, Maximize2, Minus, Plus } from "lucide-react";
 import type { MouseEvent, PointerEvent, WheelEvent } from "react";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -29,9 +29,10 @@ export type EvidenceMapNavigationTarget = {
 
 const GRAPH_WIDTH = 900;
 const GRAPH_HEIGHT = 520;
-const MIN_ZOOM = 0.75;
+const MIN_ZOOM = 0.28;
 const MAX_ZOOM = 2;
 const FOCUS_ZOOM = 1.55;
+const FIT_PADDING = 0;
 
 const sectionLabels: Record<string, string> = {
   boxed_warning: "Boxed Warning",
@@ -146,7 +147,6 @@ export function EvidenceMapD3({
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const [selectedTypes, setSelectedTypes] = useState<Set<string>>(new Set());
-  const [layoutIteration, setLayoutIteration] = useState(0);
   const [dragState, setDragState] = useState<{
     startClientX: number;
     startClientY: number;
@@ -159,16 +159,16 @@ export function EvidenceMapD3({
     moved: boolean;
     startClientX: number;
     startClientY: number;
+    startGraphX: number;
+    startGraphY: number;
+    origins: Map<string, { x: number; y: number }>;
   } | null>(null);
   const [nodeOverrides, setNodeOverrides] = useState<
     Map<string, { x: number; y: number }>
   >(new Map());
 
   const visibleMap = useMemo(() => withoutTerminologyContext(map), [map]);
-  const graph = useMemo(
-    () => buildD3EvidenceGraph(visibleMap, layoutIteration),
-    [layoutIteration, visibleMap]
-  );
+  const graph = useMemo(() => buildD3EvidenceGraph(visibleMap), [visibleMap]);
   const positionedNodes = useMemo(() => {
     return graph.nodes.map((node) => {
       const override = nodeOverrides.get(node.id);
@@ -233,6 +233,17 @@ export function EvidenceMapD3({
         .flatMap((link) => [link.sourceNode.id, link.targetNode.id]),
     ]);
   }, [filteredLinks, selectedNodeId]);
+  const selectedNodeCitation = useMemo(
+    () => selectedNode ? citationForEvidenceMapNode(selectedNode, graph.links) : null,
+    [graph.links, selectedNode]
+  );
+
+  useEffect(() => {
+    setNodeOverrides(new Map());
+    const fittedView = fitGraphToView(graph.nodes);
+    setPan(fittedView.pan);
+    setZoom(fittedView.zoom);
+  }, [graph.nodes]);
 
   function updateZoom(nextZoom: number) {
     setZoom(Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, nextZoom)));
@@ -280,6 +291,8 @@ export function EvidenceMapD3({
   function handlePointerMove(event: PointerEvent<SVGSVGElement>) {
     if (nodeDrag) {
       const point = screenToGraph(event.clientX, event.clientY);
+      const deltaX = point.x - nodeDrag.startGraphX;
+      const deltaY = point.y - nodeDrag.startGraphY;
       const hasMoved =
         nodeDrag.moved ||
         Math.hypot(
@@ -288,12 +301,12 @@ export function EvidenceMapD3({
         ) > 4;
       setNodeOverrides((current) => {
         const next = new Map(current);
-        const draggedNode = positionedNodeById.get(nodeDrag.id);
-        const radius = draggedNode ? evidenceNodeStyle(draggedNode).radius : 12;
-        next.set(nodeDrag.id, {
-          x: Math.max(radius + 8, Math.min(GRAPH_WIDTH - radius - 8, point.x)),
-          y: Math.max(radius + 8, Math.min(GRAPH_HEIGHT - radius - 8, point.y)),
-        });
+        for (const [nodeId, origin] of nodeDrag.origins) {
+          next.set(nodeId, {
+            x: origin.x + deltaX,
+            y: origin.y + deltaY,
+          });
+        }
         return next;
       });
       if (hasMoved && !nodeDrag.moved) {
@@ -348,15 +361,9 @@ export function EvidenceMapD3({
   }
 
   function resetView() {
-    setPan({ x: 0, y: 0 });
-    setZoom(1);
-  }
-
-  function spreadLayout() {
-    setSelectedNodeId(null);
-    setNodeOverrides(new Map());
-    setLayoutIteration((current) => current + 1);
-    resetView();
+    const fittedView = fitGraphToView(positionedNodes);
+    setPan(fittedView.pan);
+    setZoom(fittedView.zoom);
   }
 
   function focusNode(nodeId: string) {
@@ -501,11 +508,15 @@ export function EvidenceMapD3({
                   }}
                   onPointerDown={(event) => {
                     event.stopPropagation();
+                    const startPoint = screenToGraph(event.clientX, event.clientY);
                     setNodeDrag({
                       id: node.id,
                       moved: false,
                       startClientX: event.clientX,
                       startClientY: event.clientY,
+                      startGraphX: startPoint.x,
+                      startGraphY: startPoint.y,
+                      origins: buildNodeDragOrigins(node, positionedNodeById, graph.links),
                     });
                   }}
                   onMouseEnter={(event: MouseEvent<SVGGElement>) => {
@@ -586,14 +597,13 @@ export function EvidenceMapD3({
         onClearTypes={() => setSelectedTypes(new Set())}
         onResetView={resetView}
         onSelectType={toggleNodeType}
-        onSpreadLayout={spreadLayout}
         onZoomIn={() => updateZoom(zoom + 0.12)}
         onZoomOut={() => updateZoom(zoom - 0.12)}
+        selectedNodeCitation={selectedNodeCitation}
         selectedNode={selectedNode}
         selectedTypes={selectedTypes}
         totalLinkCount={graph.links.length}
         totalNodeCount={graph.nodes.length}
-        zoom={zoom}
         onCitationClick={onCitationClick}
         onRxcuiClick={onRxcuiClick}
       />
@@ -612,14 +622,13 @@ function EvidenceMapSidePanel({
   onResetView,
   onRxcuiClick,
   onSelectType,
-  onSpreadLayout,
   onZoomIn,
   onZoomOut,
+  selectedNodeCitation,
   selectedNode,
   selectedTypes,
   totalLinkCount,
   totalNodeCount,
-  zoom,
 }: {
   filteredLinkCount: number;
   filteredNodeCount: number;
@@ -629,14 +638,13 @@ function EvidenceMapSidePanel({
   onResetView: () => void;
   onRxcuiClick: (target: EvidenceMapNavigationTarget) => void;
   onSelectType: (kind: string) => void;
-  onSpreadLayout: () => void;
   onZoomIn: () => void;
   onZoomOut: () => void;
+  selectedNodeCitation: EvidenceCitation | null;
   selectedNode: VisualNode | null;
   selectedTypes: Set<string>;
   totalLinkCount: number;
   totalNodeCount: number;
-  zoom: number;
 }) {
   return (
     <aside className="space-y-3">
@@ -672,19 +680,10 @@ function EvidenceMapSidePanel({
             </button>
           </div>
         </div>
-        <Button
-          type="button"
-          variant="secondary"
-          className="h-8 w-full px-2 py-1.5 text-xs"
-          onClick={onSpreadLayout}
-          title="Rerun the force layout with more separation"
-        >
-          Spread layout
-        </Button>
-        <div className="mt-3 text-xs leading-5 text-slate-500">
-          Zoom {zoom.toFixed(2)} · Showing {filteredNodeCount} of{" "}
-          {totalNodeCount} nodes and {filteredLinkCount} of {totalLinkCount}{" "}
-          links.
+        <div className="text-xs leading-5 text-slate-500">
+          Showing {filteredNodeCount} of {totalNodeCount} nodes and{" "}
+          {filteredLinkCount} of {totalLinkCount} links. Hover over a line to
+          see the relationship. Double click a node to focus it.
         </div>
       </div>
 
@@ -725,27 +724,21 @@ function EvidenceMapSidePanel({
               ) : null}
             </div>
 
-            {selectedNode.source_id && selectedNode.section ? (
+            {selectedNodeCitation ? (
               <Button
                 type="button"
-                className="px-3 py-1.5 text-xs"
-                onClick={() =>
-                  onCitationClick({
-                    source_id: selectedNode.source_id as string,
-                    section: selectedNode.section as string,
-                    rxcui: selectedNode.rxcui,
-                  })
-                }
+                className="h-7 px-2.5 py-1 text-xs"
+                onClick={() => onCitationClick(selectedNodeCitation)}
               >
-                Open supporting evidence
+                Show in supporting evidence
               </Button>
             ) : selectedNode.rxcui ? (
               <Button
                 type="button"
-                className="px-3 py-1.5 text-xs"
+                className="h-7 px-2.5 py-1 text-xs"
                 onClick={() => onRxcuiClick({ rxcui: selectedNode.rxcui as string })}
               >
-                Open supporting evidence
+                Show in supporting evidence
               </Button>
             ) : null}
           </div>
@@ -815,13 +808,14 @@ function EvidenceMapSidePanel({
   );
 }
 
-function buildD3EvidenceGraph(map: QuestionEvidenceMap, layoutIteration: number) {
+function buildD3EvidenceGraph(map: QuestionEvidenceMap) {
+  const topology = buildEvidenceMapTopology(map);
   const nodes: VisualNode[] = map.nodes.map((node) => {
-    const anchor = evidenceMapAnchor(node.kind);
+    const anchor = evidenceMapAnchor(node, topology);
     return {
       ...node,
-      x: anchor.x + evidenceMapSeedOffset(node.id, "x", layoutIteration),
-      y: anchor.y + evidenceMapSeedOffset(node.id, "y", layoutIteration),
+      x: anchor.x + evidenceMapSeedOffset(node.id, "x"),
+      y: anchor.y + evidenceMapSeedOffset(node.id, "y"),
     };
   });
   const nodeById = new Map(nodes.map((node) => [node.id, node]));
@@ -836,24 +830,22 @@ function buildD3EvidenceGraph(map: QuestionEvidenceMap, layoutIteration: number)
         simulationLinks
       )
         .id((node) => node.id)
-        .distance((link) =>
-          evidenceMapLinkDistance(link.kind) + layoutIteration * 10
-        )
-        .strength(0.44)
+        .distance((link) => evidenceMapLinkDistance(link.kind))
+        .strength((link) => evidenceMapLinkStrength(link.kind))
     )
-    .force("charge", forceManyBody().strength(-120 - layoutIteration * 26))
+    .force("charge", forceManyBody().strength(-150))
     .force(
       "collide",
       forceCollide<VisualNode>(
-        (node) => evidenceNodeStyle(node).radius + 8 + layoutIteration * 1.5
-      )
+        (node) => evidenceNodeStyle(node).radius + 9
+      ).iterations(3)
     )
     .force("center", forceCenter(GRAPH_WIDTH / 2, GRAPH_HEIGHT / 2))
-    .force("x", forceX<VisualNode>((node) => evidenceMapAnchor(node.kind).x).strength(0.09))
-    .force("y", forceY<VisualNode>((node) => evidenceMapAnchor(node.kind).y).strength(0.09))
+    .force("x", forceX<VisualNode>((node) => evidenceMapAnchor(node, topology).x).strength(0.13))
+    .force("y", forceY<VisualNode>((node) => evidenceMapAnchor(node, topology).y).strength(0.12))
     .stop();
 
-  for (let index = 0; index < 220 + layoutIteration * 20; index += 1) {
+  for (let index = 0; index < 360; index += 1) {
     simulation.tick();
   }
 
@@ -869,6 +861,84 @@ function buildD3EvidenceGraph(map: QuestionEvidenceMap, layoutIteration: number)
     .filter((link): link is VisualLink => Boolean(link));
 
   return { nodes, links };
+}
+
+type EvidenceMapTopology = {
+  anchorsById: Map<string, { x: number; y: number }>;
+};
+
+function buildEvidenceMapTopology(map: QuestionEvidenceMap): EvidenceMapTopology {
+  const nodeById = new Map(map.nodes.map((node) => [node.id, node]));
+  const childIdsByParentId = new Map<string, string[]>();
+  const parentIdsByChildId = new Map<string, string[]>();
+  for (const edge of map.edges) {
+    if (!nodeById.has(edge.source) || !nodeById.has(edge.target)) {
+      continue;
+    }
+    const children = childIdsByParentId.get(edge.source) ?? [];
+    children.push(edge.target);
+    childIdsByParentId.set(edge.source, children);
+
+    const parents = parentIdsByChildId.get(edge.target) ?? [];
+    parents.push(edge.source);
+    parentIdsByChildId.set(edge.target, parents);
+  }
+
+  const questionNodes = map.nodes.filter((node) => node.kind === "question");
+  const rootId = questionNodes[0]?.id ?? map.nodes[0]?.id;
+  const anchorsById = new Map<string, { x: number; y: number }>();
+  if (!rootId) {
+    return { anchorsById };
+  }
+
+  anchorsById.set(rootId, graphCenter());
+  const depthsById = new Map<string, number>([[rootId, 0]]);
+  const queue = [rootId];
+  for (let index = 0; index < queue.length; index += 1) {
+    const parentId = queue[index];
+    const parentDepth = depthsById.get(parentId) ?? 0;
+    for (const childId of childIdsByParentId.get(parentId) ?? []) {
+      if (!depthsById.has(childId)) {
+        depthsById.set(childId, parentDepth + 1);
+        queue.push(childId);
+      }
+    }
+  }
+
+  const rootChildren = childIdsByParentId.get(rootId) ?? [];
+  const branchAngleById = new Map<string, number>();
+  rootChildren.forEach((childId, index) => {
+    branchAngleById.set(childId, radialAngle(index, rootChildren.length));
+  });
+
+  for (const node of map.nodes) {
+    if (node.id === rootId) {
+      continue;
+    }
+    const depth = depthsById.get(node.id) ?? evidenceMapFallbackDepth(node.kind);
+    const parents = parentIdsByChildId.get(node.id) ?? [];
+    const parentAngles = parents
+      .map((parentId) => branchAngleById.get(parentId))
+      .filter((angle): angle is number => typeof angle === "number");
+    const baseAngle =
+      branchAngleById.get(node.id) ??
+      averageAngle(parentAngles) ??
+      radialAngle(map.nodes.indexOf(node), map.nodes.length);
+
+    branchAngleById.set(node.id, baseAngle);
+    const siblings = parents.length
+      ? parents.flatMap((parentId) => childIdsByParentId.get(parentId) ?? [])
+      : map.nodes.filter((otherNode) => otherNode.kind === node.kind).map((otherNode) => otherNode.id);
+    const siblingIndex = Math.max(0, siblings.indexOf(node.id));
+    const siblingOffsetAngle = siblingAngleOffset(siblingIndex, siblings.length, depth);
+    const radius = evidenceMapDepthRadius(depth, node.kind);
+    anchorsById.set(
+      node.id,
+      polarToPoint(radius, baseAngle + siblingOffsetAngle)
+    );
+  }
+
+  return { anchorsById };
 }
 
 function withoutTerminologyContext(map: QuestionEvidenceMap): QuestionEvidenceMap {
@@ -889,41 +959,227 @@ function withoutTerminologyContext(map: QuestionEvidenceMap): QuestionEvidenceMa
   };
 }
 
-function evidenceMapAnchor(kind: string) {
+function evidenceMapAnchor(
+  nodeOrKind: QuestionEvidenceMapNode | string,
+  topology?: EvidenceMapTopology
+) {
+  const kind = typeof nodeOrKind === "string" ? nodeOrKind : nodeOrKind.kind;
+  const node = typeof nodeOrKind === "string" ? null : nodeOrKind;
+  if (node && topology?.anchorsById.has(node.id)) {
+    return topology.anchorsById.get(node.id) ?? graphCenter();
+  }
+
   const anchors: Record<string, { x: number; y: number }> = {
-    question: { x: GRAPH_WIDTH * 0.18, y: GRAPH_HEIGHT * 0.5 },
-    query_concept: { x: GRAPH_WIDTH * 0.35, y: GRAPH_HEIGHT * 0.5 },
-    resolved_medication: { x: GRAPH_WIDTH * 0.48, y: GRAPH_HEIGHT * 0.42 },
-    label_source: { x: GRAPH_WIDTH * 0.66, y: GRAPH_HEIGHT * 0.5 },
-    label_section: { x: GRAPH_WIDTH * 0.82, y: GRAPH_HEIGHT * 0.5 },
-    rxnorm_context: { x: GRAPH_WIDTH * 0.52, y: GRAPH_HEIGHT * 0.72 },
+    question: { x: GRAPH_WIDTH * 0.5, y: GRAPH_HEIGHT * 0.5 },
+    query_concept: polarToPoint(88, -Math.PI / 2),
+    resolved_medication: polarToPoint(152, 0),
+    label_source: polarToPoint(228, Math.PI / 2),
+    label_section: polarToPoint(300, Math.PI),
+    rxnorm_context: polarToPoint(180, Math.PI / 4),
   };
   return anchors[kind] ?? { x: GRAPH_WIDTH * 0.5, y: GRAPH_HEIGHT * 0.5 };
 }
 
+function graphCenter() {
+  return { x: GRAPH_WIDTH / 2, y: GRAPH_HEIGHT / 2 };
+}
+
+function radialAngle(index: number, count: number) {
+  if (count <= 1) {
+    return -Math.PI / 2;
+  }
+  return -Math.PI / 2 + (index * Math.PI * 2) / count;
+}
+
+function siblingAngleOffset(index: number, count: number, depth: number) {
+  if (count <= 1) {
+    return 0;
+  }
+  const center = (count - 1) / 2;
+  const maxSpread = depth >= 3 ? 0.42 : 0.3;
+  const step = Math.min(0.16, maxSpread / Math.max(1, count - 1));
+  return (index - center) * step;
+}
+
+function evidenceMapDepthRadius(depth: number, kind: string) {
+  const depthRadius: Record<number, number> = {
+    0: 0,
+    1: 72,
+    2: 128,
+    3: 188,
+    4: 246,
+  };
+  if (kind === "label_section") {
+    return 254;
+  }
+  return depthRadius[Math.min(4, depth)] ?? 210;
+}
+
+function evidenceMapFallbackDepth(kind: string) {
+  const fallbackDepths: Record<string, number> = {
+    question: 0,
+    query_concept: 1,
+    resolved_medication: 2,
+    label_source: 3,
+    label_section: 4,
+    rxnorm_context: 3,
+  };
+  return fallbackDepths[kind] ?? 2;
+}
+
+function polarToPoint(radius: number, angle: number) {
+  return {
+    x: GRAPH_WIDTH / 2 + Math.cos(angle) * radius,
+    y: GRAPH_HEIGHT / 2 + Math.sin(angle) * radius,
+  };
+}
+
+function averageAngle(angles: number[]) {
+  if (angles.length === 0) {
+    return null;
+  }
+  const x = angles.reduce((total, angle) => total + Math.cos(angle), 0);
+  const y = angles.reduce((total, angle) => total + Math.sin(angle), 0);
+  return Math.atan2(y, x);
+}
+
 function evidenceMapLinkDistance(kind: string) {
   const distances: Record<string, number> = {
-    resolved_as: 90,
-    has_role: 100,
-    has_label_source: 76,
-    interaction_lookup_source: 84,
-    has_label_section: 36,
-    mentions_in_interaction_section: 70,
-    has_terminology_context: 110,
+    resolved_as: 82,
+    has_role: 78,
+    has_label_source: 72,
+    interaction_lookup_source: 78,
+    has_label_section: 32,
+    mentions_in_interaction_section: 36,
+    has_terminology_context: 82,
   };
-  return distances[kind] ?? 80;
+  return distances[kind] ?? 64;
+}
+
+function evidenceMapLinkStrength(kind: string) {
+  const strengths: Record<string, number> = {
+    resolved_as: 0.42,
+    has_role: 0.32,
+    has_label_source: 0.58,
+    interaction_lookup_source: 0.62,
+    has_label_section: 0.86,
+    mentions_in_interaction_section: 0.9,
+    has_terminology_context: 0.32,
+  };
+  return strengths[kind] ?? 0.45;
 }
 
 function evidenceMapSeedOffset(
   id: string,
-  axis: "x" | "y",
-  layoutIteration: number
+  axis: "x" | "y"
 ) {
   const seed = Array.from(id).reduce(
     (total, character) => total + character.charCodeAt(0),
-    axis === "x" ? 19 + layoutIteration * 31 : 47 + layoutIteration * 37
+    axis === "x" ? 19 : 47
   );
-  return (seed % (80 + layoutIteration * 22)) - (40 + layoutIteration * 11);
+  return (seed % 54) - 27;
+}
+
+function fitGraphToView(nodes: VisualNode[]) {
+  if (nodes.length === 0) {
+    return { pan: { x: 0, y: 0 }, zoom: 1 };
+  }
+  let minX = Number.POSITIVE_INFINITY;
+  let maxX = Number.NEGATIVE_INFINITY;
+  let minY = Number.POSITIVE_INFINITY;
+  let maxY = Number.NEGATIVE_INFINITY;
+
+  for (const node of nodes) {
+    const radius = evidenceNodeStyle(node).radius;
+    minX = Math.min(minX, node.x - radius);
+    maxX = Math.max(maxX, node.x + radius);
+    minY = Math.min(minY, node.y - radius);
+    maxY = Math.max(maxY, node.y + radius);
+  }
+
+  const graphWidth = Math.max(1, maxX - minX);
+  const graphHeight = Math.max(1, maxY - minY);
+  const zoom = clamp(
+    Math.min(
+      (GRAPH_WIDTH - FIT_PADDING * 2) / graphWidth,
+      (GRAPH_HEIGHT - FIT_PADDING * 2) / graphHeight
+    ),
+    MIN_ZOOM,
+    1.08
+  );
+  const centerX = (minX + maxX) / 2;
+  const centerY = (minY + maxY) / 2;
+
+  return {
+    pan: {
+      x: GRAPH_WIDTH / 2 - centerX * zoom,
+      y: GRAPH_HEIGHT / 2 - centerY * zoom,
+    },
+    zoom,
+  };
+}
+
+function buildNodeDragOrigins(
+  node: VisualNode,
+  nodeById: Map<string, VisualNode>,
+  links: VisualLink[]
+) {
+  const draggedIds = new Set([node.id]);
+  const childIdsByParentId = new Map<string, string[]>();
+  for (const link of links) {
+    const children = childIdsByParentId.get(link.sourceNode.id) ?? [];
+    children.push(link.targetNode.id);
+    childIdsByParentId.set(link.sourceNode.id, children);
+  }
+
+  const queue = [node.id];
+  for (let index = 0; index < queue.length; index += 1) {
+    const parentId = queue[index];
+    for (const childId of childIdsByParentId.get(parentId) ?? []) {
+      if (!draggedIds.has(childId)) {
+        draggedIds.add(childId);
+        queue.push(childId);
+      }
+    }
+  }
+
+  const origins = new Map<string, { x: number; y: number }>();
+  for (const nodeId of draggedIds) {
+    const draggedNode = nodeById.get(nodeId);
+    if (draggedNode) {
+      origins.set(nodeId, { x: draggedNode.x, y: draggedNode.y });
+    }
+  }
+  return origins;
+}
+
+function citationForEvidenceMapNode(
+  node: VisualNode,
+  links: VisualLink[]
+): EvidenceCitation | null {
+  if (node.source_id && node.section) {
+    return {
+      source_id: node.source_id,
+      section: node.section,
+      rxcui: node.rxcui,
+    };
+  }
+  if (node.source_id) {
+    const sectionLink = links.find(
+      (link) =>
+        link.sourceNode.id === node.id &&
+        link.targetNode.source_id === node.source_id &&
+        Boolean(link.targetNode.section)
+    );
+    if (sectionLink?.targetNode.section) {
+      return {
+        source_id: node.source_id,
+        section: sectionLink.targetNode.section,
+        rxcui: node.rxcui ?? sectionLink.targetNode.rxcui,
+      };
+    }
+  }
+  return null;
 }
 
 function evidenceMapLinkEndpoints(link: VisualLink) {
