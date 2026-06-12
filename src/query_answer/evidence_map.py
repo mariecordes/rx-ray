@@ -71,6 +71,7 @@ def build_question_evidence_map(
             scope="secondary",
             source_concept_node_id=concept_node_id,
             resolved_concepts=resolved_concepts,
+            interaction_partner_concept=primary,
         )
         # Keep RxNorm pair context available on SecondaryDrugEvidence, but do not
         # render it into the question-level evidence map for now. In practice it
@@ -108,7 +109,13 @@ class EvidenceMapBuilder:
         if edge.id in self.edges:
             existing = self.edges[edge.id]
             self.edges[edge.id] = existing.model_copy(
-                update={"tags": merge_tags(existing.tags, edge.tags)}
+                update={
+                    "tags": merge_tags(existing.tags, edge.tags),
+                    "interaction_terms": merge_tags(
+                        existing.interaction_terms,
+                        edge.interaction_terms,
+                    ),
+                }
             )
             return
         self.edges[edge.id] = edge
@@ -147,7 +154,7 @@ def _add_state_nodes(
         ("patient_context", understanding.state.patient_context),
     ]:
         for value in unique_values([item for item in values if item]):
-            concept_id = state_node_id(role, value)
+            concept_id = state_node_id(value)
             builder.add_node(
                 QuestionEvidenceMapNode(
                     id=concept_id,
@@ -155,15 +162,17 @@ def _add_state_nodes(
                     label=value,
                     subtitle=display_role(role),
                     role=role,
+                    tags=[role],
                 )
             )
             builder.add_edge(
                 QuestionEvidenceMapEdge(
-                    id=f"question->{concept_id}",
+                    id=f"question->{concept_id}:has_role",
                     source="question",
                     target=concept_id,
                     kind="has_role",
-                    label=f"Extracted as {display_role(role)}",
+                    label="Extracted from user question",
+                    tags=[role],
                 )
             )
 
@@ -185,11 +194,11 @@ def _add_resolved_drug_nodes(
                 kind="resolved_medication",
                 label=concept.name,
                 subtitle=concept.tty or "RxNorm concept",
-                role=mention.role,
                 rxcui=concept.rxcui,
+                tags=[mention.role],
             )
         )
-        state_id = state_node_id(mention.role, mention.text)
+        state_id = state_node_id(mention.text)
         if state_id in builder.nodes:
             builder.add_edge(
                 QuestionEvidenceMapEdge(
@@ -215,12 +224,12 @@ def _add_resolved_drug_nodes(
                 kind="resolved_medication",
                 label=primary.name,
                 subtitle=primary.tty or "RxNorm concept",
-                role="primary_drug",
                 rxcui=primary.rxcui,
+                tags=["primary_drug"],
             )
         )
         if understanding.state.primary_drug:
-            state_id = state_node_id("primary_drug", understanding.state.primary_drug)
+            state_id = state_node_id(understanding.state.primary_drug)
             if state_id in builder.nodes:
                 builder.add_edge(
                     QuestionEvidenceMapEdge(
@@ -242,6 +251,7 @@ def _add_label_evidence(
     scope: str,
     source_concept_node_id: str,
     resolved_concepts: list[RxNormConcept],
+    interaction_partner_concept: RxNormConcept | None = None,
 ) -> None:
     if evidence is None:
         return
@@ -286,22 +296,45 @@ def _add_label_evidence(
 
         is_interaction_targeted_record = INTERACTION_TARGETED_TAG in record.provenance_tags
         if is_interaction_targeted_record:
-            builder.add_edge(
-                QuestionEvidenceMapEdge(
-                    id=(
-                        f"{source_concept_node_id}->{source_node_id}:"
-                        "interaction_lookup_source"
-                    ),
-                    source=source_concept_node_id,
-                    target=source_node_id,
-                    kind="interaction_lookup_source",
-                    label="Interaction-specific lookup returned this label source",
-                    rxcui=concept.rxcui,
-                    source_id=source_id,
-                    evidence_scope=scope,
-                    tags=merge_tags(record.provenance_tags, [INTERACTION_TARGETED_TAG]),
-                )
+            interaction_terms = unique_values(
+                [
+                    term
+                    for term in [
+                        concept.name,
+                        interaction_partner_concept.name
+                        if interaction_partner_concept
+                        else None,
+                    ]
+                    if term
+                ]
             )
+            interaction_concepts = [concept]
+            if (
+                interaction_partner_concept
+                and interaction_partner_concept.rxcui != concept.rxcui
+            ):
+                interaction_concepts.append(interaction_partner_concept)
+            for interaction_concept in interaction_concepts:
+                builder.add_edge(
+                    QuestionEvidenceMapEdge(
+                        id=(
+                            f"{rxnorm_node_id(interaction_concept.rxcui)}->"
+                            f"{source_node_id}:interaction_lookup_source"
+                        ),
+                        source=rxnorm_node_id(interaction_concept.rxcui),
+                        target=source_node_id,
+                        kind="interaction_lookup_source",
+                        label="Interaction-specific lookup returned this label source",
+                        rxcui=interaction_concept.rxcui,
+                        source_id=source_id,
+                        evidence_scope=scope,
+                        interaction_terms=interaction_terms,
+                        tags=merge_tags(
+                            record.provenance_tags,
+                            [INTERACTION_TARGETED_TAG],
+                        ),
+                    )
+                )
 
         for section_name, entries in sections_by_source.get(source_id, {}).items():
             section_tags = merge_tags(
@@ -438,8 +471,8 @@ def matching_label_owner_concepts(
     return matches
 
 
-def state_node_id(role: str, value: str) -> str:
-    return f"query-concept:{role}:{slug(value)}"
+def state_node_id(value: str) -> str:
+    return f"query-concept:{slug(value)}"
 
 
 def rxnorm_node_id(rxcui: str) -> str:

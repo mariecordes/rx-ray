@@ -186,6 +186,7 @@ export type QuestionEvidenceMapEdge = {
   source_id?: string | null;
   section?: string | null;
   evidence_scope?: string | null;
+  interaction_terms?: string[];
   tags: string[];
 };
 

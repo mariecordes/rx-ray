@@ -14,7 +14,6 @@ import type { MouseEvent, PointerEvent, WheelEvent } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   EvidenceCitation,
@@ -79,7 +78,7 @@ const nodeStyles: Record<
     radius: 18,
   },
   label_source: {
-    label: "Label source",
+    label: "Drug label",
     fill: "#E0F2FE",
     stroke: "#0284C7",
     radius: 10,
@@ -98,6 +97,49 @@ const nodeStyles: Record<
     stroke: "#D97706",
     radius: 12,
   },
+};
+
+const evidenceNodeTypeOrder = [
+  "question",
+  "query_concept",
+  "resolved_medication",
+  "label_source",
+  "label_section",
+  "rxnorm_context",
+];
+
+const evidenceMapRoleTags = new Set([
+  "primary_drug",
+  "current_medication",
+  "mentioned_drug",
+  "allergy",
+  "condition",
+  "patient_context",
+]);
+
+const rxNormTypeLabels: Record<string, string> = {
+  IN: "Ingredient",
+  PIN: "Precise Ingredient",
+  MIN: "Multiple Ingredients",
+  BN: "Brand Name",
+  SCDC: "Semantic Clinical Drug Component",
+  SCDF: "Semantic Clinical Drug Form",
+  SCDFP: "Semantic Clinical Drug Form Precise",
+  SCDG: "Semantic Clinical Drug Group",
+  SCDGP: "Semantic Clinical Drug Form Group Precise",
+  SCD: "Semantic Clinical Drug",
+  GPCK: "Generic Pack",
+  SBDC: "Semantic Branded Drug Component",
+  SBDF: "Semantic Branded Drug Form",
+  SBDFP: "Semantic Branded Drug Form Precise",
+  SBDG: "Semantic Branded Drug Group",
+  SBD: "Semantic Branded Drug",
+  BPCK: "Brand Name Pack",
+  DF: "Dose Form",
+  DFG: "Dose Form Group",
+  PSN: "Prescribable Name",
+  SY: "Synonym",
+  TMSY: "Tall Man Lettering Synonym",
 };
 
 type EvidenceMapD3Props = {
@@ -215,6 +257,7 @@ export function EvidenceMapD3({
   const visibleNodeTypes = useMemo(() => {
     return Array.from(new Set(graph.nodes.map((node) => node.kind))).sort(
       (left, right) =>
+        nodeTypeSortIndex(left) - nodeTypeSortIndex(right) ||
         evidenceNodeStyle(left).label.localeCompare(evidenceNodeStyle(right).label)
     );
   }, [graph.nodes]);
@@ -680,11 +723,6 @@ function EvidenceMapSidePanel({
             </button>
           </div>
         </div>
-        <div className="text-xs leading-5 text-slate-500">
-          Showing {filteredNodeCount} of {totalNodeCount} nodes and{" "}
-          {filteredLinkCount} of {totalLinkCount} links. Hover over a line to
-          see the relationship. Double click a node to focus it.
-        </div>
       </div>
 
       <div className="h-40 rounded-md border border-slate-200 bg-slate-50 p-3">
@@ -725,21 +763,23 @@ function EvidenceMapSidePanel({
             </div>
 
             {selectedNodeCitation ? (
-              <Button
-                type="button"
-                className="h-7 px-2.5 py-1 text-xs"
+              <Badge
+                className="w-fit cursor-pointer !border-[#371E8F] !bg-[#371E8F] !text-white hover:!bg-[#371E8F]"
                 onClick={() => onCitationClick(selectedNodeCitation)}
+                title="Show in supporting evidence"
               >
                 Show in supporting evidence
-              </Button>
+              </Badge>
             ) : selectedNode.rxcui ? (
-              <Button
-                type="button"
-                className="h-7 px-2.5 py-1 text-xs"
-                onClick={() => onRxcuiClick({ rxcui: selectedNode.rxcui as string })}
+              <Badge
+                className="w-fit cursor-pointer !border-[#371E8F] !bg-[#371E8F] !text-white hover:!bg-[#371E8F]"
+                onClick={() =>
+                  onRxcuiClick({ rxcui: selectedNode.rxcui as string })
+                }
+                title="Show in supporting evidence"
               >
                 Show in supporting evidence
-              </Button>
+              </Badge>
             ) : null}
           </div>
         ) : (
@@ -789,10 +829,7 @@ function EvidenceMapSidePanel({
                 onClick={() => onSelectType(kind)}
               >
                 <span
-                  className={[
-                    "size-3 shrink-0 rounded-full border",
-                    kind === "label_source" ? "border-dashed" : "",
-                  ].join(" ")}
+                  className="size-3 shrink-0 rounded-full border"
                   style={{
                     backgroundColor: style.fill,
                     borderColor: style.stroke,
@@ -802,8 +839,22 @@ function EvidenceMapSidePanel({
               </button>
             );
           })}
+          <div
+            className="flex min-w-0 items-center gap-2 rounded-md px-2 py-1 text-left text-slate-700"
+            style={{ fontSize: "12px", lineHeight: "13px" }}
+          >
+            <span className="flex h-3 w-3 shrink-0 items-center">
+              <span className="w-3 border-t border-dashed border-[#371E8F]" />
+            </span>
+            <span className="truncate">Interaction-specific</span>
+          </div>
         </div>
       </div>
+      <p className="px-1 text-xs leading-5 text-slate-500">
+        Showing {filteredNodeCount} of {totalNodeCount} nodes and{" "}
+        {filteredLinkCount} of {totalLinkCount} links. Hover over a line to see
+        the relationship. Double click a node to focus it.
+      </p>
     </aside>
   );
 }
@@ -1238,8 +1289,12 @@ function edgeTooltipContent(link: VisualLink) {
         title,
         body: (
           <>
-            The {displayMentionRole(link.targetNode.role ?? "query_concept").toLowerCase()}{" "}
-            <strong>{target.toUpperCase()}</strong> was extracted from the user question.
+            <strong>{target.toUpperCase()}</strong> was extracted from the user
+            question
+            {conceptRoleLabels(link.targetNode).length
+              ? ` as ${formatList(conceptRoleLabels(link.targetNode).map((role) => role.toLowerCase()))}`
+              : ""}
+            .
           </>
         ),
       };
@@ -1265,13 +1320,16 @@ function edgeTooltipContent(link: VisualLink) {
         ),
       };
     case "interaction_lookup_source":
+      const interactionTerms = link.interaction_terms?.length
+        ? link.interaction_terms.map((term) => term.toUpperCase())
+        : [source.toUpperCase()];
       return {
         title,
         body: (
           <>
-            An interaction-specific lookup for <strong>{source.toUpperCase()}</strong>{" "}
-            returned the label source <strong>{target}</strong>. The returned source may
-            be the label for another mentioned medication.
+            An interaction-specific lookup for{" "}
+            <strong>{formatList(interactionTerms)}</strong> returned the drug
+            label <strong>{target}</strong>.
           </>
         ),
       };
@@ -1319,8 +1377,18 @@ function edgeTooltipContent(link: VisualLink) {
 
 function nodeTooltipBody(node: QuestionEvidenceMapNode) {
   const lines = [evidenceNodeStyle(node).label];
-  if (node.role) {
-    lines.push(displayMentionRole(node.role));
+  if (node.kind === "query_concept") {
+    const roles = conceptRoleLabels(node);
+    if (roles.length) {
+      lines.push(formatList(roles));
+    }
+    if (node.subtitle && !roles.includes(node.subtitle)) {
+      lines.push(node.subtitle);
+    }
+    return lines.join("\n");
+  }
+  if (node.kind === "resolved_medication" && node.subtitle) {
+    lines.push(displayRxNormType(node.subtitle));
   }
   if (node.rxcui) {
     lines.push(`RXCUI ${node.rxcui}`);
@@ -1328,16 +1396,13 @@ function nodeTooltipBody(node: QuestionEvidenceMapNode) {
   if (node.section) {
     lines.push(displaySectionName(node.section));
   }
-  if (node.subtitle) {
+  if (node.subtitle && node.kind !== "resolved_medication") {
     lines.push(node.subtitle);
   }
   return lines.join("\n");
 }
 
 function displayEvidenceMapNodeKind(node: QuestionEvidenceMapNode) {
-  if (node.role) {
-    return displayMentionRole(node.role);
-  }
   return evidenceNodeStyle(node).label;
 }
 
@@ -1356,6 +1421,39 @@ function displayMentionRole(value: string) {
     allergy: "Allergy",
   };
   return labels[value] ?? sentenceCase(value.replaceAll("_", " "));
+}
+
+function conceptRoleLabels(node: QuestionEvidenceMapNode) {
+  return roleTags(node).map(displayMentionRole);
+}
+
+function roleTags(node: QuestionEvidenceMapNode) {
+  const tags = new Set(
+    [
+      node.role,
+      ...node.tags.filter((tag) => evidenceMapRoleTags.has(tag)),
+    ].filter((tag): tag is string => Boolean(tag))
+  );
+  return Array.from(tags);
+}
+
+function displayRxNormType(value: string) {
+  return rxNormTypeLabels[value.toUpperCase()] ?? sentenceCase(value);
+}
+
+function formatList(values: string[]) {
+  if (values.length <= 1) {
+    return values[0] ?? "";
+  }
+  if (values.length === 2) {
+    return `${values[0]} and ${values[1]}`;
+  }
+  return `${values.slice(0, -1).join(", ")}, and ${values[values.length - 1]}`;
+}
+
+function nodeTypeSortIndex(kind: string) {
+  const index = evidenceNodeTypeOrder.indexOf(kind);
+  return index === -1 ? Number.MAX_SAFE_INTEGER : index;
 }
 
 function displayGraphNodeName(name: string) {

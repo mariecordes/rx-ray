@@ -98,6 +98,7 @@ class QuestionEvidenceMapEdge(BaseModel):
     source_id: str | None = None
     section: str | None = None
     evidence_scope: str | None = None
+    interaction_terms: list[str] = Field(default_factory=list)
     tags: list[str] = Field(default_factory=list)
 
 
