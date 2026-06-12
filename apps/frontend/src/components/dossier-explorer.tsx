@@ -21,7 +21,7 @@ import {
   TriangleAlert,
 } from "lucide-react";
 
-import { EvidenceMapSection } from "@/components/question-evidence-map-section";
+import { EvidenceMapD3 } from "@/components/question-evidence-map-d3";
 import { RxNormKnowledgeGraph } from "@/components/rxnorm-knowledge-graph";
 import {
   DEMO_QUERY,
@@ -633,7 +633,7 @@ export function AskQuestionExperience() {
       queryAnswer?.question_evidence_map?.nodes.length &&
       !isAnswerLoading &&
       !isUnderstandingLoading ? (
-        <EvidenceMapSection
+        <EvidenceMapD3
           map={queryAnswer.question_evidence_map}
           onCitationClick={handleAnswerCitationClick}
           onRxcuiClick={handleCoverageTargetClick}

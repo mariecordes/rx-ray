@@ -9,19 +9,23 @@ import {
   forceX,
   forceY,
 } from "d3-force";
-import { Maximize2, Minus, Plus } from "lucide-react";
+import { Info, Maximize2, Minus, Plus } from "lucide-react";
 import type { MouseEvent, PointerEvent, WheelEvent } from "react";
 import { useMemo, useRef, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   EvidenceCitation,
   QuestionEvidenceMap,
   QuestionEvidenceMapEdge,
   QuestionEvidenceMapNode,
 } from "@/lib/types";
-import type { EvidenceMapNavigationTarget } from "./question-evidence-map-react-flow";
+
+export type EvidenceMapNavigationTarget = {
+  rxcui: string;
+};
 
 const GRAPH_WIDTH = 900;
 const GRAPH_HEIGHT = 520;
@@ -117,6 +121,17 @@ type HoverTooltip = {
   title?: string | React.ReactNode;
   body?: string | React.ReactNode;
 };
+
+function InfoTooltip({ text }: { text: string }) {
+  return (
+    <span className="group relative inline-flex">
+      <Info className="size-3.5 text-slate-400" />
+      <span className="pointer-events-none absolute left-0 top-full z-20 mt-2 hidden w-72 rounded-md border border-slate-200 bg-white px-3 py-2 text-xs normal-case leading-5 text-slate-700 shadow-lg group-hover:block">
+        {text}
+      </span>
+    </span>
+  );
+}
 
 export function EvidenceMapD3({
   map,
@@ -390,7 +405,19 @@ export function EvidenceMapD3({
   }
 
   return (
-    <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
+    <Card>
+      <CardHeader>
+        <div className="flex items-center gap-2">
+          <CardTitle>Evidence Map</CardTitle>
+          <InfoTooltip text="This map connects extracted question concepts, RxNorm medication resolution, public FDA label sources, and retrieved label sections. Interaction-specific edges show retrieval paths, not clinical interaction claims." />
+        </div>
+        <p className="mt-1 text-sm leading-6 text-slate-500">
+          Follow how the question is translated into medication concepts and linked
+          to the retrieved public label evidence.
+        </p>
+      </CardHeader>
+      <CardContent>
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
       <div
         ref={graphFrameRef}
         className="relative h-[560px] overflow-hidden rounded-md border border-slate-200 bg-white"
@@ -570,7 +597,9 @@ export function EvidenceMapD3({
         onCitationClick={onCitationClick}
         onRxcuiClick={onRxcuiClick}
       />
-    </div>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
