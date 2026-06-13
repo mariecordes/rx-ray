@@ -170,6 +170,7 @@ export type QuestionEvidenceMapNode = {
   subtitle?: string | null;
   role?: string | null;
   rxcui?: string | null;
+  label_rxcuis?: string[];
   source_id?: string | null;
   section?: string | null;
   evidence_scope?: string | null;

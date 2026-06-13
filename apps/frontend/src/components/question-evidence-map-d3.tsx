@@ -755,6 +755,14 @@ function EvidenceMapSidePanel({
                   RXCUI {selectedNode.rxcui}
                 </Badge>
               ) : null}
+              {selectedNode.label_rxcuis?.length ? (
+                <Badge
+                  className="min-w-0 truncate"
+                  title={`OpenFDA label RXCUIs: ${selectedNode.label_rxcuis.join(", ")}`}
+                >
+                  Label RXCUIs {formatList(selectedNode.label_rxcuis)}
+                </Badge>
+              ) : null}
               {selectedNode.section ? (
                 <Badge className="min-w-0 truncate">
                   {displaySectionName(selectedNode.section)}
@@ -1390,7 +1398,10 @@ function nodeTooltipBody(node: QuestionEvidenceMapNode) {
   if (node.kind === "resolved_medication" && node.subtitle) {
     lines.push(displayRxNormType(node.subtitle));
   }
-  if (node.rxcui) {
+  if (node.label_rxcuis?.length) {
+    const label = node.label_rxcuis.length > 1 ? "RXCUIs" : "RXCUI";
+    lines.push(`${label} ${node.label_rxcuis.join(", ")}`);
+  } else if (node.rxcui) {
     lines.push(`RXCUI ${node.rxcui}`);
   }
   if (node.section) {

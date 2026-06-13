@@ -80,6 +80,7 @@ class QuestionEvidenceMapNode(BaseModel):
     subtitle: str | None = None
     role: str | None = None
     rxcui: str | None = None
+    label_rxcuis: list[str] = Field(default_factory=list)
     source_id: str | None = None
     section: str | None = None
     evidence_scope: str | None = None

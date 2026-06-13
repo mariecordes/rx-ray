@@ -717,7 +717,10 @@ def test_question_evidence_map_marks_interaction_targeted_label_sources() -> Non
         update={
             "label_records": [
                 record.model_copy(
-                    update={"provenance_tags": ["interaction_targeted_lookup"]}
+                    update={
+                        "provenance_tags": ["interaction_targeted_lookup"],
+                        "rxcuis": ["5640", "1191"],
+                    }
                 )
                 for record in fixture.label_evidence.label_records
             ],
@@ -756,6 +759,14 @@ def test_question_evidence_map_marks_interaction_targeted_label_sources() -> Non
     assert any(
         edge.kind == "has_label_section" and edge.section == "drug_interactions"
         for edge in evidence_map.edges
+    )
+    assert any(
+        node.kind == "label_source" and node.label_rxcuis == ["5640", "1191"]
+        for node in evidence_map.nodes
+    )
+    assert any(
+        node.kind == "label_section" and node.label_rxcuis == ["5640", "1191"]
+        for node in evidence_map.nodes
     )
     edge_text = " ".join(
         value for edge in evidence_map.edges for value in [edge.kind, edge.label]

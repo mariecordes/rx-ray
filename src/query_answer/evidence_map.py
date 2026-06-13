@@ -99,6 +99,10 @@ class EvidenceMapBuilder:
             self.nodes[node.id] = existing.model_copy(
                 update={
                     "tags": merge_tags(existing.tags, node.tags),
+                    "label_rxcuis": merge_tags(
+                        existing.label_rxcuis,
+                        node.label_rxcuis,
+                    ),
                     "subtitle": existing.subtitle or node.subtitle,
                 }
             )
@@ -273,6 +277,7 @@ def _add_label_evidence(
                 label=source_label(record),
                 subtitle=source_subtitle(record),
                 rxcui=owner_rxcui,
+                label_rxcuis=record.rxcuis,
                 source_id=source_id,
                 evidence_scope=scope,
                 tags=record.provenance_tags,
@@ -356,6 +361,7 @@ def _add_label_evidence(
                     label=section_name.replace("_", " "),
                     subtitle=subtitle,
                     rxcui=owner_rxcui,
+                    label_rxcuis=record.rxcuis,
                     source_id=source_id,
                     section=section_name,
                     evidence_scope=scope,
