@@ -1384,3 +1384,20 @@ def test_query_understanding_scanner_does_not_fuzzy_match_stop_words(
     assert resolved_names == {"tretinoin", "benzoyl peroxide"}
     assert response.state.all_drugs_mentioned == ["Benzoyl peroxide", "tretinoin"]
     assert response.state.intents == ["interaction_check", "label_context_check"]
+
+    response = service.understand(
+        "I currently take cetirizine for my pollen allergy. can i take both "
+        "ibuprofen and aspirin against swollen eyes?",
+        openfda_limit=1,
+    )
+
+    resolved_mentions = {
+        mention.text: mention.selected_concept.name
+        for mention in response.resolved_drugs
+        if mention.selected_concept
+    }
+    assert resolved_mentions == {
+        "aspirin": "aspirin",
+        "cetirizine": "cetirizine",
+        "ibuprofen": "ibuprofen",
+    }
