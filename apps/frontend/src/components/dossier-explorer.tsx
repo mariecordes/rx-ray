@@ -4,6 +4,7 @@ import {
   FormEvent,
   type RefObject,
   type ReactNode,
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -14,12 +15,14 @@ import {
   ChevronDown,
   ChevronRight,
   Database,
+  ExternalLink,
   FileText,
   Info,
   Loader2,
   Search,
   TriangleAlert,
 } from "lucide-react";
+import { useSearchParams } from "next/navigation";
 
 import { EvidenceMapD3 } from "@/components/question-evidence-map-d3";
 import { RxNormKnowledgeGraph } from "@/components/rxnorm-knowledge-graph";
@@ -671,14 +674,21 @@ export function AskQuestionExperience() {
 }
 
 export function DrugDossierExperience() {
-  const [drug, setDrug] = useState("aspirin");
+  const searchParams = useSearchParams();
+  const initialDrug = searchParams.get("drug")?.trim() || "aspirin";
+  const shouldAutoSearch = searchParams.get("auto") === "1";
+  const [drug, setDrug] = useState(initialDrug);
   const [openfdaLimit, setOpenfdaLimit] = useState(5);
   const [dossier, setDossier] = useState<DrugDossier | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const didAutoSearchRef = useRef(false);
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  const buildDossier = useCallback(async (searchDrug = drug) => {
+    const trimmedDrug = searchDrug.trim();
+    if (!trimmedDrug) {
+      return;
+    }
     setIsLoading(true);
     setError(null);
 
@@ -691,7 +701,7 @@ export function DrugDossierExperience() {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            drug,
+            drug: trimmedDrug,
             depth: 2,
             max_edges: 400,
             openfda_limit: openfdaLimit,
@@ -710,7 +720,21 @@ export function DrugDossierExperience() {
     } finally {
       setIsLoading(false);
     }
+  }, [drug, openfdaLimit]);
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    await buildDossier();
   }
+
+  useEffect(() => {
+    if (!shouldAutoSearch || didAutoSearchRef.current || !initialDrug) {
+      return;
+    }
+    didAutoSearchRef.current = true;
+    setDrug(initialDrug);
+    void buildDossier(initialDrug);
+  }, [buildDossier, initialDrug, shouldAutoSearch]);
 
   return (
     <div className="flex flex-col gap-5">
@@ -2743,32 +2767,38 @@ function LabelEvidenceContextNote({
       nodeLabelEvidence?.label_limit !== undefined &&
       nodeLabelEvidence.labels_found >= nodeLabelEvidence.label_limit;
     return (
-      <div className="text-sm leading-6 text-slate-700">
-        Selected graph node:{" "}
-        <span className="font-bold text-slate-950">
-          {displayGraphNodeName(node.name)}
+      <GraphSelectionContextLayout
+        node={node}
+        action={<OpenDossierForNodeButton node={node} />}
+      >
+        <span>
+          Displaying {displayEvidence.selectedNodeOnlyCount} node-specific
+          source{displayEvidence.selectedNodeOnlyCount === 1 ? "" : "s"} pinned
+          first.
+          {previewLimitReached
+            ? " This is a compact preview; open the Drug Dossier to retrieve further label evidence."
+            : ""}
         </span>
-        . Displaying {displayEvidence.selectedNodeOnlyCount} node-specific
-        source{displayEvidence.selectedNodeOnlyCount === 1 ? "" : "s"} pinned
-        first.
-        {previewLimitReached
-          ? " This is a compact preview; search this drug directly to retrieve further label evidence."
-          : ""}
-      </div>
+      </GraphSelectionContextLayout>
     );
   }
 
   if (displayEvidence.selectedNodeMatchCount > 0) {
     return (
-      <div className="text-sm leading-6 text-slate-700">
-        Selected graph node:{" "}
-        <span className="font-bold text-slate-950">
-          {displayGraphNodeName(node.name)}
+      <GraphSelectionContextLayout
+        node={node}
+        action={
+          nodeLabelEvidence && nodeLabelEvidence.labels_found > 0 ? (
+            <OpenDossierForNodeButton node={node} />
+          ) : null
+        }
+      >
+        <span>
+          Its labels match source
+          {displayEvidence.selectedNodeMatchCount === 1 ? "" : "s"} already
+          returned for the original search.
         </span>
-        . Its labels match source
-        {displayEvidence.selectedNodeMatchCount === 1 ? "" : "s"} already
-        returned for the original search.
-      </div>
+      </GraphSelectionContextLayout>
     );
   }
 
@@ -2780,5 +2810,50 @@ function LabelEvidenceContextNote({
       </span>
       .
     </div>
+  );
+}
+
+function GraphSelectionContextLayout({
+  action,
+  children,
+  node,
+}: {
+  action?: ReactNode;
+  children: ReactNode;
+  node: RxNormConcept;
+}) {
+  return (
+    <div className="flex flex-col gap-2 text-sm leading-6 text-slate-700 sm:flex-row sm:items-center sm:justify-between">
+      <div>
+        Selected graph node:{" "}
+        <span className="font-bold text-slate-950">
+          {displayGraphNodeName(node.name)}
+        </span>
+        . {children}
+      </div>
+      {action}
+    </div>
+  );
+}
+
+function OpenDossierForNodeButton({ node }: { node: RxNormConcept }) {
+  function handleClick() {
+    const params = new URLSearchParams({
+      drug: node.name,
+      auto: "1",
+    });
+    window.open(`/dossier?${params.toString()}`, "_blank", "noopener,noreferrer");
+  }
+
+  return (
+    <Button
+      type="button"
+      variant="secondary"
+      className="w-fit shrink-0 gap-1.5 border-slate-300 bg-white text-xs uppercase tracking-normal text-slate-700 hover:bg-slate-50"
+      onClick={handleClick}
+    >
+      <ExternalLink className="size-3.5" />
+      Open Drug Dossier
+    </Button>
   );
 }
