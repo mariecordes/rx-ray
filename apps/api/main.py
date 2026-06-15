@@ -63,19 +63,19 @@ class DossierRequest(BaseModel):
     drug: str = Field(..., min_length=1)
     depth: int = Field(default=1, ge=1, le=3)
     max_edges: int = Field(default=75, ge=1, le=500)
-    openfda_limit: int = Field(default=5, ge=1, le=25)
+    openfda_limit: int = Field(default=5, ge=1)
     include_openfda: bool = True
 
 
 class LabelEvidenceRequest(BaseModel):
     rxcui: str = Field(..., min_length=1)
     name: str | None = None
-    limit: int = Field(default=3, ge=1, le=25)
+    limit: int = Field(default=3, ge=1)
 
 
 class QueryUnderstandingRequest(BaseModel):
     query: str = Field(..., min_length=1)
-    openfda_limit: int = Field(default=5, ge=1, le=25)
+    openfda_limit: int = Field(default=5, ge=1)
 
 
 class QueryAnswerRequest(BaseModel):
@@ -83,7 +83,6 @@ class QueryAnswerRequest(BaseModel):
     openfda_limit: int = Field(
         default_factory=lambda: load_query_answer_parameters().default_openfda_limit,
         ge=1,
-        le=25,
     )
 
 

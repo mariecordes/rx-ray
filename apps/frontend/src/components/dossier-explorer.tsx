@@ -47,6 +47,7 @@ import {
   SecondaryDrugEvidence,
 } from "@/lib/types";
 import { requestJsonWithRetry } from "@/lib/api-client";
+import { frontendParameters } from "@/lib/parameters";
 import { cn } from "@/lib/utils";
 
 const sectionLabels: Record<string, string> = {
@@ -74,6 +75,7 @@ function primaryValue(values?: string[] | null) {
 
 const unidentifiedDrugLabel = "Unidentified drug label";
 const metadataUnavailableLabel = "OpenFDA metadata unavailable";
+const frontendLimits = frontendParameters.limits;
 
 const sourceSelectionClasses =
   "border-[#C7B4EF] bg-[#E8DDF9] shadow-sm hover:border-[#C7B4EF]";
@@ -740,10 +742,20 @@ export function DrugDossierExperience() {
               </span>
               <Input
                 min={1}
-                max={25}
+                max={frontendLimits.maxLabelSearchLimit}
                 type="number"
                 value={openfdaLimit}
-                onChange={(event) => setOpenfdaLimit(Number(event.target.value))}
+                onChange={(event) =>
+                  setOpenfdaLimit(
+                    Math.max(
+                      1,
+                      Math.min(
+                        Number(event.target.value),
+                        frontendLimits.maxLabelSearchLimit
+                      )
+                    )
+                  )
+                }
               />
             </label>
             <div className="flex items-end">
@@ -1395,6 +1407,7 @@ function QueryUnderstandingPanel({
               onChange={(event) => onQuestionChange(event.target.value)}
               placeholder="Can I use tretinoin if I am pregnant and already take ibuprofen?"
               rows={1}
+              maxLength={frontendLimits.maxUserQueryCharacters}
               aria-label="Question"
               className="min-h-11 flex-1 resize-y rounded-md border border-[#C7B4EF] bg-white px-3 py-2 text-slate-950 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-[#371E8F] focus:ring-2 focus:ring-[#E8DDF9]"
               style={{ fontSize: "15px", lineHeight: "27px" }}
