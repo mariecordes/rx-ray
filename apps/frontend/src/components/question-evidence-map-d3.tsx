@@ -38,6 +38,8 @@ const CONCEPT_SPREAD_STRENGTH = 0.55;
 const CONCEPT_SPREAD_MAX_PUSH = 8;
 const CONCEPT_LABEL_REPULSION_DISTANCE = 140;
 const CONCEPT_LABEL_REPULSION_STRENGTH = 0.5;
+const QUERY_LABEL_REPULSION_DISTANCE = 600;
+const QUERY_LABEL_REPULSION_STRENGTH = 0.2;
 const MEDICATION_SPREAD_DISTANCE = 820;
 const MEDICATION_SPREAD_STRENGTH = 0.72;
 const MEDICATION_SPREAD_MAX_PUSH = 14;
@@ -1101,6 +1103,7 @@ function createEvidenceMapSimulation(
     .force("interactionLabelCentroid", interactionLabelCentroidForce(links))
     .force("conceptSpread", conceptSpreadForce())
     .force("conceptLabelRepulsion", conceptLabelRepulsionForce())
+    .force("queryLabelRepulsion", queryLabelRepulsionForce())
     .force(
       "collide",
       forceCollide<VisualNode>(
@@ -1203,6 +1206,39 @@ function conceptLabelRepulsionForce(): Force<VisualNode, SimulationLink> {
 
   force.initialize = (nodes: VisualNode[]) => {
     conceptNodes = nodes.filter((n) => n.kind === "query_concept");
+    sharedLabelNodes = nodes.filter(
+      (n) => n.kind === "label_source" && n.medicationParentCount > 1
+    );
+  };
+
+  return force;
+}
+
+function queryLabelRepulsionForce(): Force<VisualNode, SimulationLink> {
+  let queryNodes: VisualNode[] = [];
+  let sharedLabelNodes: VisualNode[] = [];
+
+  function force(alpha: number) {
+    for (const query of queryNodes) {
+      for (const label of sharedLabelNodes) {
+        const dx = (label.x ?? GRAPH_WIDTH / 2) - (query.x ?? GRAPH_WIDTH / 2);
+        const dy = (label.y ?? GRAPH_HEIGHT / 2) - (query.y ?? GRAPH_HEIGHT / 2);
+        const distance = Math.hypot(dx, dy) || 1;
+        if (distance >= QUERY_LABEL_REPULSION_DISTANCE) continue;
+
+        const push =
+          ((QUERY_LABEL_REPULSION_DISTANCE - distance) / distance) *
+          alpha *
+          QUERY_LABEL_REPULSION_STRENGTH;
+        // Keep the query centered; push shared labels out of its orbit instead.
+        label.vx = (label.vx ?? 0) + dx * push;
+        label.vy = (label.vy ?? 0) + dy * push;
+      }
+    }
+  }
+
+  force.initialize = (nodes: VisualNode[]) => {
+    queryNodes = nodes.filter((n) => n.kind === "question");
     sharedLabelNodes = nodes.filter(
       (n) => n.kind === "label_source" && n.medicationParentCount > 1
     );
