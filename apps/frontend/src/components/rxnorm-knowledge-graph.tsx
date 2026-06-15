@@ -6,23 +6,27 @@ import {
   forceLink,
   forceManyBody,
   forceSimulation,
+  forceX,
+  forceY,
 } from "d3-force";
+import type { Simulation } from "d3-force";
 import { Info, Maximize2, Minus, Plus } from "lucide-react";
 import type { MouseEvent, PointerEvent, WheelEvent } from "react";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { CardTitle } from "@/components/ui/card";
 import { DrugDossier, RxNormConcept, RxNormEdge } from "@/lib/types";
 
-const GRAPH_WIDTH = 900;
-const GRAPH_HEIGHT = 520;
+const GRAPH_WIDTH = 1180;
+const GRAPH_HEIGHT = 1180;
 const MAX_VISUAL_NODES = 80;
-const DEFAULT_DISPLAYED_EDGES = 200;
+const DEFAULT_DISPLAYED_EDGES = 100;
 const MAX_DISPLAYED_EDGES = 400;
-const MIN_ZOOM = 0.75;
+const MIN_ZOOM = 0.42;
 const MAX_ZOOM = 2;
 const FOCUS_ZOOM = 1.55;
+const TYPE_CLUSTER_STRENGTH = 0.035;
 
 const ttyStyles: Record<string, { label: string; fill: string; stroke: string }> = {
   IN: { label: "Ingredient", fill: "#ecfeff", stroke: "#0891b2" },
@@ -174,7 +178,7 @@ function InfoTooltip({ text }: { text: string }) {
 }
 
 type VisualNode = RxNormConcept & {
-  depthLevel: 0 | 1 | 2;
+  depthLevel: number;
 };
 
 type ForceNode = VisualNode & {
@@ -202,16 +206,6 @@ function buildVisualGraph(
           edge.source_rxcui === centerRxcui || edge.target_rxcui === centerRxcui
       )
     : [];
-  const firstHopIds = new Set<string>();
-  for (const edge of centerEdges) {
-    if (edge.source_rxcui !== centerRxcui) {
-      firstHopIds.add(edge.source_rxcui);
-    }
-    if (edge.target_rxcui !== centerRxcui) {
-      firstHopIds.add(edge.target_rxcui);
-    }
-  }
-
   const selectedIds = new Set<string>();
   if (centerRxcui) {
     selectedIds.add(centerRxcui);
@@ -254,16 +248,52 @@ function buildVisualGraph(
     selectedIds.add(edge.target_rxcui);
   }
 
+  const depthLevelsByRxcui = buildDepthLevels(centerRxcui, visualEdges);
   const visualNodes: VisualNode[] = Array.from(selectedIds)
     .map((rxcui) => nodeMap.get(rxcui))
     .filter((node): node is RxNormConcept => Boolean(node))
     .map((node) => ({
       ...node,
-      depthLevel:
-        node.rxcui === centerRxcui ? 0 : firstHopIds.has(node.rxcui) ? 1 : 2,
+      depthLevel: depthLevelsByRxcui.get(node.rxcui) ?? 2,
     }));
 
-  return { firstHopIds, visualEdges, visualNodes };
+  return { visualEdges, visualNodes };
+}
+
+function buildDepthLevels(centerRxcui: string | null, edges: RxNormEdge[]) {
+  const depthLevelsByRxcui = new Map<string, number>();
+  if (!centerRxcui) {
+    return depthLevelsByRxcui;
+  }
+
+  const neighborsByRxcui = new Map<string, Set<string>>();
+  for (const edge of edges) {
+    const sourceNeighbors =
+      neighborsByRxcui.get(edge.source_rxcui) ?? new Set<string>();
+    sourceNeighbors.add(edge.target_rxcui);
+    neighborsByRxcui.set(edge.source_rxcui, sourceNeighbors);
+
+    const targetNeighbors =
+      neighborsByRxcui.get(edge.target_rxcui) ?? new Set<string>();
+    targetNeighbors.add(edge.source_rxcui);
+    neighborsByRxcui.set(edge.target_rxcui, targetNeighbors);
+  }
+
+  depthLevelsByRxcui.set(centerRxcui, 0);
+  const queue = [centerRxcui];
+  for (let index = 0; index < queue.length; index += 1) {
+    const rxcui = queue[index];
+    const nextDepth = (depthLevelsByRxcui.get(rxcui) ?? 0) + 1;
+    for (const neighbor of neighborsByRxcui.get(rxcui) ?? []) {
+      if (depthLevelsByRxcui.has(neighbor)) {
+        continue;
+      }
+      depthLevelsByRxcui.set(neighbor, nextDepth);
+      queue.push(neighbor);
+    }
+  }
+
+  return depthLevelsByRxcui;
 }
 
 function computeLayout(
@@ -273,7 +303,7 @@ function computeLayout(
 ) {
   const simulationNodes = visualNodes.map((node, index) => {
     const angle = (2 * Math.PI * index) / Math.max(visualNodes.length, 1);
-    const radius = node.depthLevel === 0 ? 72 : node.depthLevel === 1 ? 170 : 250;
+    const radius = initialRadiusForDepth(node.depthLevel);
     return {
       ...node,
       x: GRAPH_WIDTH / 2 + radius * Math.cos(angle),
@@ -286,7 +316,27 @@ function computeLayout(
     target: edge.source_rxcui,
   }));
 
-  const simulation = forceSimulation<ForceNode>(simulationNodes)
+  const simulation = createRxNormSimulation(simulationNodes, links)
+    .stop();
+
+  for (let tick = 0; tick < 260; tick += 1) {
+    simulation.tick();
+  }
+
+  return new Map(
+    simulationNodes.map((node) => [
+      node.rxcui,
+      {
+        ...node,
+        x: node.x ?? GRAPH_WIDTH / 2,
+        y: node.y ?? GRAPH_HEIGHT / 2,
+      },
+    ])
+  );
+}
+
+function createRxNormSimulation(nodes: ForceNode[], links: ForceLink[]) {
+  return forceSimulation<ForceNode>(nodes)
     .force(
       "link",
       forceLink<ForceNode, ForceLink>(links)
@@ -299,34 +349,91 @@ function computeLayout(
           if (!source || !target) {
             return 100;
           }
-          return source.depthLevel === 0 || target.depthLevel === 0 ? 138 : 96;
+          return rxNormLinkDistance(source, target);
         })
         .strength(0.34)
     )
     .force("charge", forceManyBody().strength(-310))
+    .force(
+      "clusterX",
+      forceX<ForceNode>((node) => typeClusterPoint(node).x).strength(
+        TYPE_CLUSTER_STRENGTH
+      )
+    )
+    .force(
+      "clusterY",
+      forceY<ForceNode>((node) => typeClusterPoint(node).y).strength(
+        TYPE_CLUSTER_STRENGTH
+      )
+    )
     .force(
       "collide",
       forceCollide((node) => {
         return nodeRadius(node as ForceNode) + 10;
       })
     )
-    .force("center", forceCenter(GRAPH_WIDTH / 2, GRAPH_HEIGHT / 2))
-    .stop();
+    .force("center", forceCenter(GRAPH_WIDTH / 2, GRAPH_HEIGHT / 2));
+}
 
-  for (let tick = 0; tick < 260; tick += 1) {
-    simulation.tick();
+function rxNormLinkDistance(source: VisualNode, target: VisualNode) {
+  const shallowestDepth = Math.min(source.depthLevel, target.depthLevel);
+  const deepestDepth = Math.max(source.depthLevel, target.depthLevel);
+
+  if (shallowestDepth === 0) {
+    return 138;
+  }
+  if (deepestDepth >= 3) {
+    return 58;
+  }
+  if (deepestDepth === 2) {
+    return 72;
+  }
+  return 88;
+}
+
+function typeClusterPoint(node: Pick<VisualNode, "depthLevel" | "tty">) {
+  if (node.depthLevel === 0) {
+    return { x: GRAPH_WIDTH / 2, y: GRAPH_HEIGHT / 2 };
   }
 
-  return new Map(
-    simulationNodes.map((node) => [
-      node.rxcui,
-      {
-        ...node,
-        x: Math.max(40, Math.min(GRAPH_WIDTH - 40, node.x ?? GRAPH_WIDTH / 2)),
-        y: Math.max(40, Math.min(GRAPH_HEIGHT - 40, node.y ?? GRAPH_HEIGHT / 2)),
-      },
-    ])
+  const code = (node.tty ?? "").toUpperCase();
+  const clusters: Record<string, { x: number; y: number }> = {
+    IN: { x: GRAPH_WIDTH * 0.28, y: GRAPH_HEIGHT * 0.42 },
+    PIN: { x: GRAPH_WIDTH * 0.28, y: GRAPH_HEIGHT * 0.42 },
+    MIN: { x: GRAPH_WIDTH * 0.28, y: GRAPH_HEIGHT * 0.58 },
+    BN: { x: GRAPH_WIDTH * 0.72, y: GRAPH_HEIGHT * 0.42 },
+    SBDC: { x: GRAPH_WIDTH * 0.72, y: GRAPH_HEIGHT * 0.42 },
+    SBDF: { x: GRAPH_WIDTH * 0.72, y: GRAPH_HEIGHT * 0.5 },
+    SBDFP: { x: GRAPH_WIDTH * 0.72, y: GRAPH_HEIGHT * 0.5 },
+    SBDG: { x: GRAPH_WIDTH * 0.72, y: GRAPH_HEIGHT * 0.58 },
+    SBD: { x: GRAPH_WIDTH * 0.72, y: GRAPH_HEIGHT * 0.58 },
+    SCDC: { x: GRAPH_WIDTH * 0.5, y: GRAPH_HEIGHT * 0.25 },
+    SCDF: { x: GRAPH_WIDTH * 0.5, y: GRAPH_HEIGHT * 0.28 },
+    SCDFP: { x: GRAPH_WIDTH * 0.5, y: GRAPH_HEIGHT * 0.28 },
+    SCDG: { x: GRAPH_WIDTH * 0.5, y: GRAPH_HEIGHT * 0.75 },
+    SCDGP: { x: GRAPH_WIDTH * 0.5, y: GRAPH_HEIGHT * 0.75 },
+    SCD: { x: GRAPH_WIDTH * 0.5, y: GRAPH_HEIGHT * 0.72 },
+  };
+
+  return (
+    clusters[code] ?? {
+      x: GRAPH_WIDTH * (node.depthLevel === 1 ? 0.42 : 0.58),
+      y: GRAPH_HEIGHT * (node.depthLevel === 1 ? 0.45 : 0.55),
+    }
   );
+}
+
+function initialRadiusForDepth(depthLevel: number) {
+  if (depthLevel === 0) {
+    return 96;
+  }
+  if (depthLevel === 1) {
+    return 260;
+  }
+  if (depthLevel === 2) {
+    return 380;
+  }
+  return Math.min(520, 380 + (depthLevel - 2) * 80);
 }
 
 function nodeRadius(node: Pick<VisualNode, "depthLevel">) {
@@ -334,9 +441,53 @@ function nodeRadius(node: Pick<VisualNode, "depthLevel">) {
     return 24;
   }
   if (node.depthLevel === 1) {
-    return 16;
+    return 14;
   }
-  return 9;
+  if (node.depthLevel === 2) {
+    return 12;
+  }
+  return 8;
+}
+
+function fitGraphToView(nodes: LayoutPoint[]) {
+  if (nodes.length === 0) {
+    return { pan: { x: 0, y: 0 }, zoom: 1 };
+  }
+
+  let minX = Number.POSITIVE_INFINITY;
+  let maxX = Number.NEGATIVE_INFINITY;
+  let minY = Number.POSITIVE_INFINITY;
+  let maxY = Number.NEGATIVE_INFINITY;
+
+  for (const node of nodes) {
+    const radius = nodeRadius(node) + 28;
+    const x = node.x ?? GRAPH_WIDTH / 2;
+    const y = node.y ?? GRAPH_HEIGHT / 2;
+    minX = Math.min(minX, x - radius);
+    maxX = Math.max(maxX, x + radius);
+    minY = Math.min(minY, y - radius);
+    maxY = Math.max(maxY, y + radius);
+  }
+
+  const graphWidth = Math.max(1, maxX - minX);
+  const graphHeight = Math.max(1, maxY - minY);
+  const zoom = Math.max(
+    MIN_ZOOM,
+    Math.min(
+      1,
+      Math.min(GRAPH_WIDTH / graphWidth, GRAPH_HEIGHT / graphHeight)
+    )
+  );
+  const centerX = (minX + maxX) / 2;
+  const centerY = (minY + maxY) / 2;
+
+  return {
+    pan: {
+      x: GRAPH_WIDTH / 2 - centerX * zoom,
+      y: GRAPH_HEIGHT / 2 - centerY * zoom,
+    },
+    zoom,
+  };
 }
 
 type LayoutPoint = VisualNode & {
@@ -391,9 +542,11 @@ export function RxNormKnowledgeGraph({
     moved: boolean;
   } | null>(null);
   const [nodeDrag, setNodeDrag] = useState<string | null>(null);
-  const [nodeOverrides, setNodeOverrides] = useState<
-    Map<string, { x: number; y: number }>
+  const [simulationNodeMap, setSimulationNodeMap] = useState<
+    Map<string, LayoutPoint>
   >(new Map());
+  const simulationRef = useRef<Simulation<ForceNode, ForceLink> | null>(null);
+  const latestNodesRef = useRef<ForceNode[]>([]);
   const graphFrameRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const edges = dossier.rxnorm_neighborhood.edges;
@@ -408,14 +561,49 @@ export function RxNormKnowledgeGraph({
     () => computeLayout(centerRxcui, visualNodes, visualEdges),
     [centerRxcui, visualEdges, visualNodes]
   );
-  const positionedNodes = useMemo(() => {
-    return new Map(
-      Array.from(layoutNodes.entries()).map(([rxcui, node]) => {
-        const override = nodeOverrides.get(rxcui);
-        return [rxcui, override ? { ...node, ...override } : node];
-      })
+  const positionedNodes = simulationNodeMap.size ? simulationNodeMap : layoutNodes;
+  useEffect(() => {
+    const simulationNodes: ForceNode[] = Array.from(layoutNodes.values()).map(
+      (node) => ({ ...node })
     );
-  }, [layoutNodes, nodeOverrides]);
+    latestNodesRef.current = simulationNodes;
+    setSimulationNodeMap(
+      new Map(simulationNodes.map((node) => [node.rxcui, node as LayoutPoint]))
+    );
+
+    const links: ForceLink[] = visualEdges.map((edge) => ({
+      source: edge.target_rxcui,
+      target: edge.source_rxcui,
+    }));
+
+    let animationFrame: number | null = null;
+    const simulation = createRxNormSimulation(simulationNodes, links).on(
+      "tick",
+      () => {
+        latestNodesRef.current = simulationNodes;
+        if (animationFrame !== null) {
+          return;
+        }
+        animationFrame = window.requestAnimationFrame(() => {
+          setSimulationNodeMap(
+            new Map(
+              simulationNodes.map((node) => [node.rxcui, node as LayoutPoint])
+            )
+          );
+          animationFrame = null;
+        });
+      }
+    );
+    simulationRef.current = simulation;
+
+    return () => {
+      simulation.stop();
+      simulationRef.current = null;
+      if (animationFrame !== null) {
+        window.cancelAnimationFrame(animationFrame);
+      }
+    };
+  }, [layoutNodes, visualEdges]);
   const visualRxcuis = useMemo(
     () => visualNodes.map((node) => node.rxcui),
     [visualNodes]
@@ -464,6 +652,20 @@ export function RxNormKnowledgeGraph({
     }
     return ids;
   }, [filteredEdges, selectedRxcui]);
+  const positionedNodeList = useMemo(
+    () =>
+      filteredRxcuis
+        .map((rxcui) => positionedNodes.get(rxcui))
+        .filter((node): node is LayoutPoint => Boolean(node)),
+    [filteredRxcuis, positionedNodes]
+  );
+  const layoutNodeList = useMemo(
+    () =>
+      filteredRxcuis
+        .map((rxcui) => layoutNodes.get(rxcui))
+        .filter((node): node is LayoutPoint => Boolean(node)),
+    [filteredRxcuis, layoutNodes]
+  );
   const visibleNodeTypes = useMemo(() => {
     return Array.from(
       new Set(
@@ -528,9 +730,16 @@ export function RxNormKnowledgeGraph({
   }
 
   function resetView() {
-    setZoom(1);
-    setPan({ x: 0, y: 0 });
+    const fittedView = fitGraphToView(positionedNodeList);
+    setZoom(fittedView.zoom);
+    setPan(fittedView.pan);
   }
+
+  useEffect(() => {
+    const fittedView = fitGraphToView(layoutNodeList);
+    setZoom(fittedView.zoom);
+    setPan(fittedView.pan);
+  }, [layoutNodeList]);
 
   function selectGraphNode(rxcui: string | null) {
     setSelectedRxcui(rxcui);
@@ -552,6 +761,14 @@ export function RxNormKnowledgeGraph({
     rxcui: string
   ) {
     event.stopPropagation();
+    const simulationNode = latestNodesRef.current.find(
+      (node) => node.rxcui === rxcui
+    );
+    if (simulationNode) {
+      simulationNode.fx = simulationNode.x;
+      simulationNode.fy = simulationNode.y;
+    }
+    simulationRef.current?.alphaTarget(0.25).restart();
     setNodeDrag(rxcui);
   }
 
@@ -571,14 +788,14 @@ export function RxNormKnowledgeGraph({
   function handlePointerMove(event: PointerEvent<SVGSVGElement>) {
     if (nodeDrag) {
       const point = screenToGraph(event.clientX, event.clientY);
-      setNodeOverrides((current) => {
-        const next = new Map(current);
-        next.set(nodeDrag, {
-          x: Math.max(24, Math.min(GRAPH_WIDTH - 24, point.x)),
-          y: Math.max(24, Math.min(GRAPH_HEIGHT - 24, point.y)),
-        });
-        return next;
-      });
+      const simulationNode = latestNodesRef.current.find(
+        (node) => node.rxcui === nodeDrag
+      );
+      if (simulationNode) {
+        simulationNode.fx = point.x;
+        simulationNode.fy = point.y;
+        simulationRef.current?.alphaTarget(0.25).restart();
+      }
       return;
     }
 
@@ -605,6 +822,16 @@ export function RxNormKnowledgeGraph({
   function handlePointerUp() {
     if (panDrag && !panDrag.moved && !nodeDrag) {
       selectGraphNode(null);
+    }
+    if (nodeDrag) {
+      const simulationNode = latestNodesRef.current.find(
+        (node) => node.rxcui === nodeDrag
+      );
+      if (simulationNode) {
+        simulationNode.fx = undefined;
+        simulationNode.fy = undefined;
+      }
+      simulationRef.current?.alphaTarget(0);
     }
     setPanDrag(null);
     setNodeDrag(null);
@@ -672,12 +899,12 @@ export function RxNormKnowledgeGraph({
           <div className="grid items-stretch gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
             <div
               ref={graphFrameRef}
-              className="relative min-h-[520px] overflow-hidden rounded-md border border-slate-200 bg-white"
+              className="relative h-[700px] overflow-hidden rounded-md border border-slate-200 bg-white"
             >
               <svg
                 ref={svgRef}
                 viewBox={`0 0 ${GRAPH_WIDTH} ${GRAPH_HEIGHT}`}
-                className="h-full min-h-[520px] w-full cursor-grab touch-none"
+                className="h-full w-full cursor-grab touch-none"
                 role="img"
                 aria-label="Local drug relationship network"
                 onPointerDown={handleCanvasPointerDown}

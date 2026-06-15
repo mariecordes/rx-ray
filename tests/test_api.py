@@ -24,7 +24,12 @@ from src.dossier.openfda_store import OpenFDALabelStore
 from src.dossier.rxnorm_store import RxNormParquetStore
 from src.query_answer.config import QueryAnswerParameters
 from src.query_answer.coverage import evidence_snippet
-from src.query_answer.models import EvidenceAnswer, SecondaryDrugEvidence
+from src.query_answer.evidence_map import build_question_evidence_map
+from src.query_answer.models import (
+    EvidenceAnswer,
+    RxNormPairContext,
+    SecondaryDrugEvidence,
+)
 from src.query_answer.secondary import build_secondary_evidence
 from src.query_answer.service import QueryAnswerService
 from src.query_answer.synthesizer import (
@@ -664,6 +669,25 @@ def test_query_answer_response_includes_evidence_coverage() -> None:
     )
 
 
+def test_query_answer_response_includes_question_evidence_map() -> None:
+    understanding = response_with_label_evidence()
+    service = QueryAnswerService(
+        builder=offline_builder(),
+        understanding_service=FakeUnderstandingService(understanding),
+        synthesizer=FakeAnswerSynthesizer(),
+    )
+
+    response = service.answer("Can I take aspirin?")
+
+    node_kinds = {node.kind for node in response.question_evidence_map.nodes}
+    edge_kinds = {edge.kind for edge in response.question_evidence_map.edges}
+    assert {"question", "query_concept", "resolved_medication", "label_source"} <= (
+        node_kinds
+    )
+    assert {"has_role", "resolved_as", "has_label_source"} <= edge_kinds
+    assert response.question_evidence_map.summary_counts["nodes"] >= 4
+
+
 def test_query_answer_response_includes_secondary_evidence() -> None:
     understanding = response_with_secondary_mention()
     service = QueryAnswerService(
@@ -680,6 +704,205 @@ def test_query_answer_response_includes_secondary_evidence() -> None:
     assert secondary.label_evidence is not None
     assert secondary.label_evidence.labels_found == 1
     assert "standard_secondary_label_lookup" in secondary.retrieval_modes
+    assert any(
+        node.kind == "resolved_medication" and node.rxcui == "5640"
+        for node in response.question_evidence_map.nodes
+    )
+
+
+def test_question_evidence_map_marks_interaction_targeted_label_sources() -> None:
+    fixture = secondary_evidence_fixture()
+    assert fixture.label_evidence is not None
+    tagged_evidence = fixture.label_evidence.model_copy(
+        update={
+            "label_records": [
+                record.model_copy(
+                    update={
+                        "provenance_tags": ["interaction_targeted_lookup"],
+                        "rxcuis": ["5640", "1191"],
+                    }
+                )
+                for record in fixture.label_evidence.label_records
+            ],
+            "sections": {
+                "drug_interactions": [
+                    section.model_copy(
+                        update={"provenance_tags": ["interaction_targeted_lookup"]}
+                    )
+                    for section in fixture.label_evidence.sections[
+                        "drug_interactions"
+                    ]
+                ]
+            },
+        }
+    )
+    secondary = fixture.model_copy(
+        update={
+            "label_evidence": tagged_evidence,
+            "retrieval_modes": ["interaction_targeted_lookup"],
+        }
+    )
+
+    evidence_map = build_question_evidence_map(
+        response_with_secondary_mention(),
+        secondary_evidence=[secondary],
+    )
+
+    interaction_edges = [
+        edge
+        for edge in evidence_map.edges
+        if edge.kind == "interaction_lookup_source"
+    ]
+    assert interaction_edges
+    assert all(edge.source_id == "label-2" for edge in interaction_edges)
+    assert all(edge.section is None for edge in interaction_edges)
+    assert any(
+        edge.kind == "has_label_section" and edge.section == "drug_interactions"
+        for edge in evidence_map.edges
+    )
+    assert any(
+        node.kind == "label_source" and node.label_rxcuis == ["5640", "1191"]
+        for node in evidence_map.nodes
+    )
+    assert any(
+        node.kind == "label_section" and node.label_rxcuis == ["5640", "1191"]
+        for node in evidence_map.nodes
+    )
+    edge_text = " ".join(
+        value for edge in evidence_map.edges for value in [edge.kind, edge.label]
+    )
+    assert "interacts_with" not in edge_text
+    assert "clinical interaction" not in edge_text.lower()
+
+
+def test_question_evidence_map_shares_interaction_label_source_across_medications() -> None:
+    interaction_evidence = OpenFDALabelEvidence(
+        rxcui="5640",
+        labels_found=1,
+        label_limit=3,
+        retrieval_mode="interaction_targeted_lookup",
+        label_records=[
+            OpenFDALabelRecord(
+                source_id="label-1",
+                brand_names=["Aspirin"],
+                generic_names=["ASPIRIN"],
+                provenance_tags=["interaction_targeted_lookup"],
+            )
+        ],
+        sections={
+            "drug_interactions": [
+                LabelSection(
+                    section="drug_interactions",
+                    text="Aspirin label text mentioning ibuprofen.",
+                    source_id="label-1",
+                    provenance_tags=["interaction_targeted_lookup"],
+                )
+            ]
+        },
+    )
+    secondary = secondary_evidence_fixture().model_copy(
+        update={
+            "label_evidence": interaction_evidence,
+            "interaction_label_evidence": interaction_evidence,
+            "retrieval_modes": ["interaction_targeted_lookup"],
+        }
+    )
+
+    evidence_map = build_question_evidence_map(
+        response_with_secondary_mention(),
+        secondary_evidence=[secondary],
+    )
+
+    label_source_nodes = [
+        node
+        for node in evidence_map.nodes
+        if node.kind == "label_source" and node.source_id == "label-1"
+    ]
+    assert len(label_source_nodes) == 1
+    label_source_id = label_source_nodes[0].id
+    assert any(
+        edge.kind == "has_label_source"
+        and edge.source == "rxnorm:1191"
+        and edge.target == label_source_id
+        for edge in evidence_map.edges
+    )
+    assert any(
+        edge.kind == "interaction_lookup_source"
+        and edge.source == "rxnorm:5640"
+        and edge.target == label_source_id
+        for edge in evidence_map.edges
+    )
+
+
+def test_question_evidence_map_labels_sources_without_openfda_metadata() -> None:
+    interaction_evidence = OpenFDALabelEvidence(
+        rxcui="5640",
+        labels_found=1,
+        label_limit=3,
+        retrieval_mode="interaction_targeted_lookup",
+        label_records=[
+            OpenFDALabelRecord(
+                source_id="label-without-openfda",
+                provenance_tags=["interaction_targeted_lookup"],
+            )
+        ],
+        sections={
+            "drug_interactions": [
+                LabelSection(
+                    section="drug_interactions",
+                    text="Unidentified label text mentioning another medication.",
+                    source_id="label-without-openfda",
+                    provenance_tags=["interaction_targeted_lookup"],
+                )
+            ]
+        },
+    )
+    secondary = secondary_evidence_fixture().model_copy(
+        update={
+            "label_evidence": interaction_evidence,
+            "interaction_label_evidence": interaction_evidence,
+            "retrieval_modes": ["interaction_targeted_lookup"],
+        }
+    )
+
+    evidence_map = build_question_evidence_map(
+        response_with_secondary_mention(),
+        secondary_evidence=[secondary],
+    )
+
+    label_source_node = next(
+        node
+        for node in evidence_map.nodes
+        if node.kind == "label_source"
+        and node.source_id == "label-without-openfda"
+    )
+    assert label_source_node.label == "Unidentified drug label"
+    assert label_source_node.subtitle == "OpenFDA product metadata unavailable"
+
+
+def test_question_evidence_map_omits_rxnorm_context_for_visual_clarity() -> None:
+    secondary = secondary_evidence_fixture().model_copy(
+        update={
+            "rxnorm_context": RxNormPairContext(
+                primary_rxcui="1191",
+                secondary_rxcui="5640",
+                status="shared_neighbor",
+                summary=(
+                    "The primary and secondary concepts share nearby RxNorm "
+                    "terminology neighbors. This is terminology context, not "
+                    "clinical interaction evidence."
+                ),
+            )
+        }
+    )
+    evidence_map = build_question_evidence_map(
+        response_with_secondary_mention(),
+        secondary_evidence=[secondary],
+    )
+
+    assert all(node.kind != "rxnorm_context" for node in evidence_map.nodes)
+    assert all(edge.kind != "has_terminology_context" for edge in evidence_map.edges)
+    assert all(edge.kind != "interacts_with" for edge in evidence_map.edges)
 
 
 def test_secondary_evidence_triggers_interaction_targeted_lookups() -> None:
@@ -1207,3 +1430,20 @@ def test_query_understanding_scanner_does_not_fuzzy_match_stop_words(
     assert resolved_names == {"tretinoin", "benzoyl peroxide"}
     assert response.state.all_drugs_mentioned == ["Benzoyl peroxide", "tretinoin"]
     assert response.state.intents == ["interaction_check", "label_context_check"]
+
+    response = service.understand(
+        "I currently take cetirizine for my pollen allergy. can i take both "
+        "ibuprofen and aspirin against swollen eyes?",
+        openfda_limit=1,
+    )
+
+    resolved_mentions = {
+        mention.text: mention.selected_concept.name
+        for mention in response.resolved_drugs
+        if mention.selected_concept
+    }
+    assert resolved_mentions == {
+        "aspirin": "aspirin",
+        "cetirizine": "cetirizine",
+        "ibuprofen": "ibuprofen",
+    }

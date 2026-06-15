@@ -117,6 +117,7 @@ export type EvidenceCitation = {
   source_id: string;
   section: string;
   snippet?: string | null;
+  rxcui?: string | null;
 };
 
 export type EvidenceBullet = {
@@ -162,6 +163,40 @@ export type RxNormPairContext = {
   shared_neighbors: RxNormConcept[];
 };
 
+export type QuestionEvidenceMapNode = {
+  id: string;
+  kind: string;
+  label: string;
+  subtitle?: string | null;
+  role?: string | null;
+  rxcui?: string | null;
+  label_rxcuis?: string[];
+  source_id?: string | null;
+  section?: string | null;
+  evidence_scope?: string | null;
+  tags: string[];
+};
+
+export type QuestionEvidenceMapEdge = {
+  id: string;
+  source: string;
+  target: string;
+  kind: string;
+  label: string;
+  rxcui?: string | null;
+  source_id?: string | null;
+  section?: string | null;
+  evidence_scope?: string | null;
+  interaction_terms?: string[];
+  tags: string[];
+};
+
+export type QuestionEvidenceMap = {
+  nodes: QuestionEvidenceMapNode[];
+  edges: QuestionEvidenceMapEdge[];
+  summary_counts: Record<string, number>;
+};
+
 export type SecondaryDrugEvidence = {
   mention_text: string;
   role: string;
@@ -176,6 +211,7 @@ export type QueryAnswerResponse = {
   understanding: QueryUnderstandingResponse;
   answer?: EvidenceAnswer | null;
   secondary_evidence: SecondaryDrugEvidence[];
+  question_evidence_map: QuestionEvidenceMap;
   coverage: EvidenceCoverageReport;
   warnings: string[];
   errors: string[];

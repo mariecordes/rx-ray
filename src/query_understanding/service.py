@@ -175,6 +175,8 @@ class QueryUnderstandingService:
                 candidates = self._resolve_text(phrase, limit=1, allow_fuzzy=False)
                 if not candidates or candidates[0].score < 80:
                     continue
+                if not self._is_scanned_candidate_confident(phrase, candidates[0]):
+                    continue
                 occupied |= indexes
                 mentions.append(
                     ExtractedDrugMention(text=phrase, role="mentioned_drug")
@@ -243,6 +245,25 @@ class QueryUnderstandingService:
             candidates=candidates,
             selected_concept=candidates[0].concept if candidates else None,
         )
+
+    @staticmethod
+    def _is_scanned_candidate_confident(
+        phrase: str,
+        candidate: ResolutionCandidate,
+    ) -> bool:
+        """Avoid one-token prefix false positives from the fallback scanner.
+
+        LLM/rule-extracted mentions still use the normal resolver. This only
+        filters extra mentions discovered by scanning every query n-gram.
+        """
+
+        if len(phrase.split()) > 1:
+            return True
+        return candidate.match_type in {
+            "exact",
+            "normalized_exact",
+            "compact_exact",
+        }
 
     def _resolve_text(
         self,

@@ -21,7 +21,12 @@ import {
   TriangleAlert,
 } from "lucide-react";
 
+import { EvidenceMapD3 } from "@/components/question-evidence-map-d3";
 import { RxNormKnowledgeGraph } from "@/components/rxnorm-knowledge-graph";
+import {
+  DEMO_QUERY,
+  demoQueryAnswer,
+} from "@/components/demo-query-answer-fixture";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -66,6 +71,9 @@ function primaryValue(values?: string[] | null) {
   }
   return values[0];
 }
+
+const unidentifiedDrugLabel = "Unidentified drug label";
+const metadataUnavailableLabel = "OpenFDA metadata unavailable";
 
 const sourceSelectionClasses =
   "border-[#C7B4EF] bg-[#E8DDF9] shadow-sm hover:border-[#C7B4EF]";
@@ -165,10 +173,19 @@ function citationDisplayLabel(
     ? displayBrandName(brandName)
     : genericName
       ? displayGenericName(genericName)
-      : "Label source";
+      : unidentifiedDrugLabel;
   return [productName, manufacturerName, displaySectionName(citation.section)]
     .filter(Boolean)
     .join(" · ");
+}
+
+function hasOpenFdaProductMetadata(record?: OpenFDALabelRecord | null) {
+  return Boolean(
+    record &&
+      (record.brand_names.length ||
+        record.generic_names.length ||
+        record.manufacturer_names.length)
+  );
 }
 
 function InfoTooltip({ text }: { text: string }) {
@@ -458,6 +475,7 @@ export function AskQuestionExperience() {
   const [queryError, setQueryError] = useState<string | null>(null);
   const [dossier, setDossier] = useState<DrugDossier | null>(null);
   const [isEvidenceOpen, setIsEvidenceOpen] = useState(false);
+  const [isDemoMode, setIsDemoMode] = useState(false);
   const [highlightCitation, setHighlightCitation] =
     useState<EvidenceCitation | null>(null);
   const [highlightEvidenceRxcui, setHighlightEvidenceRxcui] =
@@ -502,6 +520,21 @@ export function AskQuestionExperience() {
     setIsEvidenceOpen(false);
     setHighlightCitation(null);
     setHighlightEvidenceRxcui(null);
+
+    if (isDemoMode) {
+      setQuestion(DEMO_QUERY);
+      window.setTimeout(() => {
+        if (queryRequestRef.current !== requestId) {
+          return;
+        }
+        setQueryUnderstanding(demoQueryAnswer.understanding);
+        setQueryAnswer(demoQueryAnswer);
+        setDossier(demoQueryAnswer.understanding.primary_dossier ?? null);
+        setIsUnderstandingLoading(false);
+        setIsAnswerLoading(false);
+      }, 250);
+      return;
+    }
 
     try {
       const understanding = await requestJsonWithRetry<QueryUnderstandingResponse>(
@@ -594,25 +627,42 @@ export function AskQuestionExperience() {
         isAnswerLoading={isAnswerLoading}
         isUnderstandingLoading={isUnderstandingLoading}
         onQuestionChange={setQuestion}
+        onDemoModeChange={(enabled) => {
+          setIsDemoMode(enabled);
+          if (enabled) {
+            setQuestion(DEMO_QUERY);
+          }
+        }}
         onSubmit={handleQuestionSubmit}
         question={question}
         result={queryUnderstanding}
+        isDemoMode={isDemoMode}
         onAnswerCitationClick={handleAnswerCitationClick}
         onCoverageTargetClick={handleCoverageTargetClick}
       />
 
       {dossier && queryAnswer && !isAnswerLoading && !isUnderstandingLoading ? (
-        <SupportingEvidence
-          dossier={dossier}
+        <EvidenceReveal
           evidenceRef={supportingEvidenceRef}
-          highlightCitation={highlightCitation}
-          highlightRxcui={highlightEvidenceRxcui}
           isOpen={isEvidenceOpen}
-          secondaryEvidence={queryAnswer.secondary_evidence ?? []}
           onOpenChange={setIsEvidenceOpen}
-          onCitationHandled={() => setHighlightCitation(null)}
-          onRxcuiHandled={() => setHighlightEvidenceRxcui(null)}
-        />
+        >
+          {queryAnswer.question_evidence_map?.nodes.length ? (
+            <EvidenceMapD3
+              map={queryAnswer.question_evidence_map}
+              onCitationClick={handleAnswerCitationClick}
+              onRxcuiClick={handleCoverageTargetClick}
+            />
+          ) : null}
+          <SupportingEvidence
+            dossier={dossier}
+            highlightCitation={highlightCitation}
+            highlightRxcui={highlightEvidenceRxcui}
+            secondaryEvidence={queryAnswer.secondary_evidence ?? []}
+            onCitationHandled={() => setHighlightCitation(null)}
+            onRxcuiHandled={() => setHighlightEvidenceRxcui(null)}
+          />
+        </EvidenceReveal>
       ) : null}
     </div>
   );
@@ -722,25 +772,53 @@ export function DrugDossierExperience() {
   );
 }
 
+function EvidenceReveal({
+  children,
+  evidenceRef,
+  isOpen,
+  onOpenChange,
+}: {
+  children: ReactNode;
+  evidenceRef: RefObject<HTMLDivElement | null>;
+  isOpen: boolean;
+  onOpenChange: (isOpen: boolean) => void;
+}) {
+  return (
+    <div ref={evidenceRef} className="scroll-mt-6">
+      <div className="relative flex items-center py-4">
+        <div className="flex-1 border-t border-[#D7C8F4]" />
+        <Button
+          type="button"
+          className="mx-4 rounded-full px-5"
+          onClick={() => onOpenChange(!isOpen)}
+        >
+          {isOpen ? "Collapse evidence" : "Explore evidence"}
+          {isOpen ? (
+            <ChevronDown className="size-4" />
+          ) : (
+            <ChevronRight className="size-4" />
+          )}
+        </Button>
+        <div className="flex-1 border-t border-[#D7C8F4]" />
+      </div>
+      {isOpen ? <div className="space-y-6">{children}</div> : null}
+    </div>
+  );
+}
+
 function SupportingEvidence({
   dossier,
-  evidenceRef,
   highlightCitation,
   highlightRxcui,
-  isOpen,
   secondaryEvidence,
   onCitationHandled,
-  onOpenChange,
   onRxcuiHandled,
 }: {
   dossier: DrugDossier;
-  evidenceRef: RefObject<HTMLDivElement | null>;
   highlightCitation: EvidenceCitation | null;
   highlightRxcui: string | null;
-  isOpen: boolean;
   secondaryEvidence: SecondaryDrugEvidence[];
   onCitationHandled: () => void;
-  onOpenChange: (isOpen: boolean) => void;
   onRxcuiHandled: () => void;
 }) {
   const evidenceTabs = useMemo(
@@ -757,8 +835,9 @@ function SupportingEvidence({
     if (!highlightCitation) {
       return;
     }
-    const matchingTab = evidenceTabs.find((tab) =>
-      tab.sourceIds.has(highlightCitation.source_id)
+    const matchingTab = supportingEvidenceTabForCitation(
+      evidenceTabs,
+      highlightCitation
     );
     if (matchingTab) {
       setActiveTabKey(matchingTab.key);
@@ -776,83 +855,72 @@ function SupportingEvidence({
     onRxcuiHandled();
   }, [evidenceTabs, highlightRxcui, onRxcuiHandled]);
 
-  const activeTab = evidenceTabs.find((tab) => tab.key === activeTabKey)
-    ?? evidenceTabs[0];
+  const highlightedTab = highlightCitation
+    ? supportingEvidenceTabForCitation(evidenceTabs, highlightCitation)
+    : null;
+  const activeTab =
+    highlightedTab ??
+    evidenceTabs.find((tab) => tab.key === activeTabKey) ??
+    evidenceTabs[0];
+  const activeTabHighlightCitation =
+    highlightedTab && highlightedTab.key === activeTab.key
+      ? highlightCitation
+      : null;
 
   return (
-    <div ref={evidenceRef} className="scroll-mt-6">
-      {!isOpen ? (
-        <div className="relative flex items-center py-4">
-          <div className="flex-1 border-t border-[#D7C8F4]" />
-          <Button
-            type="button"
-            className="mx-4 rounded-full px-5"
-            onClick={() => onOpenChange(true)}
-          >
-            Explore supporting evidence
-            <ChevronRight className="size-4" />
-          </Button>
-          <div className="flex-1 border-t border-[#D7C8F4]" />
-        </div>
-      ) : (
-        <Card className="border-[#C7B4EF] shadow-md">
-          <CardHeader className="flex flex-row items-start justify-between gap-3">
-            <div>
-              <CardTitle>Supporting Evidence</CardTitle>
-              <p className="mt-1 text-sm leading-6 text-slate-500">
-                Inspect the retrieved dossier behind the generated response.
-              </p>
-            </div>
-            <Button
+    <Card className="border-[#C7B4EF] shadow-md">
+      <CardHeader>
+        <CardTitle>Supporting Evidence</CardTitle>
+        <p className="mt-1 text-sm leading-6 text-slate-500">
+          Inspect the retrieved dossier behind the generated response.
+        </p>
+      </CardHeader>
+      <CardContent className="space-y-5">
+        <div className="flex flex-wrap items-end gap-1">
+          {evidenceTabs.map((tab) => (
+            <button
+              key={tab.key}
               type="button"
-              variant="ghost"
-              className="h-auto px-0 py-0 font-semibold uppercase tracking-wide text-slate-600 hover:bg-transparent hover:text-slate-900"
-              style={{ fontSize: "14px", lineHeight: "20px" }}
-              onClick={() => onOpenChange(false)}
-            >
-              <ChevronDown className="size-4" />
-              Collapse
-            </Button>
-          </CardHeader>
-          <CardContent className="space-y-5">
-            <div className="flex flex-wrap items-end gap-1">
-              {evidenceTabs.map((tab) => (
-                <button
-                  key={tab.key}
-                  type="button"
-                  onClick={() => setActiveTabKey(tab.key)}
-                  className={cn(
-                    "rounded-t-md px-4 py-2 text-sm font-semibold shadow-sm",
-                    activeTab.key === tab.key
-                      ? "bg-[#371E8F] text-white"
-                      : "border border-slate-200 bg-slate-50 text-slate-700"
-                  )}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </div>
-            <div className="-mt-5 rounded-b-md rounded-tr-md border border-slate-200 bg-white p-4 shadow-sm">
-              {activeTab.kind === "primary" ? (
-                <DossierResults
-                  dossier={dossier}
-                  highlightCitation={highlightCitation}
-                  variant="embedded"
-                  onCitationHandled={onCitationHandled}
-                />
-              ) : (
-                <SecondaryEvidenceResults
-                  evidence={activeTab.evidence}
-                  highlightCitation={highlightCitation}
-                  onCitationHandled={onCitationHandled}
-                />
+              onClick={() => setActiveTabKey(tab.key)}
+              className={cn(
+                "rounded-t-md px-4 py-2 text-sm font-semibold shadow-sm",
+                activeTab.key === tab.key
+                  ? "bg-[#371E8F] text-white"
+                  : "border border-slate-200 bg-slate-50 text-slate-700"
               )}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-    </div>
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+        <div className="-mt-5 rounded-b-md rounded-tr-md border border-slate-200 bg-white p-4 shadow-sm">
+          {activeTab.kind === "primary" ? (
+            <DossierResults
+              dossier={dossier}
+              highlightCitation={activeTabHighlightCitation}
+              variant="embedded"
+              onCitationHandled={onCitationHandled}
+            />
+          ) : (
+            <SecondaryEvidenceResults
+              evidence={activeTab.evidence}
+              highlightCitation={activeTabHighlightCitation}
+              onCitationHandled={onCitationHandled}
+            />
+          )}
+        </div>
+      </CardContent>
+    </Card>
   );
+}
+
+function supportingEvidenceTabForCitation(
+  tabs: SupportingEvidenceTab[],
+  citation: EvidenceCitation
+) {
+  return citation.rxcui
+    ? tabs.find((tab) => tab.rxcui === citation.rxcui)
+    : tabs.find((tab) => tab.sourceIds.has(citation.source_id));
 }
 
 type SupportingEvidenceTab =
@@ -1137,13 +1205,16 @@ function DossierResults({
     if (!highlightCitation) {
       return;
     }
-    if (displayEvidence.sections[highlightCitation.section]) {
-      setSelectedSection(highlightCitation.section);
-    }
     const matchingSource = displayEvidence.records.find(
       (source) => source.record.source_id === highlightCitation.source_id
     );
-    setSelectedSourceKey(matchingSource?.key ?? null);
+    if (!matchingSource) {
+      return;
+    }
+    if (displayEvidence.sections[highlightCitation.section]) {
+      setSelectedSection(highlightCitation.section);
+    }
+    setSelectedSourceKey(matchingSource.key);
     window.requestAnimationFrame(() => {
       labelEvidencePanelRef.current?.scrollIntoView({
         behavior: "smooth",
@@ -1274,22 +1345,26 @@ function DossierResults({
 function QueryUnderstandingPanel({
   answerResponse,
   error,
+  isDemoMode,
   isAnswerLoading,
   isUnderstandingLoading,
   onQuestionChange,
   onAnswerCitationClick,
   onCoverageTargetClick,
+  onDemoModeChange,
   onSubmit,
   question,
   result,
 }: {
   answerResponse: QueryAnswerResponse | null;
   error: string | null;
+  isDemoMode: boolean;
   isAnswerLoading: boolean;
   isUnderstandingLoading: boolean;
   onQuestionChange: (value: string) => void;
   onAnswerCitationClick: (citation: EvidenceCitation) => void;
   onCoverageTargetClick: (target: EvidenceCoverageTarget) => void;
+  onDemoModeChange: (enabled: boolean) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   question: string;
   result: QueryUnderstandingResponse | null;
@@ -1339,6 +1414,21 @@ function QueryUnderstandingPanel({
               )}
             </Button>
           </form>
+          <div className="mx-auto mt-3 flex max-w-4xl flex-wrap items-center justify-between gap-2 text-sm text-slate-500">
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={isDemoMode}
+                onChange={(event) => onDemoModeChange(event.target.checked)}
+                className="size-4 rounded border-slate-300 text-[#371E8F] focus:ring-[#371E8F]"
+              />
+              Demo mode
+            </label>
+            <span className="text-xs leading-5">
+              Uses a local fixture for the cetirizine, ibuprofen, and aspirin
+              query. No LLM or live API calls.
+            </span>
+          </div>
         </CardContent>
       </Card>
 
@@ -2364,6 +2454,9 @@ function LabelEvidencePanel({
                     const manufacturerName = primaryValue(
                       source.record.manufacturer_names
                     );
+                    const hasProductMetadata = hasOpenFdaProductMetadata(
+                      source.record
+                    );
                     const route = primaryValue(source.record.routes);
                     const productType = primaryValue(source.record.product_types);
                     const isSelected = source.key === selectedSourceKey;
@@ -2407,16 +2500,26 @@ function LabelEvidencePanel({
                         <div className="mt-1.5 truncate font-medium text-slate-900">
                           {brandName
                             ? displayBrandName(brandName)
-                            : "Brand unavailable"}
+                            : hasProductMetadata
+                              ? "Brand unavailable"
+                              : unidentifiedDrugLabel}
                         </div>
-                        <div className="mt-0.5 truncate text-slate-600">
-                          {genericName
-                            ? displayGenericName(genericName)
-                            : "Generic unavailable"}
-                        </div>
-                        <div className="mt-0.5 truncate text-slate-500">
-                          {manufacturerName ?? "Manufacturer unavailable"}
-                        </div>
+                        {hasProductMetadata ? (
+                          <>
+                            <div className="mt-0.5 truncate text-slate-600">
+                              {genericName
+                                ? displayGenericName(genericName)
+                                : "Generic unavailable"}
+                            </div>
+                            <div className="mt-0.5 truncate text-slate-500">
+                              {manufacturerName ?? "Manufacturer unavailable"}
+                            </div>
+                          </>
+                        ) : (
+                          <div className="mt-0.5 truncate text-slate-600">
+                            {metadataUnavailableLabel}
+                          </div>
+                        )}
                         {route || productType ? (
                           <div className="mt-1.5 text-slate-500">
                             {route ? (
@@ -2470,6 +2573,9 @@ function LabelEvidencePanel({
                       const manufacturerName = primaryValue(
                         source?.record.manufacturer_names
                       );
+                      const hasProductMetadata = hasOpenFdaProductMetadata(
+                        source?.record
+                      );
                       const isSelected =
                         Boolean(sourceKey) && sourceKey === selectedSourceKey;
                       const evidenceClasses = isSelected
@@ -2511,9 +2617,13 @@ function LabelEvidencePanel({
                             )}
                             {brandName ? (
                               <span>{displayBrandName(brandName)}</span>
+                            ) : source && !hasProductMetadata ? (
+                              <span>{unidentifiedDrugLabel}</span>
                             ) : null}
                             {manufacturerName ? (
                               <span>· {manufacturerName}</span>
+                            ) : source && !hasProductMetadata ? (
+                              <span>· {metadataUnavailableLabel}</span>
                             ) : null}
                           </div>
                           <p

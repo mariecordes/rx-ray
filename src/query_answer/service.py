@@ -5,6 +5,7 @@ import logging
 from src.dossier.builder import DossierBuilder
 from src.query_answer.config import load_query_answer_parameters
 from src.query_answer.coverage import add_coverage_limitations, build_evidence_coverage
+from src.query_answer.evidence_map import build_question_evidence_map
 from src.query_answer.models import QueryAnswerResponse
 from src.query_answer.secondary import build_secondary_evidence
 from src.query_answer.synthesizer import EvidenceAnswerSynthesizer
@@ -57,6 +58,10 @@ class QueryAnswerService:
             understanding,
             secondary_evidence=secondary_evidence,
         )
+        question_evidence_map = build_question_evidence_map(
+            understanding,
+            secondary_evidence=secondary_evidence,
+        )
         answer = add_coverage_limitations(
             synthesis.answer,
             coverage,
@@ -76,6 +81,7 @@ class QueryAnswerService:
             understanding=understanding,
             answer=answer,
             secondary_evidence=secondary_evidence,
+            question_evidence_map=question_evidence_map,
             coverage=coverage,
             warnings=warnings,
             errors=errors,
