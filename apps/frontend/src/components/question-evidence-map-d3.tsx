@@ -1774,6 +1774,9 @@ function nodeTooltipTitle(node: QuestionEvidenceMapNode) {
   if (node.kind === "resolved_medication") {
     return displayGraphNodeName(node.label);
   }
+  if (node.kind === "label_source") {
+    return displayLabelSourceName(node);
+  }
   if (node.kind === "label_section") {
     return displaySectionName(node.section ?? node.label);
   }
@@ -1825,7 +1828,9 @@ function nodeTooltipBody(node: QuestionEvidenceMapNode) {
           <em>{displayEvidenceMapNodeKind(node)}</em>
         </div>
         {rxcuis.length ? <div>{rxcuiLabel(rxcuis)}</div> : null}
-        {node.subtitle ? <div>{node.subtitle}</div> : null}
+        {labelSourceMetadataNote(node) ? (
+          <div>{labelSourceMetadataNote(node)}</div>
+        ) : null}
       </>
     );
   }
@@ -1861,6 +1866,9 @@ function displayEvidenceMapEdgeNode(node: QuestionEvidenceMapNode) {
   }
   if (node.kind === "label_section") {
     return displaySectionName(node.section ?? node.label);
+  }
+  if (node.kind === "label_source") {
+    return displayLabelSourceName(node);
   }
   return node.label;
 }
@@ -1911,6 +1919,9 @@ function graphNodeLabel(node: QuestionEvidenceMapNode) {
   if (node.kind === "label_section") {
     return displaySectionName(node.section ?? node.label);
   }
+  if (node.kind === "label_source") {
+    return displayLabelSourceName(node);
+  }
   return node.label;
 }
 
@@ -1959,7 +1970,39 @@ function selectedNodeDetails(
     details.push(displayRxNormType(node.subtitle));
   }
 
+  if (node.kind === "label_source") {
+    const metadataNote = labelSourceMetadataNote(node);
+    if (metadataNote) {
+      details.push(metadataNote);
+    }
+  }
+
   return details;
+}
+
+function displayLabelSourceName(node: QuestionEvidenceMapNode) {
+  if (isUnidentifiedLabelSource(node)) {
+    return "Unidentified drug label";
+  }
+  return node.label;
+}
+
+function labelSourceMetadataNote(node: QuestionEvidenceMapNode) {
+  if (node.subtitle) {
+    return node.subtitle;
+  }
+  return isUnidentifiedLabelSource(node)
+    ? "OpenFDA product metadata unavailable"
+    : null;
+}
+
+function isUnidentifiedLabelSource(node: QuestionEvidenceMapNode) {
+  return (
+    node.kind === "label_source" &&
+    ["label source", "unidentified drug label"].includes(
+      node.label.trim().toLowerCase()
+    )
+  );
 }
 
 function formatAmpersandList(values: string[]) {

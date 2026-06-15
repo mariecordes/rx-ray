@@ -834,6 +834,52 @@ def test_question_evidence_map_shares_interaction_label_source_across_medication
     )
 
 
+def test_question_evidence_map_labels_sources_without_openfda_metadata() -> None:
+    interaction_evidence = OpenFDALabelEvidence(
+        rxcui="5640",
+        labels_found=1,
+        label_limit=3,
+        retrieval_mode="interaction_targeted_lookup",
+        label_records=[
+            OpenFDALabelRecord(
+                source_id="label-without-openfda",
+                provenance_tags=["interaction_targeted_lookup"],
+            )
+        ],
+        sections={
+            "drug_interactions": [
+                LabelSection(
+                    section="drug_interactions",
+                    text="Unidentified label text mentioning another medication.",
+                    source_id="label-without-openfda",
+                    provenance_tags=["interaction_targeted_lookup"],
+                )
+            ]
+        },
+    )
+    secondary = secondary_evidence_fixture().model_copy(
+        update={
+            "label_evidence": interaction_evidence,
+            "interaction_label_evidence": interaction_evidence,
+            "retrieval_modes": ["interaction_targeted_lookup"],
+        }
+    )
+
+    evidence_map = build_question_evidence_map(
+        response_with_secondary_mention(),
+        secondary_evidence=[secondary],
+    )
+
+    label_source_node = next(
+        node
+        for node in evidence_map.nodes
+        if node.kind == "label_source"
+        and node.source_id == "label-without-openfda"
+    )
+    assert label_source_node.label == "Unidentified drug label"
+    assert label_source_node.subtitle == "OpenFDA product metadata unavailable"
+
+
 def test_question_evidence_map_omits_rxnorm_context_for_visual_clarity() -> None:
     secondary = secondary_evidence_fixture().model_copy(
         update={

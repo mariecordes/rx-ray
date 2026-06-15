@@ -72,6 +72,9 @@ function primaryValue(values?: string[] | null) {
   return values[0];
 }
 
+const unidentifiedDrugLabel = "Unidentified drug label";
+const metadataUnavailableLabel = "OpenFDA metadata unavailable";
+
 const sourceSelectionClasses =
   "border-[#C7B4EF] bg-[#E8DDF9] shadow-sm hover:border-[#C7B4EF]";
 const nodeSpecificClasses =
@@ -170,10 +173,19 @@ function citationDisplayLabel(
     ? displayBrandName(brandName)
     : genericName
       ? displayGenericName(genericName)
-      : "Label source";
+      : unidentifiedDrugLabel;
   return [productName, manufacturerName, displaySectionName(citation.section)]
     .filter(Boolean)
     .join(" · ");
+}
+
+function hasOpenFdaProductMetadata(record?: OpenFDALabelRecord | null) {
+  return Boolean(
+    record &&
+      (record.brand_names.length ||
+        record.generic_names.length ||
+        record.manufacturer_names.length)
+  );
 }
 
 function InfoTooltip({ text }: { text: string }) {
@@ -2420,6 +2432,9 @@ function LabelEvidencePanel({
                     const manufacturerName = primaryValue(
                       source.record.manufacturer_names
                     );
+                    const hasProductMetadata = hasOpenFdaProductMetadata(
+                      source.record
+                    );
                     const route = primaryValue(source.record.routes);
                     const productType = primaryValue(source.record.product_types);
                     const isSelected = source.key === selectedSourceKey;
@@ -2463,16 +2478,26 @@ function LabelEvidencePanel({
                         <div className="mt-1.5 truncate font-medium text-slate-900">
                           {brandName
                             ? displayBrandName(brandName)
-                            : "Brand unavailable"}
+                            : hasProductMetadata
+                              ? "Brand unavailable"
+                              : unidentifiedDrugLabel}
                         </div>
-                        <div className="mt-0.5 truncate text-slate-600">
-                          {genericName
-                            ? displayGenericName(genericName)
-                            : "Generic unavailable"}
-                        </div>
-                        <div className="mt-0.5 truncate text-slate-500">
-                          {manufacturerName ?? "Manufacturer unavailable"}
-                        </div>
+                        {hasProductMetadata ? (
+                          <>
+                            <div className="mt-0.5 truncate text-slate-600">
+                              {genericName
+                                ? displayGenericName(genericName)
+                                : "Generic unavailable"}
+                            </div>
+                            <div className="mt-0.5 truncate text-slate-500">
+                              {manufacturerName ?? "Manufacturer unavailable"}
+                            </div>
+                          </>
+                        ) : (
+                          <div className="mt-0.5 truncate text-slate-600">
+                            {metadataUnavailableLabel}
+                          </div>
+                        )}
                         {route || productType ? (
                           <div className="mt-1.5 text-slate-500">
                             {route ? (
@@ -2526,6 +2551,9 @@ function LabelEvidencePanel({
                       const manufacturerName = primaryValue(
                         source?.record.manufacturer_names
                       );
+                      const hasProductMetadata = hasOpenFdaProductMetadata(
+                        source?.record
+                      );
                       const isSelected =
                         Boolean(sourceKey) && sourceKey === selectedSourceKey;
                       const evidenceClasses = isSelected
@@ -2567,9 +2595,13 @@ function LabelEvidencePanel({
                             )}
                             {brandName ? (
                               <span>{displayBrandName(brandName)}</span>
+                            ) : source && !hasProductMetadata ? (
+                              <span>{unidentifiedDrugLabel}</span>
                             ) : null}
                             {manufacturerName ? (
                               <span>· {manufacturerName}</span>
+                            ) : source && !hasProductMetadata ? (
+                              <span>· {metadataUnavailableLabel}</span>
                             ) : null}
                           </div>
                           <p

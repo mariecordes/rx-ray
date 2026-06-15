@@ -501,7 +501,7 @@ def source_label(record: OpenFDALabelRecord) -> str:
         first(record.brand_names)
         or first(record.generic_names)
         or first(record.manufacturer_names)
-        or "Label source"
+        or "Unidentified drug label"
     )
 
 
@@ -510,7 +510,11 @@ def source_subtitle(record: OpenFDALabelRecord) -> str | None:
         first(record.generic_names),
         first(record.manufacturer_names),
     ]
-    return " · ".join(value for value in values if value) or None
+    return " · ".join(value for value in values if value) or (
+        "OpenFDA product metadata unavailable"
+        if source_label(record) == "Unidentified drug label"
+        else None
+    )
 
 
 def display_role(role: str) -> str:
