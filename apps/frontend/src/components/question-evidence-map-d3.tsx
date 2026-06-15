@@ -33,13 +33,18 @@ const MIN_ZOOM = 0.28;
 const MAX_ZOOM = 2;
 const FOCUS_ZOOM = 1.55;
 const FIT_PADDING = 0;
-const MEDICATION_SPREAD_DISTANCE = 360;
-const MEDICATION_SPREAD_STRENGTH = 0.46;
-const MEDICATION_SPREAD_MAX_PUSH = 9;
+const CONCEPT_SPREAD_DISTANCE = 160;
+const CONCEPT_SPREAD_STRENGTH = 0.55;
+const CONCEPT_SPREAD_MAX_PUSH = 8;
+const CONCEPT_LABEL_REPULSION_DISTANCE = 140;
+const CONCEPT_LABEL_REPULSION_STRENGTH = 0.5;
+const MEDICATION_SPREAD_DISTANCE = 420;
+const MEDICATION_SPREAD_STRENGTH = 0.72;
+const MEDICATION_SPREAD_MAX_PUSH = 14;
 const CONCEPT_RING_RADIUS = 118;
-const MEDICATION_RING_RADIUS = 250;
-const HIERARCHY_RING_STRENGTH = 0.12;
-const INITIAL_LAYOUT_TICKS = 90;
+const MEDICATION_RING_RADIUS = 310;
+const HIERARCHY_RING_STRENGTH = 0.22;
+const INITIAL_LAYOUT_TICKS = 160;
 
 const sectionLabels: Record<string, string> = {
   boxed_warning: "Boxed Warning",
@@ -866,9 +871,8 @@ function EvidenceMapSidePanel({
           </div>
         ) : (
           <div className="grid h-[112px] grid-rows-[48px_24px] gap-2">
-            <p className="line-clamp-2 min-h-12 text-sm leading-6 text-slate-600">
-              Select a bubble to inspect the extracted concept, medication,
-              source, or label section.
+            <p className="min-h-12 text-sm leading-6 text-slate-600">
+              Select a bubble to inspect it. Double-click a bubble to zoom in on it in the graph.
             </p>
           </div>
         )}
@@ -1073,6 +1077,9 @@ function createEvidenceMapSimulation(
     .force("questionCenter", questionCenterForce())
     .force("medicationSpread", medicationSpreadForce())
     .force("hierarchyRing", hierarchyRingForce())
+    .force("interactionLabelCentroid", interactionLabelCentroidForce(links))
+    .force("conceptSpread", conceptSpreadForce())
+    .force("conceptLabelRepulsion", conceptLabelRepulsionForce())
     .force(
       "collide",
       forceCollide<VisualNode>(
@@ -1110,6 +1117,73 @@ function questionCenterForce(): Force<VisualNode, SimulationLink> {
   force.initialize = (nodes: VisualNode[]) => {
     questionNodes = nodes.filter(
       (node: VisualNode) => node.kind === "question"
+    );
+  };
+
+  return force;
+}
+
+function conceptSpreadForce(): Force<VisualNode, SimulationLink> {
+  let conceptNodes: VisualNode[] = [];
+
+  function force(alpha: number) {
+    for (let i = 0; i < conceptNodes.length; i++) {
+      const source = conceptNodes[i];
+      for (let j = i + 1; j < conceptNodes.length; j++) {
+        const target = conceptNodes[j];
+        const dx = (target.x ?? GRAPH_WIDTH / 2) - (source.x ?? GRAPH_WIDTH / 2);
+        const dy = (target.y ?? GRAPH_HEIGHT / 2) - (source.y ?? GRAPH_HEIGHT / 2);
+        const distance = Math.hypot(dx, dy) || 1;
+        if (distance >= CONCEPT_SPREAD_DISTANCE) continue;
+
+        const push = Math.min(
+          CONCEPT_SPREAD_MAX_PUSH,
+          ((CONCEPT_SPREAD_DISTANCE - distance) / distance) *
+            alpha *
+            CONCEPT_SPREAD_STRENGTH
+        );
+        source.vx = (source.vx ?? 0) - dx * push * 0.5;
+        source.vy = (source.vy ?? 0) - dy * push * 0.5;
+        target.vx = (target.vx ?? 0) + dx * push * 0.5;
+        target.vy = (target.vy ?? 0) + dy * push * 0.5;
+      }
+    }
+  }
+
+  force.initialize = (nodes: VisualNode[]) => {
+    conceptNodes = nodes.filter((n) => n.kind === "query_concept");
+  };
+
+  return force;
+}
+
+function conceptLabelRepulsionForce(): Force<VisualNode, SimulationLink> {
+  let conceptNodes: VisualNode[] = [];
+  let sharedLabelNodes: VisualNode[] = [];
+
+  function force(alpha: number) {
+    for (const concept of conceptNodes) {
+      for (const label of sharedLabelNodes) {
+        const dx = (concept.x ?? GRAPH_WIDTH / 2) - (label.x ?? GRAPH_WIDTH / 2);
+        const dy = (concept.y ?? GRAPH_HEIGHT / 2) - (label.y ?? GRAPH_HEIGHT / 2);
+        const distance = Math.hypot(dx, dy) || 1;
+        if (distance >= CONCEPT_LABEL_REPULSION_DISTANCE) continue;
+
+        const push =
+          ((CONCEPT_LABEL_REPULSION_DISTANCE - distance) / distance) *
+          alpha *
+          CONCEPT_LABEL_REPULSION_STRENGTH;
+        // Only push the concept away, not the label (label has its own centroid force)
+        concept.vx = (concept.vx ?? 0) + dx * push;
+        concept.vy = (concept.vy ?? 0) + dy * push;
+      }
+    }
+  }
+
+  force.initialize = (nodes: VisualNode[]) => {
+    conceptNodes = nodes.filter((n) => n.kind === "query_concept");
+    sharedLabelNodes = nodes.filter(
+      (n) => n.kind === "label_source" && n.medicationParentCount > 1
     );
   };
 
@@ -1192,6 +1266,37 @@ function hierarchyRingForce(): Force<VisualNode, SimulationLink> {
   return force;
 }
 
+function interactionLabelCentroidForce(links: SimulationLink[]): Force<VisualNode, SimulationLink> {
+  let labelNodes: VisualNode[] = [];
+
+  function force(alpha: number) {
+    for (const node of labelNodes) {
+      const parentPositions = links
+        .filter(
+          (link) =>
+            isMedicationLabelLink(link.kind) &&
+            (link.target as VisualNode).id === node.id
+        )
+        .map((link) => link.source as VisualNode)
+        .filter((p) => p.x !== undefined);
+
+      if (parentPositions.length < 2) continue;
+
+      const centroidX = parentPositions.reduce((s, p) => s + (p.x ?? 0), 0) / parentPositions.length;
+      const centroidY = parentPositions.reduce((s, p) => s + (p.y ?? 0), 0) / parentPositions.length;
+
+      node.vx = (node.vx ?? 0) + (centroidX - (node.x ?? centroidX)) * alpha * 0.38;
+      node.vy = (node.vy ?? 0) + (centroidY - (node.y ?? centroidY)) * alpha * 0.38;
+    }
+  }
+
+  force.initialize = (allNodes: VisualNode[]) => {
+    labelNodes = allNodes.filter((n) => n.kind === "label_source" && n.medicationParentCount > 1);
+  };
+
+  return force;
+}
+
 function withoutTerminologyContext(map: QuestionEvidenceMap): QuestionEvidenceMap {
   const visibleNodeIds = new Set(
     map.nodes
@@ -1252,17 +1357,17 @@ function evidenceMapLinkDistance(link: SimulationLink) {
 
   if (isMedicationLabelLink(link.kind)) {
     const sharedParentBonus =
-      Math.max(0, link.targetNode.medicationParentCount - 1) * 80;
+      Math.max(0, link.targetNode.medicationParentCount - 1) * 40;
     if (
       link.kind === "interaction_lookup_source" ||
       link.hasParallelInteractionLookup
     ) {
       return link.targetNode.medicationParentCount > 1
-        ? 1000 + sharedParentBonus
+        ? 280 + sharedParentBonus
         : 230;
     }
     return link.targetNode.medicationParentCount > 1
-      ? 210 + sharedParentBonus
+      ? 200 + sharedParentBonus
       : 150;
   }
 
@@ -1285,9 +1390,9 @@ function evidenceMapLinkStrength(link: SimulationLink) {
       link.kind === "interaction_lookup_source" ||
       link.hasParallelInteractionLookup
     ) {
-      return link.targetNode.medicationParentCount > 1 ? 0.08 : 0.28;
+      return link.targetNode.medicationParentCount > 1 ? 0.22 : 0.28;
     }
-    return link.targetNode.medicationParentCount > 1 ? 0.18 : 0.58;
+    return link.targetNode.medicationParentCount > 1 ? 0.28 : 0.58;
   }
 
   const strengths: Record<string, number> = {
