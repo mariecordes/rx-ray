@@ -835,9 +835,10 @@ function SupportingEvidence({
     if (!highlightCitation) {
       return;
     }
-    const matchingTab = highlightCitation.rxcui
-      ? evidenceTabs.find((tab) => tab.rxcui === highlightCitation.rxcui)
-      : evidenceTabs.find((tab) => tab.sourceIds.has(highlightCitation.source_id));
+    const matchingTab = supportingEvidenceTabForCitation(
+      evidenceTabs,
+      highlightCitation
+    );
     if (matchingTab) {
       setActiveTabKey(matchingTab.key);
     }
@@ -854,8 +855,17 @@ function SupportingEvidence({
     onRxcuiHandled();
   }, [evidenceTabs, highlightRxcui, onRxcuiHandled]);
 
-  const activeTab = evidenceTabs.find((tab) => tab.key === activeTabKey)
-    ?? evidenceTabs[0];
+  const highlightedTab = highlightCitation
+    ? supportingEvidenceTabForCitation(evidenceTabs, highlightCitation)
+    : null;
+  const activeTab =
+    highlightedTab ??
+    evidenceTabs.find((tab) => tab.key === activeTabKey) ??
+    evidenceTabs[0];
+  const activeTabHighlightCitation =
+    highlightedTab && highlightedTab.key === activeTab.key
+      ? highlightCitation
+      : null;
 
   return (
     <Card className="border-[#C7B4EF] shadow-md">
@@ -887,14 +897,14 @@ function SupportingEvidence({
           {activeTab.kind === "primary" ? (
             <DossierResults
               dossier={dossier}
-              highlightCitation={highlightCitation}
+              highlightCitation={activeTabHighlightCitation}
               variant="embedded"
               onCitationHandled={onCitationHandled}
             />
           ) : (
             <SecondaryEvidenceResults
               evidence={activeTab.evidence}
-              highlightCitation={highlightCitation}
+              highlightCitation={activeTabHighlightCitation}
               onCitationHandled={onCitationHandled}
             />
           )}
@@ -902,6 +912,15 @@ function SupportingEvidence({
       </CardContent>
     </Card>
   );
+}
+
+function supportingEvidenceTabForCitation(
+  tabs: SupportingEvidenceTab[],
+  citation: EvidenceCitation
+) {
+  return citation.rxcui
+    ? tabs.find((tab) => tab.rxcui === citation.rxcui)
+    : tabs.find((tab) => tab.sourceIds.has(citation.source_id));
 }
 
 type SupportingEvidenceTab =
@@ -1186,13 +1205,16 @@ function DossierResults({
     if (!highlightCitation) {
       return;
     }
-    if (displayEvidence.sections[highlightCitation.section]) {
-      setSelectedSection(highlightCitation.section);
-    }
     const matchingSource = displayEvidence.records.find(
       (source) => source.record.source_id === highlightCitation.source_id
     );
-    setSelectedSourceKey(matchingSource?.key ?? null);
+    if (!matchingSource) {
+      return;
+    }
+    if (displayEvidence.sections[highlightCitation.section]) {
+      setSelectedSection(highlightCitation.section);
+    }
+    setSelectedSourceKey(matchingSource.key);
     window.requestAnimationFrame(() => {
       labelEvidencePanelRef.current?.scrollIntoView({
         behavior: "smooth",
