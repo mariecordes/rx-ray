@@ -9,6 +9,7 @@ import {
   forceX,
   forceY,
 } from "d3-force";
+import type { Force, Simulation, SimulationNodeDatum } from "d3-force";
 import { Info, Maximize2, Minus, Plus } from "lucide-react";
 import type { MouseEvent, PointerEvent, WheelEvent } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -32,6 +33,13 @@ const MIN_ZOOM = 0.28;
 const MAX_ZOOM = 2;
 const FOCUS_ZOOM = 1.55;
 const FIT_PADDING = 0;
+const MEDICATION_SPREAD_DISTANCE = 360;
+const MEDICATION_SPREAD_STRENGTH = 0.46;
+const MEDICATION_SPREAD_MAX_PUSH = 9;
+const CONCEPT_RING_RADIUS = 118;
+const MEDICATION_RING_RADIUS = 250;
+const HIERARCHY_RING_STRENGTH = 0.12;
+const INITIAL_LAYOUT_TICKS = 90;
 
 const sectionLabels: Record<string, string> = {
   boxed_warning: "Boxed Warning",
@@ -148,12 +156,28 @@ type EvidenceMapD3Props = {
   onRxcuiClick: (target: EvidenceMapNavigationTarget) => void;
 };
 
-type VisualNode = QuestionEvidenceMapNode & {
+type VisualNode = QuestionEvidenceMapNode &
+  SimulationNodeDatum & {
   x: number;
   y: number;
+  hierarchyAngle: number | null;
+  labelSectionCount: number;
+  medicationIndex: number;
+  medicationCount: number;
+  medicationParentCount: number;
+};
+
+type SimulationLink = {
+  source: string | VisualNode;
+  target: string | VisualNode;
+  kind: string;
+  hasParallelInteractionLookup: boolean;
+  sourceNode: VisualNode;
+  targetNode: VisualNode;
 };
 
 type VisualLink = QuestionEvidenceMapEdge & {
+  hasParallelInteractionLookup: boolean;
   sourceNode: VisualNode;
   targetNode: VisualNode;
 };
@@ -184,11 +208,16 @@ export function EvidenceMapD3({
   const svgRef = useRef<SVGSVGElement>(null);
   const graphFrameRef = useRef<HTMLDivElement>(null);
   const suppressNodeClickRef = useRef(false);
+  const simulationRef = useRef<Simulation<VisualNode, SimulationLink> | null>(
+    null
+  );
+  const latestNodesRef = useRef<VisualNode[]>([]);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [hoverTooltip, setHoverTooltip] = useState<HoverTooltip | null>(null);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const [selectedTypes, setSelectedTypes] = useState<Set<string>>(new Set());
+  const [simulationNodes, setSimulationNodes] = useState<VisualNode[]>([]);
   const [dragState, setDragState] = useState<{
     startClientX: number;
     startClientY: number;
@@ -201,22 +230,11 @@ export function EvidenceMapD3({
     moved: boolean;
     startClientX: number;
     startClientY: number;
-    startGraphX: number;
-    startGraphY: number;
-    origins: Map<string, { x: number; y: number }>;
   } | null>(null);
-  const [nodeOverrides, setNodeOverrides] = useState<
-    Map<string, { x: number; y: number }>
-  >(new Map());
 
   const visibleMap = useMemo(() => withoutTerminologyContext(map), [map]);
   const graph = useMemo(() => buildD3EvidenceGraph(visibleMap), [visibleMap]);
-  const positionedNodes = useMemo(() => {
-    return graph.nodes.map((node) => {
-      const override = nodeOverrides.get(node.id);
-      return override ? { ...node, ...override } : node;
-    });
-  }, [graph.nodes, nodeOverrides]);
+  const positionedNodes = simulationNodes.length ? simulationNodes : graph.nodes;
   const positionedNodeById = useMemo(
     () => new Map(positionedNodes.map((node) => [node.id, node])),
     [positionedNodes]
@@ -282,11 +300,57 @@ export function EvidenceMapD3({
   );
 
   useEffect(() => {
-    setNodeOverrides(new Map());
-    const fittedView = fitGraphToView(graph.nodes);
+    const nodes = graph.nodes.map((node) => ({ ...node }));
+    latestNodesRef.current = nodes;
+
+    const simulationLinks = graph.links.map((link) => ({
+      source: link.sourceNode.id,
+      target: link.targetNode.id,
+      kind: link.kind,
+      hasParallelInteractionLookup: link.hasParallelInteractionLookup,
+      sourceNode:
+        nodes.find((node) => node.id === link.sourceNode.id) ?? link.sourceNode,
+      targetNode:
+        nodes.find((node) => node.id === link.targetNode.id) ?? link.targetNode,
+    }));
+
+    let animationFrame: number | null = null;
+    const simulation = createEvidenceMapSimulation(nodes, simulationLinks);
+    simulation.stop();
+    for (let tick = 0; tick < INITIAL_LAYOUT_TICKS; tick += 1) {
+      simulation.tick();
+    }
+
+    latestNodesRef.current = nodes;
+    setSimulationNodes([...nodes]);
+    const fittedView = fitGraphToView(nodes);
     setPan(fittedView.pan);
     setZoom(fittedView.zoom);
-  }, [graph.nodes]);
+
+    simulation
+      .on("tick", () => {
+        latestNodesRef.current = nodes;
+        if (animationFrame !== null) {
+          return;
+        }
+        animationFrame = window.requestAnimationFrame(() => {
+          setSimulationNodes([...nodes]);
+          animationFrame = null;
+        });
+      })
+      .alpha(0.42)
+      .restart();
+
+    simulationRef.current = simulation;
+
+    return () => {
+      simulation.stop();
+      simulationRef.current = null;
+      if (animationFrame !== null) {
+        window.cancelAnimationFrame(animationFrame);
+      }
+    };
+  }, [graph]);
 
   function updateZoom(nextZoom: number) {
     setZoom(Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, nextZoom)));
@@ -334,24 +398,20 @@ export function EvidenceMapD3({
   function handlePointerMove(event: PointerEvent<SVGSVGElement>) {
     if (nodeDrag) {
       const point = screenToGraph(event.clientX, event.clientY);
-      const deltaX = point.x - nodeDrag.startGraphX;
-      const deltaY = point.y - nodeDrag.startGraphY;
+      const simulationNode = latestNodesRef.current.find(
+        (node) => node.id === nodeDrag.id
+      );
+      if (simulationNode) {
+        simulationNode.fx = point.x;
+        simulationNode.fy = point.y;
+        simulationRef.current?.alphaTarget(0.3).restart();
+      }
       const hasMoved =
         nodeDrag.moved ||
         Math.hypot(
           event.clientX - nodeDrag.startClientX,
           event.clientY - nodeDrag.startClientY
         ) > 4;
-      setNodeOverrides((current) => {
-        const next = new Map(current);
-        for (const [nodeId, origin] of nodeDrag.origins) {
-          next.set(nodeId, {
-            x: origin.x + deltaX,
-            y: origin.y + deltaY,
-          });
-        }
-        return next;
-      });
       if (hasMoved && !nodeDrag.moved) {
         setNodeDrag({ ...nodeDrag, moved: true });
       }
@@ -384,6 +444,16 @@ export function EvidenceMapD3({
     }
     if (nodeDrag?.moved) {
       suppressNodeClickRef.current = true;
+    }
+    if (nodeDrag) {
+      const simulationNode = latestNodesRef.current.find(
+        (node) => node.id === nodeDrag.id
+      );
+      if (simulationNode) {
+        simulationNode.fx = null;
+        simulationNode.fy = null;
+      }
+      simulationRef.current?.alphaTarget(0);
     }
     setDragState(null);
     setNodeDrag(null);
@@ -551,15 +621,19 @@ export function EvidenceMapD3({
                   }}
                   onPointerDown={(event) => {
                     event.stopPropagation();
-                    const startPoint = screenToGraph(event.clientX, event.clientY);
+                    const simulationNode = latestNodesRef.current.find(
+                      (candidate) => candidate.id === node.id
+                    );
+                    if (simulationNode) {
+                      simulationNode.fx = simulationNode.x;
+                      simulationNode.fy = simulationNode.y;
+                    }
+                    simulationRef.current?.alphaTarget(0.3).restart();
                     setNodeDrag({
                       id: node.id,
                       moved: false,
                       startClientX: event.clientX,
                       startClientY: event.clientY,
-                      startGraphX: startPoint.x,
-                      startGraphY: startPoint.y,
-                      origins: buildNodeDragOrigins(node, positionedNodeById, graph.links),
                     });
                   }}
                   onMouseEnter={(event: MouseEvent<SVGGElement>) => {
@@ -868,45 +942,36 @@ function EvidenceMapSidePanel({
 }
 
 function buildD3EvidenceGraph(map: QuestionEvidenceMap) {
-  const topology = buildEvidenceMapTopology(map);
-  const nodes: VisualNode[] = map.nodes.map((node) => {
-    const anchor = evidenceMapAnchor(node, topology);
+  const hierarchyAnglesById = buildHierarchyAngles(map);
+  const medicationIds = map.nodes
+    .filter((candidate) => candidate.kind === "resolved_medication")
+    .map((candidate) => candidate.id);
+  const nodes: VisualNode[] = map.nodes.map((node, index) => {
+    const hierarchyAngle = hierarchyAnglesById.get(node.id) ?? null;
+    const medicationIndex = medicationIds.indexOf(node.id);
+    const initialPoint =
+      node.kind === "question"
+        ? graphCenter()
+        : hierarchyAngle !== null
+        ? hierarchySeedPoint(node.kind, hierarchyAngle)
+        : naturalGraphSeedPoint(index);
     return {
       ...node,
-      x: anchor.x + evidenceMapSeedOffset(node.id, "x"),
-      y: anchor.y + evidenceMapSeedOffset(node.id, "y"),
+      x: initialPoint.x + evidenceMapSeedOffset(node.id, "x"),
+      y: initialPoint.y + evidenceMapSeedOffset(node.id, "y"),
+      hierarchyAngle,
+      labelSectionCount: 0,
+      medicationIndex,
+      medicationCount: medicationIds.length,
+      medicationParentCount: 0,
     };
   });
   const nodeById = new Map(nodes.map((node) => [node.id, node]));
-  const simulationLinks = map.edges
-    .filter((edge) => nodeById.has(edge.source) && nodeById.has(edge.target))
-    .map((edge) => ({ source: edge.source, target: edge.target, kind: edge.kind }));
-
-  const simulation = forceSimulation(nodes)
-    .force(
-      "link",
-      forceLink<VisualNode, { source: string | VisualNode; target: string | VisualNode; kind: string }>(
-        simulationLinks
-      )
-        .id((node) => node.id)
-        .distance((link) => evidenceMapLinkDistance(link.kind))
-        .strength((link) => evidenceMapLinkStrength(link.kind))
-    )
-    .force("charge", forceManyBody().strength(-150))
-    .force(
-      "collide",
-      forceCollide<VisualNode>(
-        (node) => evidenceNodeStyle(node).radius + 9
-      ).iterations(3)
-    )
-    .force("center", forceCenter(GRAPH_WIDTH / 2, GRAPH_HEIGHT / 2))
-    .force("x", forceX<VisualNode>((node) => evidenceMapAnchor(node, topology).x).strength(0.13))
-    .force("y", forceY<VisualNode>((node) => evidenceMapAnchor(node, topology).y).strength(0.12))
-    .stop();
-
-  for (let index = 0; index < 360; index += 1) {
-    simulation.tick();
-  }
+  const interactionLookupPairKeys = new Set(
+    map.edges
+      .filter((edge) => edge.kind === "interaction_lookup_source")
+      .map((edge) => medicationLabelPairKey(edge.source, edge.target))
+  );
 
   const links: VisualLink[] = map.edges
     .map((edge) => {
@@ -915,89 +980,216 @@ function buildD3EvidenceGraph(map: QuestionEvidenceMap) {
       if (!sourceNode || !targetNode) {
         return null;
       }
-      return { ...edge, sourceNode, targetNode };
+      return {
+        ...edge,
+        hasParallelInteractionLookup:
+          edge.kind === "has_label_source" &&
+          interactionLookupPairKeys.has(
+            medicationLabelPairKey(edge.source, edge.target)
+          ),
+        sourceNode,
+        targetNode,
+      };
     })
     .filter((link): link is VisualLink => Boolean(link));
+
+  applyEvidenceGraphMetrics(nodes, links);
 
   return { nodes, links };
 }
 
-type EvidenceMapTopology = {
-  anchorsById: Map<string, { x: number; y: number }>;
-};
+function buildHierarchyAngles(map: QuestionEvidenceMap) {
+  const conceptIds = map.nodes
+    .filter((node) => node.kind === "query_concept")
+    .map((node) => node.id);
+  const angleById = new Map<string, number>();
+  conceptIds.forEach((nodeId, index) => {
+    angleById.set(nodeId, hierarchyRingAngle(index, conceptIds.length));
+  });
 
-function buildEvidenceMapTopology(map: QuestionEvidenceMap): EvidenceMapTopology {
-  const nodeById = new Map(map.nodes.map((node) => [node.id, node]));
-  const childIdsByParentId = new Map<string, string[]>();
-  const parentIdsByChildId = new Map<string, string[]>();
   for (const edge of map.edges) {
-    if (!nodeById.has(edge.source) || !nodeById.has(edge.target)) {
+    if (edge.kind !== "resolved_as") {
       continue;
     }
-    const children = childIdsByParentId.get(edge.source) ?? [];
-    children.push(edge.target);
-    childIdsByParentId.set(edge.source, children);
-
-    const parents = parentIdsByChildId.get(edge.target) ?? [];
-    parents.push(edge.source);
-    parentIdsByChildId.set(edge.target, parents);
+    const conceptAngle = angleById.get(edge.source);
+    if (conceptAngle !== undefined) {
+      angleById.set(edge.target, conceptAngle);
+    }
   }
 
-  const questionNodes = map.nodes.filter((node) => node.kind === "question");
-  const rootId = questionNodes[0]?.id ?? map.nodes[0]?.id;
-  const anchorsById = new Map<string, { x: number; y: number }>();
-  if (!rootId) {
-    return { anchorsById };
+  return angleById;
+}
+
+function applyEvidenceGraphMetrics(nodes: VisualNode[], links: VisualLink[]) {
+  const labelSectionIdsBySourceId = new Map<string, Set<string>>();
+  const medicationParentIdsByLabelId = new Map<string, Set<string>>();
+
+  for (const link of links) {
+    if (
+      link.kind === "has_label_section" &&
+      link.sourceNode.kind === "label_source" &&
+      link.targetNode.kind === "label_section"
+    ) {
+      const sectionIds =
+        labelSectionIdsBySourceId.get(link.sourceNode.id) ?? new Set<string>();
+      sectionIds.add(link.targetNode.id);
+      labelSectionIdsBySourceId.set(link.sourceNode.id, sectionIds);
+    }
+
+    if (
+      isMedicationLabelLink(link.kind) &&
+      link.sourceNode.kind === "resolved_medication" &&
+      link.targetNode.kind === "label_source"
+    ) {
+      const medicationParentIds =
+        medicationParentIdsByLabelId.get(link.targetNode.id) ??
+        new Set<string>();
+      medicationParentIds.add(link.sourceNode.id);
+      medicationParentIdsByLabelId.set(link.targetNode.id, medicationParentIds);
+    }
   }
 
-  anchorsById.set(rootId, graphCenter());
-  const depthsById = new Map<string, number>([[rootId, 0]]);
-  const queue = [rootId];
-  for (let index = 0; index < queue.length; index += 1) {
-    const parentId = queue[index];
-    const parentDepth = depthsById.get(parentId) ?? 0;
-    for (const childId of childIdsByParentId.get(parentId) ?? []) {
-      if (!depthsById.has(childId)) {
-        depthsById.set(childId, parentDepth + 1);
-        queue.push(childId);
+  for (const node of nodes) {
+    node.labelSectionCount = labelSectionIdsBySourceId.get(node.id)?.size ?? 0;
+    node.medicationParentCount =
+      medicationParentIdsByLabelId.get(node.id)?.size ?? 0;
+  }
+}
+
+function createEvidenceMapSimulation(
+  nodes: VisualNode[],
+  links: SimulationLink[]
+) {
+  return forceSimulation<VisualNode>(nodes)
+    .force(
+      "link",
+      forceLink<VisualNode, SimulationLink>(links)
+        .id((node) => node.id)
+        .distance(evidenceMapLinkDistance)
+        .strength(evidenceMapLinkStrength)
+        .iterations(2)
+    )
+    .force("charge", forceManyBody<VisualNode>().strength(nodeChargeStrength))
+    .force("questionCenter", questionCenterForce())
+    .force("medicationSpread", medicationSpreadForce())
+    .force("hierarchyRing", hierarchyRingForce())
+    .force(
+      "collide",
+      forceCollide<VisualNode>(
+        (node) => evidenceNodeStyle(node).radius + nodeCollisionPadding(node)
+      )
+        .strength(1)
+        .iterations(5)
+    )
+    .force("center", forceCenter(GRAPH_WIDTH / 2, GRAPH_HEIGHT / 2))
+    .force(
+      "x",
+      forceX<VisualNode>(GRAPH_WIDTH / 2).strength(0.025)
+    )
+    .force(
+      "y",
+      forceY<VisualNode>(GRAPH_HEIGHT / 2).strength(0.025)
+    )
+    .alpha(0.95);
+}
+
+function questionCenterForce(): Force<VisualNode, SimulationLink> {
+  let questionNodes: VisualNode[] = [];
+
+  function force(alpha: number) {
+    for (const node of questionNodes) {
+      node.vx =
+        (node.vx ?? 0) +
+        (GRAPH_WIDTH / 2 - (node.x ?? GRAPH_WIDTH / 2)) * alpha * 0.16;
+      node.vy =
+        (node.vy ?? 0) +
+        (GRAPH_HEIGHT / 2 - (node.y ?? GRAPH_HEIGHT / 2)) * alpha * 0.16;
+    }
+  }
+
+  force.initialize = (nodes: VisualNode[]) => {
+    questionNodes = nodes.filter(
+      (node: VisualNode) => node.kind === "question"
+    );
+  };
+
+  return force;
+}
+
+function medicationSpreadForce(): Force<VisualNode, SimulationLink> {
+  let medicationNodes: VisualNode[] = [];
+
+  function force(alpha: number) {
+    for (let sourceIndex = 0; sourceIndex < medicationNodes.length; sourceIndex += 1) {
+      const source = medicationNodes[sourceIndex];
+      for (
+        let targetIndex = sourceIndex + 1;
+        targetIndex < medicationNodes.length;
+        targetIndex += 1
+      ) {
+        const target = medicationNodes[targetIndex];
+        const dx = (target.x ?? GRAPH_WIDTH / 2) - (source.x ?? GRAPH_WIDTH / 2);
+        const dy = (target.y ?? GRAPH_HEIGHT / 2) - (source.y ?? GRAPH_HEIGHT / 2);
+        const distance = Math.hypot(dx, dy) || 1;
+        if (distance >= MEDICATION_SPREAD_DISTANCE) {
+          continue;
+        }
+
+        const push = Math.min(
+          MEDICATION_SPREAD_MAX_PUSH,
+          ((MEDICATION_SPREAD_DISTANCE - distance) / distance) *
+            alpha *
+            MEDICATION_SPREAD_STRENGTH
+        );
+        const pushX = dx * push * 0.5;
+        const pushY = dy * push * 0.5;
+        source.vx = (source.vx ?? 0) - pushX;
+        source.vy = (source.vy ?? 0) - pushY;
+        target.vx = (target.vx ?? 0) + pushX;
+        target.vy = (target.vy ?? 0) + pushY;
       }
     }
   }
 
-  const rootChildren = childIdsByParentId.get(rootId) ?? [];
-  const branchAngleById = new Map<string, number>();
-  rootChildren.forEach((childId, index) => {
-    branchAngleById.set(childId, radialAngle(index, rootChildren.length));
-  });
-
-  for (const node of map.nodes) {
-    if (node.id === rootId) {
-      continue;
-    }
-    const depth = depthsById.get(node.id) ?? evidenceMapFallbackDepth(node.kind);
-    const parents = parentIdsByChildId.get(node.id) ?? [];
-    const parentAngles = parents
-      .map((parentId) => branchAngleById.get(parentId))
-      .filter((angle): angle is number => typeof angle === "number");
-    const baseAngle =
-      branchAngleById.get(node.id) ??
-      averageAngle(parentAngles) ??
-      radialAngle(map.nodes.indexOf(node), map.nodes.length);
-
-    branchAngleById.set(node.id, baseAngle);
-    const siblings = parents.length
-      ? parents.flatMap((parentId) => childIdsByParentId.get(parentId) ?? [])
-      : map.nodes.filter((otherNode) => otherNode.kind === node.kind).map((otherNode) => otherNode.id);
-    const siblingIndex = Math.max(0, siblings.indexOf(node.id));
-    const siblingOffsetAngle = siblingAngleOffset(siblingIndex, siblings.length, depth);
-    const radius = evidenceMapDepthRadius(depth, node.kind);
-    anchorsById.set(
-      node.id,
-      polarToPoint(radius, baseAngle + siblingOffsetAngle)
+  force.initialize = (nodes: VisualNode[]) => {
+    medicationNodes = nodes.filter(
+      (node: VisualNode) => node.kind === "resolved_medication"
     );
+  };
+
+  return force;
+}
+
+function hierarchyRingForce(): Force<VisualNode, SimulationLink> {
+  let hierarchyNodes: VisualNode[] = [];
+
+  function force(alpha: number) {
+    for (const node of hierarchyNodes) {
+      const target = hierarchySeedPoint(
+        node.kind,
+        node.hierarchyAngle ?? 0
+      );
+      const strength =
+        node.kind === "query_concept"
+          ? HIERARCHY_RING_STRENGTH * 0.72
+          : HIERARCHY_RING_STRENGTH;
+      node.vx =
+        (node.vx ?? 0) + (target.x - (node.x ?? target.x)) * alpha * strength;
+      node.vy =
+        (node.vy ?? 0) + (target.y - (node.y ?? target.y)) * alpha * strength;
+    }
   }
 
-  return { anchorsById };
+  force.initialize = (nodes: VisualNode[]) => {
+    hierarchyNodes = nodes.filter(
+      (node: VisualNode) =>
+        (node.kind === "query_concept" ||
+          node.kind === "resolved_medication") &&
+        node.hierarchyAngle !== null
+    );
+  };
+
+  return force;
 }
 
 function withoutTerminologyContext(map: QuestionEvidenceMap): QuestionEvidenceMap {
@@ -1018,114 +1210,132 @@ function withoutTerminologyContext(map: QuestionEvidenceMap): QuestionEvidenceMa
   };
 }
 
-function evidenceMapAnchor(
-  nodeOrKind: QuestionEvidenceMapNode | string,
-  topology?: EvidenceMapTopology
-) {
-  const kind = typeof nodeOrKind === "string" ? nodeOrKind : nodeOrKind.kind;
-  const node = typeof nodeOrKind === "string" ? null : nodeOrKind;
-  if (node && topology?.anchorsById.has(node.id)) {
-    return topology.anchorsById.get(node.id) ?? graphCenter();
-  }
-
-  const anchors: Record<string, { x: number; y: number }> = {
-    question: { x: GRAPH_WIDTH * 0.5, y: GRAPH_HEIGHT * 0.5 },
-    query_concept: polarToPoint(88, -Math.PI / 2),
-    resolved_medication: polarToPoint(152, 0),
-    label_source: polarToPoint(228, Math.PI / 2),
-    label_section: polarToPoint(300, Math.PI),
-    rxnorm_context: polarToPoint(180, Math.PI / 4),
+function naturalGraphSeedPoint(index: number) {
+  const angle = index * Math.PI * (3 - Math.sqrt(5));
+  const radius = 42 * Math.sqrt(index + 1);
+  const maxRadius = Math.min(GRAPH_WIDTH, GRAPH_HEIGHT) * 0.36;
+  const normalizedRadius = Math.min(radius, maxRadius);
+  return {
+    x: GRAPH_WIDTH / 2 + Math.cos(angle) * normalizedRadius,
+    y: GRAPH_HEIGHT / 2 + Math.sin(angle) * normalizedRadius,
   };
-  return anchors[kind] ?? { x: GRAPH_WIDTH * 0.5, y: GRAPH_HEIGHT * 0.5 };
 }
 
 function graphCenter() {
   return { x: GRAPH_WIDTH / 2, y: GRAPH_HEIGHT / 2 };
 }
 
-function radialAngle(index: number, count: number) {
-  if (count <= 1) {
-    return -Math.PI / 2;
-  }
-  return -Math.PI / 2 + (index * Math.PI * 2) / count;
-}
-
-function siblingAngleOffset(index: number, count: number, depth: number) {
-  if (count <= 1) {
-    return 0;
-  }
-  const center = (count - 1) / 2;
-  const maxSpread = depth >= 3 ? 0.42 : 0.3;
-  const step = Math.min(0.16, maxSpread / Math.max(1, count - 1));
-  return (index - center) * step;
-}
-
-function evidenceMapDepthRadius(depth: number, kind: string) {
-  const depthRadius: Record<number, number> = {
-    0: 0,
-    1: 72,
-    2: 128,
-    3: 188,
-    4: 246,
-  };
-  if (kind === "label_section") {
-    return 254;
-  }
-  return depthRadius[Math.min(4, depth)] ?? 210;
-}
-
-function evidenceMapFallbackDepth(kind: string) {
-  const fallbackDepths: Record<string, number> = {
-    question: 0,
-    query_concept: 1,
-    resolved_medication: 2,
-    label_source: 3,
-    label_section: 4,
-    rxnorm_context: 3,
-  };
-  return fallbackDepths[kind] ?? 2;
-}
-
-function polarToPoint(radius: number, angle: number) {
+function hierarchySeedPoint(kind: string, angle: number) {
+  const radius =
+    kind === "query_concept" ? CONCEPT_RING_RADIUS : MEDICATION_RING_RADIUS;
   return {
     x: GRAPH_WIDTH / 2 + Math.cos(angle) * radius,
     y: GRAPH_HEIGHT / 2 + Math.sin(angle) * radius,
   };
 }
 
-function averageAngle(angles: number[]) {
-  if (angles.length === 0) {
-    return null;
+function hierarchyRingAngle(index: number, count: number) {
+  if (count <= 1) {
+    return -Math.PI / 2;
   }
-  const x = angles.reduce((total, angle) => total + Math.cos(angle), 0);
-  const y = angles.reduce((total, angle) => total + Math.sin(angle), 0);
-  return Math.atan2(y, x);
+  return -Math.PI / 2 + (index * Math.PI * 2) / count;
 }
 
-function evidenceMapLinkDistance(kind: string) {
+function medicationLabelPairKey(sourceId: string, targetId: string) {
+  return `${sourceId}->${targetId}`;
+}
+
+function evidenceMapLinkDistance(link: SimulationLink) {
+  if (link.kind === "has_label_section") {
+    return 30 + Math.min(5, link.sourceNode.labelSectionCount) * 4;
+  }
+
+  if (isMedicationLabelLink(link.kind)) {
+    const sharedParentBonus =
+      Math.max(0, link.targetNode.medicationParentCount - 1) * 80;
+    if (
+      link.kind === "interaction_lookup_source" ||
+      link.hasParallelInteractionLookup
+    ) {
+      return link.targetNode.medicationParentCount > 1
+        ? 1000 + sharedParentBonus
+        : 230;
+    }
+    return link.targetNode.medicationParentCount > 1
+      ? 210 + sharedParentBonus
+      : 150;
+  }
+
   const distances: Record<string, number> = {
-    resolved_as: 82,
-    has_role: 78,
-    has_label_source: 72,
-    interaction_lookup_source: 78,
-    has_label_section: 32,
-    mentions_in_interaction_section: 36,
-    has_terminology_context: 82,
+    resolved_as: 118,
+    has_role: 130,
+    mentions_in_interaction_section: 120,
+    has_terminology_context: 96,
   };
-  return distances[kind] ?? 64;
+  return distances[link.kind] ?? 104;
 }
 
-function evidenceMapLinkStrength(kind: string) {
+function evidenceMapLinkStrength(link: SimulationLink) {
+  if (link.kind === "has_label_section") {
+    return 1.15;
+  }
+
+  if (isMedicationLabelLink(link.kind)) {
+    if (
+      link.kind === "interaction_lookup_source" ||
+      link.hasParallelInteractionLookup
+    ) {
+      return link.targetNode.medicationParentCount > 1 ? 0.08 : 0.28;
+    }
+    return link.targetNode.medicationParentCount > 1 ? 0.18 : 0.58;
+  }
+
   const strengths: Record<string, number> = {
-    resolved_as: 0.42,
-    has_role: 0.32,
-    has_label_source: 0.58,
-    interaction_lookup_source: 0.62,
-    has_label_section: 0.86,
-    mentions_in_interaction_section: 0.9,
-    has_terminology_context: 0.32,
+    resolved_as: 0.76,
+    has_role: 0.72,
+    mentions_in_interaction_section: 0.58,
+    has_terminology_context: 0.58,
   };
-  return strengths[kind] ?? 0.45;
+  return strengths[link.kind] ?? 0.66;
+}
+
+function isMedicationLabelLink(kind: string) {
+  return kind === "has_label_source" || kind === "interaction_lookup_source";
+}
+
+function nodeChargeStrength(node: VisualNode) {
+  if (node.kind === "question") {
+    return -620;
+  }
+  if (node.kind === "resolved_medication") {
+    return -700;
+  }
+  if (node.kind === "label_source") {
+    return node.medicationParentCount > 1 ? -1180 : -420;
+  }
+  if (node.kind === "query_concept") {
+    return -320;
+  }
+  if (node.kind === "label_section") {
+    return -30;
+  }
+  return -150;
+}
+
+function nodeCollisionPadding(node: VisualNode) {
+  if (node.kind === "question" || node.kind === "resolved_medication") {
+    return 28;
+  }
+  if (node.kind === "label_source") {
+    return node.medicationParentCount > 1 ? 52 : 24;
+  }
+  if (node.kind === "query_concept") {
+    return 20;
+  }
+  if (node.kind === "label_section") {
+    return 10;
+  }
+  return 14;
 }
 
 function evidenceMapSeedOffset(
@@ -1176,40 +1386,6 @@ function fitGraphToView(nodes: VisualNode[]) {
     },
     zoom,
   };
-}
-
-function buildNodeDragOrigins(
-  node: VisualNode,
-  nodeById: Map<string, VisualNode>,
-  links: VisualLink[]
-) {
-  const draggedIds = new Set([node.id]);
-  const childIdsByParentId = new Map<string, string[]>();
-  for (const link of links) {
-    const children = childIdsByParentId.get(link.sourceNode.id) ?? [];
-    children.push(link.targetNode.id);
-    childIdsByParentId.set(link.sourceNode.id, children);
-  }
-
-  const queue = [node.id];
-  for (let index = 0; index < queue.length; index += 1) {
-    const parentId = queue[index];
-    for (const childId of childIdsByParentId.get(parentId) ?? []) {
-      if (!draggedIds.has(childId)) {
-        draggedIds.add(childId);
-        queue.push(childId);
-      }
-    }
-  }
-
-  const origins = new Map<string, { x: number; y: number }>();
-  for (const nodeId of draggedIds) {
-    const draggedNode = nodeById.get(nodeId);
-    if (draggedNode) {
-      origins.set(nodeId, { x: draggedNode.x, y: draggedNode.y });
-    }
-  }
-  return origins;
 }
 
 function citationForEvidenceMapNode(
