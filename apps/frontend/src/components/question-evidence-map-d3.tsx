@@ -33,6 +33,7 @@ const MIN_ZOOM = 0.28;
 const MAX_ZOOM = 2;
 const FOCUS_ZOOM = 1.25;
 const FIT_PADDING = 0;
+const QUERY_CENTER_STRENGTH = 0.025;
 const CONCEPT_SPREAD_DISTANCE = 160;
 const CONCEPT_SPREAD_STRENGTH = 0.55;
 const CONCEPT_SPREAD_MAX_PUSH = 8;
@@ -40,6 +41,8 @@ const CONCEPT_LABEL_REPULSION_DISTANCE = 140;
 const CONCEPT_LABEL_REPULSION_STRENGTH = 0.5;
 const QUERY_LABEL_REPULSION_DISTANCE = 600;
 const QUERY_LABEL_REPULSION_STRENGTH = 0.2;
+const SHARED_LABEL_CLUSTER_STRENGTH = 0.48;
+const SHARED_LABEL_CLUSTER_MAX_PULL = 18;
 const MEDICATION_SPREAD_DISTANCE = 820;
 const MEDICATION_SPREAD_STRENGTH = 0.72;
 const MEDICATION_SPREAD_MAX_PUSH = 14;
@@ -1097,10 +1100,11 @@ function createEvidenceMapSimulation(
         .iterations(2)
     )
     .force("charge", forceManyBody<VisualNode>().strength(nodeChargeStrength))
-    .force("questionCenter", questionCenterForce())
+    .force("queryCenter", queryCenterForce())
     .force("medicationSpread", medicationSpreadForce())
     .force("hierarchyRing", hierarchyRingForce())
     .force("interactionLabelCentroid", interactionLabelCentroidForce(links))
+    .force("sharedLabelCluster", sharedLabelClusterForce())
     .force("conceptSpread", conceptSpreadForce())
     .force("conceptLabelRepulsion", conceptLabelRepulsionForce())
     .force("queryLabelRepulsion", queryLabelRepulsionForce())
@@ -1124,17 +1128,18 @@ function createEvidenceMapSimulation(
     .alpha(0.95);
 }
 
-function questionCenterForce(): Force<VisualNode, SimulationLink> {
+function queryCenterForce(): Force<VisualNode, SimulationLink> {
   let questionNodes: VisualNode[] = [];
 
   function force(alpha: number) {
+    const target = graphCenter();
     for (const node of questionNodes) {
       node.vx =
         (node.vx ?? 0) +
-        (GRAPH_WIDTH / 2 - (node.x ?? GRAPH_WIDTH / 2)) * alpha * 0.16;
+        (target.x - (node.x ?? target.x)) * alpha * QUERY_CENTER_STRENGTH;
       node.vy =
         (node.vy ?? 0) +
-        (GRAPH_HEIGHT / 2 - (node.y ?? GRAPH_HEIGHT / 2)) * alpha * 0.16;
+        (target.y - (node.y ?? target.y)) * alpha * QUERY_CENTER_STRENGTH;
     }
   }
 
@@ -1354,6 +1359,47 @@ function interactionLabelCentroidForce(links: SimulationLink[]): Force<VisualNod
   return force;
 }
 
+function sharedLabelClusterForce(): Force<VisualNode, SimulationLink> {
+  let sharedLabelNodes: VisualNode[] = [];
+
+  function force(alpha: number) {
+    if (sharedLabelNodes.length < 2) {
+      return;
+    }
+
+    const centroidX =
+      sharedLabelNodes.reduce(
+        (sum, node) => sum + (node.x ?? GRAPH_WIDTH / 2),
+        0
+      ) / sharedLabelNodes.length;
+    const centroidY =
+      sharedLabelNodes.reduce(
+        (sum, node) => sum + (node.y ?? GRAPH_HEIGHT / 2),
+        0
+      ) / sharedLabelNodes.length;
+
+    for (const node of sharedLabelNodes) {
+      const dx = centroidX - (node.x ?? centroidX);
+      const dy = centroidY - (node.y ?? centroidY);
+      const distance = Math.hypot(dx, dy) || 1;
+      const pull = Math.min(
+        SHARED_LABEL_CLUSTER_MAX_PULL,
+        distance * alpha * SHARED_LABEL_CLUSTER_STRENGTH
+      );
+      node.vx = (node.vx ?? 0) + (dx / distance) * pull;
+      node.vy = (node.vy ?? 0) + (dy / distance) * pull;
+    }
+  }
+
+  force.initialize = (nodes: VisualNode[]) => {
+    sharedLabelNodes = nodes.filter(
+      (node) => node.kind === "label_source" && node.medicationParentCount > 1
+    );
+  };
+
+  return force;
+}
+
 function withoutTerminologyContext(map: QuestionEvidenceMap): QuestionEvidenceMap {
   const visibleNodeIds = new Set(
     map.nodes
@@ -1429,8 +1475,8 @@ function evidenceMapLinkDistance(link: SimulationLink) {
   }
 
   const distances: Record<string, number> = {
-    resolved_as: 118,
-    has_role: 130,
+    resolved_as: 170,
+    has_role: 190,
     mentions_in_interaction_section: 120,
     has_terminology_context: 96,
   };
