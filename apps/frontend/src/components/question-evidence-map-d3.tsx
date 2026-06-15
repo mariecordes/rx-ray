@@ -31,14 +31,14 @@ const GRAPH_WIDTH = 900;
 const GRAPH_HEIGHT = 520;
 const MIN_ZOOM = 0.28;
 const MAX_ZOOM = 2;
-const FOCUS_ZOOM = 1.55;
+const FOCUS_ZOOM = 1.25;
 const FIT_PADDING = 0;
 const CONCEPT_SPREAD_DISTANCE = 160;
 const CONCEPT_SPREAD_STRENGTH = 0.55;
 const CONCEPT_SPREAD_MAX_PUSH = 8;
 const CONCEPT_LABEL_REPULSION_DISTANCE = 140;
 const CONCEPT_LABEL_REPULSION_STRENGTH = 0.5;
-const MEDICATION_SPREAD_DISTANCE = 420;
+const MEDICATION_SPREAD_DISTANCE = 820;
 const MEDICATION_SPREAD_STRENGTH = 0.72;
 const MEDICATION_SPREAD_MAX_PUSH = 14;
 const CONCEPT_RING_RADIUS = 118;
@@ -73,42 +73,42 @@ const nodeStyles: Record<
   { label: string; fill: string; stroke: string; radius: number }
 > = {
   question: {
-    label: "Question",
-    fill: "#FFFFFF",
-    stroke: "#64748B",
-    radius: 20,
+    label: "User question",
+    fill: "#F8F4FC",
+    stroke: "#7962A4",
+    radius: 28,
   },
   query_concept: {
     label: "Extracted concept",
-    fill: "#EEF2FF",
-    stroke: "#6366F1",
-    radius: 12,
+    fill: "#FEF3C7",
+    stroke: "#D97706",
+    radius: 16,
   },
   resolved_medication: {
     label: "Medication",
     fill: "#E8DDF9",
     stroke: "#7C3AED",
-    radius: 18,
+    radius: 24,
   },
   label_source: {
     label: "Drug label",
     fill: "#E0F2FE",
     stroke: "#0284C7",
-    radius: 10,
+    radius: 14,
   },
   label_section: {
     label: "Label section",
     fill: "#CBD5E1",
     stroke: "#64748B",
-    radius: 5,
+    radius: 7,
   },
   // Hidden from the evidence-map UI for now; kept here in case we reintroduce
   // terminology context as a clearer visual layer later.
   rxnorm_context: {
     label: "Terminology context",
-    fill: "#FEF3C7",
-    stroke: "#D97706",
-    radius: 12,
+    fill: "#EEF2FF",
+    stroke: "#6366F1",
+    radius: 16,
   },
 };
 
@@ -277,6 +277,17 @@ export function EvidenceMapD3({
   }, [filteredNodeIds, graph.links, positionedNodeById]);
   const selectedNode =
     positionedNodes.find((node) => node.id === selectedNodeId) ?? null;
+  const selectedNodeLabelSourceName = useMemo(() => {
+    if (selectedNode?.kind !== "label_section") {
+      return null;
+    }
+    const sourceLink = graph.links.find(
+      (link) =>
+        link.kind === "has_label_section" &&
+        link.targetNode.id === selectedNode.id
+    );
+    return sourceLink?.sourceNode.label ?? null;
+  }, [graph.links, selectedNode]);
   const visibleNodeTypes = useMemo(() => {
     return Array.from(new Set(graph.nodes.map((node) => node.kind))).sort(
       (left, right) =>
@@ -644,10 +655,7 @@ export function EvidenceMapD3({
                   onMouseEnter={(event: MouseEvent<SVGGElement>) => {
                     event.stopPropagation();
                     updateTooltip(event, {
-                      title:
-                        node.kind === "resolved_medication"
-                          ? displayGraphNodeName(node.label)
-                          : node.label,
+                      title: nodeTooltipTitle(node),
                       body: nodeTooltipBody(node),
                     });
                   }}
@@ -672,14 +680,12 @@ export function EvidenceMapD3({
                   {showLabel ? (
                     <text
                       x={node.x}
-                      y={node.y + style.radius + 13}
+                      y={node.y + style.radius + 16}
                       textAnchor="middle"
-                      className="pointer-events-none fill-slate-900 text-[10px] font-semibold"
+                      className="pointer-events-none fill-slate-900 text-[14px] font-semibold"
                     >
                       {shortLabel(
-                        node.kind === "resolved_medication"
-                          ? displayGraphNodeName(node.label)
-                          : node.label,
+                        graphNodeLabel(node),
                         18
                       )}
                     </text>
@@ -722,6 +728,7 @@ export function EvidenceMapD3({
         onZoomIn={() => updateZoom(zoom + 0.12)}
         onZoomOut={() => updateZoom(zoom - 0.12)}
         selectedNodeCitation={selectedNodeCitation}
+        selectedNodeLabelSourceName={selectedNodeLabelSourceName}
         selectedNode={selectedNode}
         selectedTypes={selectedTypes}
         totalLinkCount={graph.links.length}
@@ -747,6 +754,7 @@ function EvidenceMapSidePanel({
   onZoomIn,
   onZoomOut,
   selectedNodeCitation,
+  selectedNodeLabelSourceName,
   selectedNode,
   selectedTypes,
   totalLinkCount,
@@ -763,6 +771,7 @@ function EvidenceMapSidePanel({
   onZoomIn: () => void;
   onZoomOut: () => void;
   selectedNodeCitation: EvidenceCitation | null;
+  selectedNodeLabelSourceName: string | null;
   selectedNode: VisualNode | null;
   selectedTypes: Set<string>;
   totalLinkCount: number;
@@ -804,70 +813,58 @@ function EvidenceMapSidePanel({
         </div>
       </div>
 
-      <div className="h-40 rounded-md border border-slate-200 bg-slate-50 p-3">
+      <div className="min-h-40 rounded-md border border-slate-200 bg-slate-50 p-3">
         <div className="mb-2 text-xs font-medium uppercase text-slate-500">
           Selected node
         </div>
         {selectedNode ? (
-          <div className="grid h-[112px] grid-rows-[48px_24px_24px] gap-2">
+          <div className="grid min-h-[112px] grid-rows-[auto_auto_auto] gap-1">
             <div>
               <div className="flex flex-wrap gap-1.5">
                 <Badge className="border-slate-200 bg-white text-slate-700">
                   {displayEvidenceMapNodeKind(selectedNode)}
                 </Badge>
+                {selectedNodeCitation ? (
+                  <Badge
+                    className="cursor-pointer !border-[#371E8F] !bg-[#371E8F] !text-white hover:!bg-[#371E8F]"
+                    onClick={() => onCitationClick(selectedNodeCitation)}
+                    title="Show in supporting evidence"
+                  >
+                    Show in supporting evidence
+                  </Badge>
+                ) : selectedNode.rxcui && selectedNode.kind === "resolved_medication" ? (
+                  <Badge
+                    className="cursor-pointer !border-[#371E8F] !bg-[#371E8F] !text-white hover:!bg-[#371E8F]"
+                    onClick={() =>
+                      onRxcuiClick({ rxcui: selectedNode.rxcui as string })
+                    }
+                    title="Show in supporting evidence"
+                  >
+                    Show in supporting evidence
+                  </Badge>
+                ) : null}
                 {selectedNode.tags.includes("interaction_targeted_lookup") ? (
                   <Badge className="border-slate-300 bg-slate-100 text-slate-700">
                     Interaction-specific
                   </Badge>
                 ) : null}
               </div>
-              <div className="mt-2 line-clamp-2 font-semibold leading-6 text-slate-950">
-                {selectedNode.kind === "resolved_medication"
-                  ? displayGraphNodeName(selectedNode.label)
-                  : selectedNode.label}
+              <div
+                className={[
+                  "mt-4 line-clamp-3 break-words leading-5 text-slate-950",
+                  selectedNode.kind === "question" ? "text-xs" : "",
+                  selectedNode.kind === "question" ? "font-normal" : "font-semibold",
+                ].join(" ")}
+                title={selectedNodePanelTitle(selectedNode)}
+              >
+                {selectedNodePanelTitle(selectedNode)}
               </div>
             </div>
 
-            <div className="flex min-w-0 gap-2 overflow-hidden">
-              {selectedNode.rxcui ? (
-                <Badge className="max-w-[56%] shrink-0 truncate overflow-hidden">
-                  RXCUI {selectedNode.rxcui}
-                </Badge>
-              ) : null}
-              {selectedNode.label_rxcuis?.length ? (
-                <Badge
-                  className="min-w-0 truncate"
-                  title={`OpenFDA label RXCUIs: ${selectedNode.label_rxcuis.join(", ")}`}
-                >
-                  Label RXCUIs {formatList(selectedNode.label_rxcuis)}
-                </Badge>
-              ) : null}
-              {selectedNode.section ? (
-                <Badge className="min-w-0 truncate">
-                  {displaySectionName(selectedNode.section)}
-                </Badge>
-              ) : null}
-            </div>
-
-            {selectedNodeCitation ? (
-              <Badge
-                className="w-fit cursor-pointer !border-[#371E8F] !bg-[#371E8F] !text-white hover:!bg-[#371E8F]"
-                onClick={() => onCitationClick(selectedNodeCitation)}
-                title="Show in supporting evidence"
-              >
-                Show in supporting evidence
-              </Badge>
-            ) : selectedNode.rxcui ? (
-              <Badge
-                className="w-fit cursor-pointer !border-[#371E8F] !bg-[#371E8F] !text-white hover:!bg-[#371E8F]"
-                onClick={() =>
-                  onRxcuiClick({ rxcui: selectedNode.rxcui as string })
-                }
-                title="Show in supporting evidence"
-              >
-                Show in supporting evidence
-              </Badge>
-            ) : null}
+            <SelectedNodeDetails
+              labelSourceName={selectedNodeLabelSourceName}
+              node={selectedNode}
+            />
           </div>
         ) : (
           <div className="grid h-[112px] grid-rows-[48px_24px] gap-2">
@@ -942,6 +939,30 @@ function EvidenceMapSidePanel({
         the relationship. Double click a node to focus it.
       </p>
     </aside>
+  );
+}
+
+function SelectedNodeDetails({
+  labelSourceName,
+  node,
+}: {
+  labelSourceName: string | null;
+  node: VisualNode;
+}) {
+  const details = selectedNodeDetails(node, labelSourceName);
+  if (!details.length) {
+    return <div />;
+  }
+
+  return (
+    <ul className="min-w-0 space-y-1 overflow-hidden text-xs leading-5 text-slate-600">
+      {details.map((detail) => (
+        <li key={detail} className="flex min-w-0 gap-1.5">
+          <span className="mt-[0.55em] size-1 shrink-0 rounded-full bg-slate-400" />
+          <span className="min-w-0 break-words">{detail}</span>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -1664,43 +1685,100 @@ function edgeTooltipContent(link: VisualLink) {
   }
 }
 
+function nodeTooltipTitle(node: QuestionEvidenceMapNode) {
+  if (node.kind === "question") {
+    return "QUERY";
+  }
+  if (node.kind === "resolved_medication") {
+    return displayGraphNodeName(node.label);
+  }
+  if (node.kind === "label_section") {
+    return displaySectionName(node.section ?? node.label);
+  }
+  return node.label;
+}
+
 function nodeTooltipBody(node: QuestionEvidenceMapNode) {
-  const lines = [evidenceNodeStyle(node).label];
+  if (node.kind === "question") {
+    return (
+      <>
+        <div>
+          <em>User question</em>
+        </div>
+        {node.subtitle ? <div>{node.subtitle}</div> : null}
+      </>
+    );
+  }
+
+  const rxcuis = selectedNodeRxcuis(node);
+
   if (node.kind === "query_concept") {
-    const roles = conceptRoleLabels(node);
-    if (roles.length) {
-      lines.push(formatList(roles));
-    }
-    if (node.subtitle && !roles.includes(node.subtitle)) {
-      lines.push(node.subtitle);
-    }
-    return lines.join("\n");
+    const roleSummary = conceptRoleSummary(node);
+    return (
+      <>
+        <div>
+          <em>{displayEvidenceMapNodeKind(node)}</em>
+        </div>
+        {roleSummary ? <div>{roleSummary}</div> : null}
+      </>
+    );
   }
-  if (node.kind === "resolved_medication" && node.subtitle) {
-    lines.push(displayRxNormType(node.subtitle));
+
+  if (node.kind === "resolved_medication") {
+    return (
+      <>
+        <div>
+          <em>{displayEvidenceMapNodeKind(node)}</em>
+        </div>
+        {node.subtitle ? <div>{displayRxNormType(node.subtitle)}</div> : null}
+        {rxcuis.length ? <div>{rxcuiLabel(rxcuis)}</div> : null}
+      </>
+    );
   }
-  if (node.label_rxcuis?.length) {
-    const label = node.label_rxcuis.length > 1 ? "RXCUIs" : "RXCUI";
-    lines.push(`${label} ${node.label_rxcuis.join(", ")}`);
-  } else if (node.rxcui) {
-    lines.push(`RXCUI ${node.rxcui}`);
+
+  if (node.kind === "label_source") {
+    return (
+      <>
+        <div>
+          <em>{displayEvidenceMapNodeKind(node)}</em>
+        </div>
+        {rxcuis.length ? <div>{rxcuiLabel(rxcuis)}</div> : null}
+        {node.subtitle ? <div>{node.subtitle}</div> : null}
+      </>
+    );
   }
-  if (node.section) {
-    lines.push(displaySectionName(node.section));
+
+  if (node.kind === "label_section") {
+    return (
+      <>
+        <div>
+          <em>{displayEvidenceMapNodeKind(node)}</em>
+        </div>
+        {rxcuis.length ? <div>{rxcuiLabel(rxcuis)}</div> : null}
+      </>
+    );
   }
-  if (node.subtitle && node.kind !== "resolved_medication") {
-    lines.push(node.subtitle);
-  }
-  return lines.join("\n");
+
+  return (
+    <div>
+      <em>{displayEvidenceMapNodeKind(node)}</em>
+    </div>
+  );
 }
 
 function displayEvidenceMapNodeKind(node: QuestionEvidenceMapNode) {
+  if (node.kind === "question") {
+    return "User question";
+  }
   return evidenceNodeStyle(node).label;
 }
 
 function displayEvidenceMapEdgeNode(node: QuestionEvidenceMapNode) {
   if (node.kind === "resolved_medication") {
     return displayGraphNodeName(node.label);
+  }
+  if (node.kind === "label_section") {
+    return displaySectionName(node.section ?? node.label);
   }
   return node.label;
 }
@@ -1719,6 +1797,14 @@ function conceptRoleLabels(node: QuestionEvidenceMapNode) {
   return roleTags(node).map(displayMentionRole);
 }
 
+function conceptRoleSummary(node: QuestionEvidenceMapNode) {
+  const roles = conceptRoleLabels(node);
+  if (!roles.length) {
+    return null;
+  }
+  return formatAmpersandList(roles);
+}
+
 function roleTags(node: QuestionEvidenceMapNode) {
   const tags = new Set(
     [
@@ -1731,6 +1817,71 @@ function roleTags(node: QuestionEvidenceMapNode) {
 
 function displayRxNormType(value: string) {
   return rxNormTypeLabels[value.toUpperCase()] ?? sentenceCase(value);
+}
+
+function graphNodeLabel(node: QuestionEvidenceMapNode) {
+  if (node.kind === "question") {
+    return "QUERY";
+  }
+  if (node.kind === "resolved_medication") {
+    return displayGraphNodeName(node.label);
+  }
+  if (node.kind === "label_section") {
+    return displaySectionName(node.section ?? node.label);
+  }
+  return node.label;
+}
+
+function selectedNodePanelTitle(node: QuestionEvidenceMapNode) {
+  if (node.kind === "question") {
+    return node.subtitle ?? "Query";
+  }
+  return nodeTooltipTitle(node);
+}
+
+function selectedNodeRxcuis(node: QuestionEvidenceMapNode) {
+  if (node.kind === "label_source" || node.kind === "label_section") {
+    return node.label_rxcuis ?? [];
+  }
+  if (node.kind === "resolved_medication" && node.rxcui) {
+    return [node.rxcui];
+  }
+  return [];
+}
+
+function rxcuiLabel(values: string[]) {
+  const label = values.length === 1 ? "RXCUI" : "RXCUIs";
+  return `${label} ${values.join(", ")}`;
+}
+
+function selectedNodeDetails(
+  node: QuestionEvidenceMapNode,
+  labelSourceName: string | null
+) {
+  const details: string[] = [];
+  const roleSummary = node.kind === "query_concept" ? conceptRoleSummary(node) : null;
+  if (roleSummary) {
+    details.push(roleSummary);
+  }
+
+   if (node.kind === "label_section" && labelSourceName) {
+    details.push(`${labelSourceName}`);
+  }
+
+  const rxcuis = selectedNodeRxcuis(node);
+  if (rxcuis.length) {
+    details.push(rxcuiLabel(rxcuis));
+  }
+
+  if (node.kind === "resolved_medication" && node.subtitle) {
+    details.push(displayRxNormType(node.subtitle));
+  }
+
+  return details;
+}
+
+function formatAmpersandList(values: string[]) {
+  return values.join(" & ");
 }
 
 function formatList(values: string[]) {
@@ -1753,13 +1904,21 @@ function displayGraphNodeName(name: string) {
 }
 
 function displaySectionName(section: string) {
-  return sectionLabels[section] ?? section.replaceAll("_", " ");
+  const label = sectionLabels[section] ?? section.replaceAll("_", " ");
+  return titleCase(label.replace(/\band\b/gi, "&"));
 }
 
 function sentenceCase(value: string) {
   return value
     .toLowerCase()
     .replace(/\b\w/g, (character) => character.toUpperCase());
+}
+
+function titleCase(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/\b\w/g, (character) => character.toUpperCase())
+    .replace(/\b&\b/g, "&");
 }
 
 function shortLabel(value: string, maxLength = 24) {
