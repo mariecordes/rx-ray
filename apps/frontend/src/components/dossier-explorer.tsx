@@ -2607,6 +2607,7 @@ function LabelEvidencePanel({
 }) {
   const records = displayEvidence.records;
   const evidenceCardsRef = useRef<HTMLDivElement>(null);
+  const evidenceCardRefs = useRef<Map<string, HTMLElement>>(new Map());
   const [expandedSourceKeys, setExpandedSourceKeys] = useState<Set<string>>(
     new Set()
   );
@@ -2629,12 +2630,44 @@ function LabelEvidencePanel({
   function handleSourceStripClick(sourceKey: string) {
     onSelectSourceFromStrip(sourceKey);
     window.requestAnimationFrame(() => {
-      evidenceCardsRef.current?.scrollIntoView({
-        behavior: "smooth",
-        block: "nearest",
-      });
+      scrollToEvidenceCardForSource(sourceKey);
     });
   }
+
+  function evidenceCardRefKey(sourceKey: string | null, entryKey: string) {
+    return `${sourceKey ?? "unknown"}::${entryKey}`;
+  }
+
+  function setEvidenceCardRef(
+    sourceKey: string | null,
+    entryKey: string,
+    element: HTMLElement | null
+  ) {
+    const refKey = evidenceCardRefKey(sourceKey, entryKey);
+    if (element) {
+      evidenceCardRefs.current.set(refKey, element);
+    } else {
+      evidenceCardRefs.current.delete(refKey);
+    }
+  }
+
+  const scrollToEvidenceCardForSource = useCallback((sourceKey: string) => {
+    const match = groupedActiveTexts.find((entry) => entry.sourceKey === sourceKey);
+    const element = match
+      ? evidenceCardRefs.current.get(evidenceCardRefKey(sourceKey, match.key))
+      : null;
+    if (element) {
+      element.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+      return;
+    }
+    evidenceCardsRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "nearest",
+    });
+  }, [groupedActiveTexts]);
 
   function toggleEvidenceExpansion(key: string) {
     setExpandedEvidenceKeys((current) => {
@@ -2679,6 +2712,15 @@ function LabelEvidencePanel({
   useEffect(() => {
     setExpandedSourceKeys(new Set());
   }, [labelEvidence, nodeLabelEvidence]);
+
+  useEffect(() => {
+    if (!selectedSourceKey) {
+      return;
+    }
+    window.requestAnimationFrame(() => {
+      scrollToEvidenceCardForSource(selectedSourceKey);
+    });
+  }, [scrollToEvidenceCardForSource, selectedSourceKey]);
 
   return (
     <div ref={ref}>
@@ -2919,10 +2961,13 @@ function LabelEvidencePanel({
                           ? nodeSpecificClasses
                           : "border-slate-200 bg-slate-50 hover:border-slate-300 hover:bg-white";
                       const isExpanded = expandedEvidenceKeys.has(entry.key);
-                      const canExpand = entry.text.length > 900;
+                      const canExpand = entry.text.length > 420;
                       return (
                         <article
                           key={entry.key}
+                          ref={(element) =>
+                            setEvidenceCardRef(sourceKey ?? null, entry.key, element)
+                          }
                           role="button"
                           tabIndex={0}
                           onClick={() => onSelectSource(sourceKey)}
@@ -2965,7 +3010,7 @@ function LabelEvidencePanel({
                             className={cn(
                               "whitespace-pre-wrap text-sm leading-6 text-slate-800",
                               canExpand && !isExpanded
-                                ? "max-h-56 overflow-hidden"
+                                ? "max-h-24 overflow-hidden"
                                 : ""
                             )}
                           >

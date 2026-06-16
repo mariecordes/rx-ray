@@ -110,8 +110,8 @@ const nodeStyles: Record<
   label_section: {
     label: "Label section",
     fill: "#CBD5E1",
-    stroke: "#64748B",
-    radius: 7,
+    stroke: "#94A3B8",
+    radius: 6,
   },
   // Hidden from the evidence-map UI for now; kept here in case we reintroduce
   // terminology context as a clearer visual layer later.
@@ -613,8 +613,14 @@ export function EvidenceMapD3({
                     y2={endpoints.y2}
                     stroke={edgeStroke(link.kind)}
                     strokeDasharray={edgeDashArray(link.kind)}
-                    strokeOpacity={isDimmed ? 0.18 : 0.78}
-                    strokeWidth={isSelectedIncident ? 2 : 1.15}
+                    strokeOpacity={edgeOpacity(link, Boolean(isDimmed))}
+                    strokeWidth={
+                      isSelectedIncident
+                        ? 2
+                        : link.kind === "has_label_section"
+                          ? 0.8
+                          : 1.15
+                    }
                     pointerEvents="none"
                   />
                 </g>
@@ -679,7 +685,9 @@ export function EvidenceMapD3({
                     cy={node.y}
                     r={style.radius}
                     fill={style.fill}
+                    fillOpacity={nodeFillOpacity(node, isSelected)}
                     stroke={isSelected ? "#371E8F" : style.stroke}
+                    strokeOpacity={nodeStrokeOpacity(node, isSelected)}
                     strokeDasharray={
                       isSelected
                         ? "3 2"
@@ -688,7 +696,13 @@ export function EvidenceMapD3({
                           ? "4 3"
                           : undefined
                     }
-                    strokeWidth={isSelected ? 2.2 : 1.4}
+                    strokeWidth={
+                      isSelected
+                        ? 2.2
+                        : node.kind === "label_section"
+                          ? 1
+                          : 1.4
+                    }
                   />
                   {showLabel ? (
                     <text
@@ -1667,6 +1681,26 @@ function evidenceNodeStyle(nodeOrKind: QuestionEvidenceMapNode | string) {
   return nodeStyles[kind] ?? nodeStyles.query_concept;
 }
 
+function nodeFillOpacity(node: QuestionEvidenceMapNode, isSelected: boolean) {
+  if (isSelected) {
+    return 1;
+  }
+  if (node.kind === "label_section") {
+    return 0.42;
+  }
+  return 1;
+}
+
+function nodeStrokeOpacity(node: QuestionEvidenceMapNode, isSelected: boolean) {
+  if (isSelected) {
+    return 1;
+  }
+  if (node.kind === "label_section") {
+    return 0.48;
+  }
+  return 1;
+}
+
 function edgeStroke(kind: string) {
   if (
     kind === "mentions_in_interaction_section" ||
@@ -1678,6 +1712,16 @@ function edgeStroke(kind: string) {
     return "#D97706";
   }
   return "#94A3B8";
+}
+
+function edgeOpacity(link: VisualLink, isDimmed: boolean) {
+  if (isDimmed) {
+    return 0.14;
+  }
+  if (link.kind === "has_label_section") {
+    return 0.24;
+  }
+  return 0.78;
 }
 
 function edgeDashArray(kind: string) {
