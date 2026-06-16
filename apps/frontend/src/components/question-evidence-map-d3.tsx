@@ -18,6 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   EvidenceCitation,
+  LabelSourceProfile,
   QuestionEvidenceMap,
   QuestionEvidenceMapEdge,
   QuestionEvidenceMapNode,
@@ -162,6 +163,7 @@ const rxNormTypeLabels: Record<string, string> = {
 
 type EvidenceMapD3Props = {
   map: QuestionEvidenceMap;
+  sourceProfilesBySourceId?: Map<string, LabelSourceProfile>;
   onCitationClick: (citation: EvidenceCitation) => void;
   onRxcuiClick: (target: EvidenceMapNavigationTarget) => void;
 };
@@ -212,6 +214,7 @@ function InfoTooltip({ text }: { text: string }) {
 
 export function EvidenceMapD3({
   map,
+  sourceProfilesBySourceId,
   onCitationClick,
   onRxcuiClick,
 }: EvidenceMapD3Props) {
@@ -735,6 +738,7 @@ export function EvidenceMapD3({
         selectedNodeCitation={selectedNodeCitation}
         selectedNodeLabelSourceName={selectedNodeLabelSourceName}
         selectedNode={selectedNode}
+        sourceProfilesBySourceId={sourceProfilesBySourceId}
         selectedTypes={selectedTypes}
         totalLinkCount={graph.links.length}
         totalNodeCount={graph.nodes.length}
@@ -761,6 +765,7 @@ function EvidenceMapSidePanel({
   selectedNodeCitation,
   selectedNodeLabelSourceName,
   selectedNode,
+  sourceProfilesBySourceId,
   selectedTypes,
   totalLinkCount,
   totalNodeCount,
@@ -778,10 +783,15 @@ function EvidenceMapSidePanel({
   selectedNodeCitation: EvidenceCitation | null;
   selectedNodeLabelSourceName: string | null;
   selectedNode: VisualNode | null;
+  sourceProfilesBySourceId?: Map<string, LabelSourceProfile>;
   selectedTypes: Set<string>;
   totalLinkCount: number;
   totalNodeCount: number;
 }) {
+  const selectedNodeSourceProfile =
+    selectedNode?.source_id && sourceProfilesBySourceId
+      ? sourceProfilesBySourceId.get(selectedNode.source_id) ?? null
+      : null;
   return (
     <aside className="space-y-3">
       <div className="rounded-md border border-slate-200 bg-white p-3">
@@ -869,6 +879,7 @@ function EvidenceMapSidePanel({
             <SelectedNodeDetails
               labelSourceName={selectedNodeLabelSourceName}
               node={selectedNode}
+              sourceProfile={selectedNodeSourceProfile}
             />
           </div>
         ) : (
@@ -950,11 +961,13 @@ function EvidenceMapSidePanel({
 function SelectedNodeDetails({
   labelSourceName,
   node,
+  sourceProfile,
 }: {
   labelSourceName: string | null;
   node: VisualNode;
+  sourceProfile: LabelSourceProfile | null;
 }) {
-  const details = selectedNodeDetails(node, labelSourceName);
+  const details = selectedNodeDetails(node, labelSourceName, sourceProfile);
   if (!details.length) {
     return <div />;
   }
@@ -1949,7 +1962,8 @@ function rxcuiLabel(values: string[]) {
 
 function selectedNodeDetails(
   node: QuestionEvidenceMapNode,
-  labelSourceName: string | null
+  labelSourceName: string | null,
+  sourceProfile: LabelSourceProfile | null
 ) {
   const details: string[] = [];
   const roleSummary = node.kind === "query_concept" ? conceptRoleSummary(node) : null;
@@ -1957,7 +1971,7 @@ function selectedNodeDetails(
     details.push(roleSummary);
   }
 
-   if (node.kind === "label_section" && labelSourceName) {
+  if (node.kind === "label_section" && labelSourceName) {
     details.push(`${labelSourceName}`);
   }
 
@@ -1977,7 +1991,25 @@ function selectedNodeDetails(
     }
   }
 
+  if (
+    (node.kind === "label_source" || node.kind === "label_section") &&
+    sourceProfile
+  ) {
+    const productLine = sourceProfileProductLine(sourceProfile);
+    if (productLine) {
+      details.push(productLine);
+    }
+  }
+
   return details;
+}
+
+function sourceProfileProductLine(profile: LabelSourceProfile) {
+  const values = [
+    profile.route ? sentenceCase(profile.route) : null,
+    profile.product_type ? displayProductType(profile.product_type) : null,
+  ].filter((value): value is string => Boolean(value));
+  return values.length ? values.join(" · ") : null;
 }
 
 function displayLabelSourceName(node: QuestionEvidenceMapNode) {
@@ -2037,6 +2069,13 @@ function sentenceCase(value: string) {
   return value
     .toLowerCase()
     .replace(/\b\w/g, (character) => character.toUpperCase());
+}
+
+function displayProductType(value: string) {
+  if (value.toLowerCase() === "human otc drug") {
+    return "Human OTC Drug";
+  }
+  return sentenceCase(value);
 }
 
 function titleCase(value: string) {

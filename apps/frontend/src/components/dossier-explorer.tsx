@@ -42,6 +42,7 @@ import {
   EvidenceCoverageReport,
   EvidenceCoverageStatus,
   LabelSection,
+  LabelSourceProfile,
   OpenFDALabelEvidence,
   OpenFDALabelRecord,
   QueryAnswerResponse,
@@ -190,6 +191,166 @@ function hasOpenFdaProductMetadata(record?: OpenFDALabelRecord | null) {
       (record.brand_names.length ||
         record.generic_names.length ||
         record.manufacturer_names.length)
+  );
+}
+
+type SourceProfileField = {
+  label: string;
+  values: string[];
+};
+
+function buildLabelSourceProfile(record: OpenFDALabelRecord): LabelSourceProfile {
+  return {
+    source_id: record.source_id,
+    brand_name: primaryValue(record.brand_names),
+    generic_name: primaryValue(record.generic_names),
+    manufacturer_name: primaryValue(record.manufacturer_names),
+    route: primaryValue(record.routes),
+    product_type: primaryValue(record.product_types),
+    substances: uniqueProfileValues(record.substance_names),
+    rxcuis: uniqueProfileValues(record.rxcuis),
+    product_ndcs: uniqueProfileValues(record.product_ndcs),
+    spl_ids: uniqueProfileValues(record.spl_ids),
+    spl_set_ids: uniqueProfileValues(record.spl_set_ids),
+    label_id: record.id,
+    set_id: record.set_id,
+    effective_time: formatEffectiveDate(record.effective_time),
+    version: record.version,
+    provenance_tags: uniqueProfileValues(record.provenance_tags),
+  };
+}
+
+function buildLabelSourceProfilesBySourceId(
+  records: OpenFDALabelRecord[]
+): Map<string, LabelSourceProfile> {
+  const profiles = new Map<string, LabelSourceProfile>();
+  for (const record of records) {
+    if (record.source_id && !profiles.has(record.source_id)) {
+      profiles.set(record.source_id, buildLabelSourceProfile(record));
+    }
+  }
+  return profiles;
+}
+
+function labelSourceProfilesFromEvidence(
+  dossier: DrugDossier | null,
+  response: QueryAnswerResponse | null
+) {
+  return buildLabelSourceProfilesBySourceId([
+    ...(dossier?.label_evidence?.label_records ?? []),
+    ...(response?.secondary_evidence ?? []).flatMap(
+      (item) => item.label_evidence?.label_records ?? []
+    ),
+  ]);
+}
+
+function uniqueProfileValues(values: string[]) {
+  return Array.from(
+    new Set(values.map((value) => value.trim()).filter(Boolean))
+  );
+}
+
+function formatEffectiveDate(value?: string | null) {
+  if (!value) {
+    return null;
+  }
+  if (/^\d{8}$/.test(value)) {
+    return `${value.slice(0, 4)}-${value.slice(4, 6)}-${value.slice(6, 8)}`;
+  }
+  return value;
+}
+
+function sourceProfileProductFields(
+  profile: LabelSourceProfile
+): SourceProfileField[] {
+  return compactProfileFields([
+    { label: "Route", values: profile.route ? [sentenceCase(profile.route)] : [] },
+    {
+      label: "Product type",
+      values: profile.product_type ? [displayProductType(profile.product_type)] : [],
+    },
+    { label: "Substances", values: profile.substances.map(sentenceCase) },
+    { label: "RXCUI", values: profile.rxcuis },
+  ]);
+}
+
+function sourceProfileIdentifierFields(
+  profile: LabelSourceProfile
+): SourceProfileField[] {
+  return compactProfileFields([
+    {
+      label: "Effective date",
+      values: profile.effective_time ? [profile.effective_time] : [],
+    },
+    { label: "Version", values: profile.version ? [profile.version] : [] },
+  ]);
+}
+
+function compactProfileFields(fields: SourceProfileField[]) {
+  return fields.filter((field) => field.values.length > 0);
+}
+
+function hasLabelSourceProfileDetails(profile: LabelSourceProfile) {
+  return (
+    sourceProfileProductFields(profile).length > 0 ||
+    sourceProfileIdentifierFields(profile).length > 0
+  );
+}
+
+function compactProfileValue(values: string[], maxValues = 3) {
+  const visibleValues = values.slice(0, maxValues);
+  const hiddenCount = Math.max(0, values.length - visibleValues.length);
+  return {
+    visible: hiddenCount
+      ? `${visibleValues.join(", ")} +${hiddenCount} more`
+      : visibleValues.join(", "),
+    title: values.join(", "),
+  };
+}
+
+function LabelSourceProfileDetails({
+  profile,
+}: {
+  profile: LabelSourceProfile;
+}) {
+  const fields = [
+    ...sourceProfileProductFields(profile),
+    ...sourceProfileIdentifierFields(profile),
+  ];
+
+  if (!fields.length) {
+    return null;
+  }
+
+  return (
+    <div className="mt-2 rounded-md border border-slate-200/80 bg-white/70 p-2 text-xs leading-5 text-slate-600">
+      <SourceProfileFields fields={fields} />
+    </div>
+  );
+}
+
+function SourceProfileFields({
+  fields,
+}: {
+  fields: SourceProfileField[];
+}) {
+  return (
+    <dl className="space-y-1">
+      {fields.map((field) => {
+        const value = compactProfileValue(field.values);
+        return (
+          <div
+            key={field.label}
+            className="grid grid-cols-[88px_minmax(0,1fr)] gap-2"
+          >
+            <dt className="text-slate-500">{field.label}</dt>
+            <dd className="min-w-0 truncate text-slate-800" title={value.title}>
+              {value.visible}
+            </dd>
+          </div>
+        );
+      })}
+    </dl>
   );
 }
 
@@ -487,6 +648,10 @@ export function AskQuestionExperience() {
     useState<string | null>(null);
   const supportingEvidenceRef = useRef<HTMLDivElement>(null);
   const queryRequestRef = useRef(0);
+  const evidenceMapSourceProfilesById = useMemo(
+    () => labelSourceProfilesFromEvidence(dossier, queryAnswer),
+    [dossier, queryAnswer]
+  );
 
   function handleAnswerCitationClick(citation: EvidenceCitation) {
     setHighlightCitation(citation);
@@ -655,6 +820,7 @@ export function AskQuestionExperience() {
           {queryAnswer.question_evidence_map?.nodes.length ? (
             <EvidenceMapD3
               map={queryAnswer.question_evidence_map}
+              sourceProfilesBySourceId={evidenceMapSourceProfilesById}
               onCitationClick={handleAnswerCitationClick}
               onRxcuiClick={handleCoverageTargetClick}
             />
@@ -2374,6 +2540,9 @@ function LabelEvidencePanel({
 }) {
   const records = displayEvidence.records;
   const evidenceCardsRef = useRef<HTMLDivElement>(null);
+  const [expandedSourceKeys, setExpandedSourceKeys] = useState<Set<string>>(
+    new Set()
+  );
   const [expandedEvidenceKeys, setExpandedEvidenceKeys] = useState<Set<string>>(
     new Set()
   );
@@ -2411,6 +2580,38 @@ function LabelEvidencePanel({
       return next;
     });
   }
+
+  function toggleSourceProfile(sourceKey: string) {
+    setExpandedSourceKeys((current) => {
+      const next = new Set(current);
+      if (next.has(sourceKey)) {
+        next.delete(sourceKey);
+      } else {
+        next.add(sourceKey);
+      }
+      return next;
+    });
+  }
+
+  function toggleSourceProfileFromSection(sourceKey?: string | null) {
+    if (!sourceKey) {
+      return;
+    }
+    onSelectSource(sourceKey);
+    setExpandedSourceKeys((current) => {
+      const next = new Set(current);
+      if (next.has(sourceKey)) {
+        next.delete(sourceKey);
+      } else {
+        next.add(sourceKey);
+      }
+      return next;
+    });
+  }
+
+  useEffect(() => {
+    setExpandedSourceKeys(new Set());
+  }, [labelEvidence, nodeLabelEvidence]);
 
   return (
     <div ref={ref}>
@@ -2470,8 +2671,8 @@ function LabelEvidencePanel({
                     <Info className="size-3.5 text-slate-400" />
                     <span className="pointer-events-none absolute left-0 top-full z-20 mt-2 hidden w-64 rounded-md border border-slate-200 bg-white px-3 py-2 text-xs normal-case leading-5 text-slate-700 shadow-lg group-hover:block">
                       Each source card shows the drug brand name, generic drug
-                      name, manufacturer name, route of administration, 
-                      and product type in that order.
+                      name, and manufacturer name. Expand Details for product
+                      metadata.
                     </span>
                   </span>
                 </div>
@@ -2491,11 +2692,12 @@ function LabelEvidencePanel({
                     const manufacturerName = primaryValue(
                       source.record.manufacturer_names
                     );
+                    const profile = buildLabelSourceProfile(source.record);
+                    const hasProfileDetails = hasLabelSourceProfileDetails(profile);
+                    const isProfileExpanded = expandedSourceKeys.has(source.key);
                     const hasProductMetadata = hasOpenFdaProductMetadata(
                       source.record
                     );
-                    const route = primaryValue(source.record.routes);
-                    const productType = primaryValue(source.record.product_types);
                     const isSelected = source.key === selectedSourceKey;
                     const sourceClasses = isSelected
                       ? sourceSelectionClasses
@@ -2503,19 +2705,26 @@ function LabelEvidencePanel({
                         ? nodeSpecificClasses
                         : searchSourceClasses;
                     return (
-                      <button
+                      <div
                         key={source.key}
-                        type="button"
+                        role="button"
+                        tabIndex={0}
                         onClick={() => handleSourceStripClick(source.key)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            handleSourceStripClick(source.key);
+                          }
+                        }}
                         className={cn(
-                          "w-full rounded-md border p-2 text-left transition",
+                          "w-full cursor-pointer rounded-md border p-2 text-left transition",
                           sourceClasses
                         )}
                         style={{ fontSize: "14px", lineHeight: "20px" }}
                       >
                         <div className="mb-1 flex flex-wrap items-center gap-1.5">
                           <Badge className={sourceNumberBadgeClasses}>
-                            Source {source.sourceNumber}
+                            Label {source.sourceNumber}
                           </Badge>
                           {!source.isSelectedNodeOnly ? (
                             <Badge className={searchSpecificBadgeClasses}>
@@ -2557,18 +2766,29 @@ function LabelEvidencePanel({
                             {metadataUnavailableLabel}
                           </div>
                         )}
-                        {route || productType ? (
-                          <div className="mt-1.5 text-slate-500">
-                            {route ? (
-                              <span>{sentenceCase(route)}</span>
-                            ) : null}
-                            {route && productType ? <span> · </span> : null}
-                            {productType ? (
-                              <span>{displayProductType(productType)}</span>
+                        {hasProfileDetails ? (
+                          <div className="mt-2 border-t border-slate-200/70 pt-2">
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                toggleSourceProfile(source.key);
+                              }}
+                              className="inline-flex items-center gap-1 text-xs font-medium uppercase text-slate-500 hover:text-slate-900"
+                            >
+                              {isProfileExpanded ? (
+                                <ChevronDown className="size-3.5" />
+                              ) : (
+                                <ChevronRight className="size-3.5" />
+                              )}
+                              Details
+                            </button>
+                            {isProfileExpanded ? (
+                              <LabelSourceProfileDetails profile={profile} />
                             ) : null}
                           </div>
                         ) : null}
-                      </button>
+                      </div>
                     );
                   })}
                 </div>
@@ -2604,6 +2824,12 @@ function LabelEvidencePanel({
                     {groupedActiveTexts.map((entry) => {
                       const sourceKey = entry.sourceKey;
                       const source = entry.source;
+                      const sourceProfile = source
+                        ? buildLabelSourceProfile(source.record)
+                        : null;
+                      const hasSourceProfileDetails = sourceProfile
+                        ? hasLabelSourceProfileDetails(sourceProfile)
+                        : false;
                       const brandName = primaryValue(
                         source?.record.brand_names
                       );
@@ -2647,10 +2873,10 @@ function LabelEvidencePanel({
                                   sourceNumberBadgeClasses
                                 )}
                               >
-                                Source {source.sourceNumber}
+                                Label {source.sourceNumber}
                               </span>
                             ) : (
-                              <Badge>Source unknown</Badge>
+                              <Badge>Label unknown</Badge>
                             )}
                             {brandName ? (
                               <span>{displayBrandName(brandName)}</span>
@@ -2673,18 +2899,41 @@ function LabelEvidencePanel({
                           >
                             {entry.text}
                           </p>
-                          {canExpand ? (
-                            <button
-                              type="button"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                toggleEvidenceExpansion(entry.key);
-                              }}
-                              className="mt-3 font-medium uppercase tracking-wide text-slate-500 underline-offset-2 hover:text-cyan-700 hover:underline"
-                              style={{ fontSize: "12px", lineHeight: "14px" }}
-                            >
-                              {isExpanded ? "Show less" : "Show more"}
-                            </button>
+                          {canExpand || (source && hasSourceProfileDetails) ? (
+                            <div className="mt-3 flex flex-wrap items-center gap-5">
+                              {canExpand ? (
+                                <button
+                                  type="button"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    toggleEvidenceExpansion(entry.key);
+                                  }}
+                                  className="font-medium uppercase tracking-wide text-slate-500 underline underline-offset-2 hover:text-cyan-700"
+                                  style={{
+                                    fontSize: "12px",
+                                    lineHeight: "14px",
+                                  }}
+                                >
+                                  {isExpanded ? "Show less" : "Show more"}
+                                </button>
+                              ) : null}
+                              {source && hasSourceProfileDetails ? (
+                                <button
+                                  type="button"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    toggleSourceProfileFromSection(sourceKey);
+                                  }}
+                                  className="font-medium uppercase tracking-wide text-slate-500 underline underline-offset-2 hover:text-slate-900"
+                                  style={{
+                                    fontSize: "12px",
+                                    lineHeight: "14px",
+                                  }}
+                                >
+                                  Label details
+                                </button>
+                              ) : null}
+                            </div>
                           ) : null}
                         </article>
                       );
