@@ -706,8 +706,12 @@ type PageNavSection = {
 
 function useActivePageSection(sections: PageNavSection[]) {
   const [activeId, setActiveId] = useState(sections[0]?.id ?? "");
+  const clickedSectionLockUntilRef = useRef(0);
 
-  useEffect(() => {
+  const updateActiveSection = useCallback(() => {
+    if (Date.now() < clickedSectionLockUntilRef.current) {
+      return;
+    }
     const visibleSections = sections.filter(
       (section) => section.isVisible && section.ref.current
     );
@@ -715,38 +719,63 @@ function useActivePageSection(sections: PageNavSection[]) {
       return;
     }
 
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const visibleEntry = entries
-          .filter((entry) => entry.isIntersecting)
-          .sort(
-            (left, right) =>
-              left.boundingClientRect.top - right.boundingClientRect.top
-          )[0];
-        if (!visibleEntry) {
-          return;
-        }
-        const matchingSection = visibleSections.find(
-          (section) => section.ref.current === visibleEntry.target
-        );
-        if (matchingSection) {
-          setActiveId(matchingSection.id);
-        }
-      },
-      {
-        rootMargin: "-18% 0px -65% 0px",
-        threshold: [0, 0.08, 0.2],
-      }
-    );
+    const topOffset = 96;
+    const sectionPositions = visibleSections
+      .map((section) => ({
+        section,
+        rect: section.ref.current?.getBoundingClientRect(),
+      }))
+      .filter(
+        (
+          entry
+        ): entry is {
+          section: PageNavSection;
+          rect: DOMRect;
+        } => Boolean(entry.rect)
+      )
+      .filter(
+        ({ rect }) => rect.bottom > topOffset && rect.top < window.innerHeight
+      )
+      .sort((left, right) => left.rect.top - right.rect.top);
 
-    visibleSections.forEach((section) => {
-      if (section.ref.current) {
-        observer.observe(section.ref.current);
-      }
-    });
+    const activeSection =
+      [...sectionPositions]
+        .reverse()
+        .find(({ rect }) => rect.top <= topOffset)?.section ??
+      sectionPositions[0]?.section;
 
-    return () => observer.disconnect();
+    if (activeSection) {
+      setActiveId(activeSection.id);
+    }
   }, [sections]);
+
+  useEffect(() => {
+    let animationFrame = 0;
+    function requestUpdate() {
+      window.cancelAnimationFrame(animationFrame);
+      animationFrame = window.requestAnimationFrame(updateActiveSection);
+    }
+
+    requestUpdate();
+    window.addEventListener("scroll", requestUpdate, { passive: true });
+    window.addEventListener("resize", requestUpdate);
+
+    return () => {
+      window.cancelAnimationFrame(animationFrame);
+      window.removeEventListener("scroll", requestUpdate);
+      window.removeEventListener("resize", requestUpdate);
+    };
+  }, [updateActiveSection]);
+
+  const activateSection = useCallback((sectionId: string) => {
+    clickedSectionLockUntilRef.current = Date.now() + 1200;
+    setActiveId(sectionId);
+    window.setTimeout(() => {
+      if (Date.now() >= clickedSectionLockUntilRef.current) {
+        clickedSectionLockUntilRef.current = 0;
+      }
+    }, 1250);
+  }, []);
 
   useEffect(() => {
     if (!sections.some((section) => section.isVisible && section.id === activeId)) {
@@ -754,19 +783,22 @@ function useActivePageSection(sections: PageNavSection[]) {
     }
   }, [activeId, sections]);
 
-  return activeId;
+  return [activeId, activateSection] as const;
 }
 
 function AskPageNavigation({
   activeId,
+  onActivate,
   sections,
 }: {
   activeId: string;
+  onActivate: (sectionId: string) => void;
   sections: PageNavSection[];
 }) {
   const visibleSections = sections.filter((section) => section.isVisible);
 
   function scrollToSection(section: PageNavSection) {
+    onActivate(section.id);
     section.ref.current?.scrollIntoView({
       behavior: "smooth",
       block: "start",
@@ -889,7 +921,8 @@ export function AskQuestionExperience() {
       ] satisfies PageNavSection[],
     [hasGeneratedResponseContent, hasSupportingEvidence, isEvidenceOpen]
   );
-  const activeNavSection = useActivePageSection(navigationSections);
+  const [activeNavSection, activateNavSection] =
+    useActivePageSection(navigationSections);
 
   function handleAnswerCitationClick(citation: EvidenceCitation) {
     setHighlightCitation(citation);
@@ -1031,6 +1064,7 @@ export function AskQuestionExperience() {
     <div className="grid gap-6 xl:-ml-48 xl:grid-cols-[10rem_minmax(0,1fr)]">
       <AskPageNavigation
         activeId={activeNavSection}
+        onActivate={activateNavSection}
         sections={navigationSections}
       />
       <div className="flex min-w-0 flex-col gap-6">
