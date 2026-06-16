@@ -23,6 +23,7 @@ import {
   QuestionEvidenceMapEdge,
   QuestionEvidenceMapNode,
 } from "@/lib/types";
+import { cn } from "@/lib/utils";
 
 export type EvidenceMapNavigationTarget = {
   rxcui: string;
@@ -721,7 +722,10 @@ export function EvidenceMapD3({
                       x={node.x}
                       y={node.y + style.radius + 16}
                       textAnchor="middle"
-                      className="pointer-events-none fill-slate-900 text-[14px] font-semibold"
+                      className={cn(
+                        "pointer-events-none fill-slate-900 font-semibold",
+                        evidenceMapNodeLabelClasses(node)
+                      )}
                     >
                       {shortLabel(
                         graphNodeLabel(node),
@@ -2165,6 +2169,16 @@ function displayEvidenceMapNodeKind(node: QuestionEvidenceMapNode) {
     return "User question";
   }
   return evidenceNodeStyle(node).label;
+}
+
+function evidenceMapNodeLabelClasses(node: QuestionEvidenceMapNode) {
+  if (node.kind === "resolved_medication") {
+    return "text-[18px]";
+  }
+  if (node.kind === "question") {
+    return "text-[18px]";
+  }
+  return "text-[16px]";
 }
 
 function displayEvidenceMapEdgeNode(node: QuestionEvidenceMapNode) {
