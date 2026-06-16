@@ -13,7 +13,6 @@ from src.query_understanding.models import ExtractedDrugMention, QueryState
 
 CONDITION_PATTERNS: dict[str, tuple[str, ...]] = {
     "acne": (r"\bacne\b",),
-    "allergy": (r"\ballerg(?:y|ies|ic)\b",),
     "cold": (r"\bcold\b",),
     "cough": (r"\bcough\b",),
     "fever": (r"\bfever\b",),
@@ -48,6 +47,10 @@ MENTION_PATTERNS: tuple[tuple[str, str], ...] = (
         "allergy",
         rf"\b(?:allergic|allergy|allergies)\s+(?:to|against)\s+"
         rf"{DRUG_FRAGMENT_PATTERN}",
+    ),
+    (
+        "allergy",
+        rf"\b(?:my|a|an|the)\s+{DRUG_FRAGMENT_PATTERN}\s+allerg(?:y|ies)\b",
     ),
     (
         "current_medication",
@@ -90,6 +93,11 @@ FRAGMENT_STOP_PATTERN = re.compile(
 QUERY_EXTRACTION_API_KEY_ENV = "QUERY_EXTRACTION_OPENAI_API_KEY"
 QUERY_EXTRACTION_MODEL_ENV = "QUERY_EXTRACTION_OPENAI_MODEL"
 QUERY_EXTRACTION_PROMPT_KEY = "query_extraction_revision"
+
+INVALID_STATE_TERMS: dict[str, tuple[str, ...]] = {
+    "conditions": ("allergy", "allergies", "allergic"),
+    "patient_context": ("allergy", "allergies", "allergic"),
+}
 
 
 @dataclass
@@ -169,7 +177,7 @@ class HybridQueryExtractor:
             )
         state.primary_drug = primary
 
-        return ExtractionResult(state=state, mentions=mentions)
+        return ExtractionResult(state=self._sanitize_state(state), mentions=mentions)
 
     def _revise_with_llm(
         self,
@@ -393,6 +401,7 @@ class HybridQueryExtractor:
         if stop_match and stop_match.start() > 0:
             fragment = fragment[: stop_match.start()]
         fragment = re.sub(r"\s+", " ", fragment).strip(" -/")
+        fragment = re.sub(r"^(?:my|a|an|the)\s+", "", fragment, flags=re.IGNORECASE)
         return fragment
 
     @staticmethod
@@ -438,6 +447,44 @@ class HybridQueryExtractor:
             merged.append(value)
         return merged
 
+    @classmethod
+    def _sanitize_state(cls, state: QueryState) -> QueryState:
+        """Remove known wrong-bucket terms while preserving the LLM's choices."""
+
+        return state.model_copy(
+            update={
+                "conditions": cls._filter_invalid_state_terms(
+                    "conditions",
+                    state.conditions,
+                ),
+                "patient_context": cls._filter_invalid_state_terms(
+                    "patient_context",
+                    state.patient_context,
+                ),
+            }
+        )
+
+    @classmethod
+    def _filter_invalid_state_terms(
+        cls,
+        field_name: str,
+        values: list[str],
+    ) -> list[str]:
+        invalid_terms = INVALID_STATE_TERMS.get(field_name, ())
+        if not invalid_terms:
+            return values
+
+        filtered: list[str] = []
+        for value in values:
+            normalized = value.casefold()
+            if any(
+                re.search(rf"\b{re.escape(term)}\b", normalized)
+                for term in invalid_terms
+            ):
+                continue
+            filtered.append(value)
+        return cls._dedupe_strings(filtered)
+
     @staticmethod
     def _optional_string(value: Any) -> str | None:
         if isinstance(value, str) and value.strip():
@@ -448,7 +495,7 @@ class HybridQueryExtractor:
         if not isinstance(value, dict):
             return QueryState()
 
-        return QueryState(
+        return self._sanitize_state(QueryState(
             primary_drug=self._optional_string(value.get("primary_drug")),
             all_drugs_mentioned=self._string_list(value.get("all_drugs_mentioned")),
             current_medications=self._string_list(value.get("current_medications")),
@@ -457,7 +504,7 @@ class HybridQueryExtractor:
             patient_context=self._string_list(value.get("patient_context")),
             intent=self._optional_string(value.get("intent")),
             intents=self._state_intents(value),
-        )
+        ))
 
     def _state_intents(self, value: dict[str, Any]) -> list[str]:
         intents = self._string_list(value.get("intents"))

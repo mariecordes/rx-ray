@@ -20,6 +20,22 @@ from src.query_understanding.models import (
 
 logger = logging.getLogger(__name__)
 
+COMMON_NON_MEDICATION_ALLERGENS = {
+    "dairy",
+    "egg",
+    "eggs",
+    "hazelnut",
+    "latex",
+    "milk",
+    "peanut",
+    "peanuts",
+    "pollen",
+    "shellfish",
+    "soy",
+    "tree nut",
+    "tree nuts",
+}
+
 
 class QueryUnderstandingService:
     """Resolve natural-language medication questions into symbolic state."""
@@ -118,7 +134,19 @@ class QueryUnderstandingService:
         extraction: ExtractionResult,
     ) -> list[ResolvedDrugMention]:
         mentions = self._complete_mentions(query, extraction.mentions)
-        return [self._resolve_mention(mention) for mention in mentions]
+        return [
+            self._resolve_mention(mention)
+            for mention in mentions
+            if not self._is_common_non_medication_allergen(mention)
+        ]
+
+    @staticmethod
+    def _is_common_non_medication_allergen(mention: ExtractedDrugMention) -> bool:
+        return (
+            mention.role == "allergy"
+            and normalize_drug_search_text(mention.text)
+            in COMMON_NON_MEDICATION_ALLERGENS
+        )
 
     @staticmethod
     def _unresolved_mention_texts(

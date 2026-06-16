@@ -226,6 +226,29 @@ async def test_query_understanding_allergy_state(
 
 
 @pytest.mark.asyncio
+async def test_query_understanding_does_not_extract_allergy_as_condition(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("QUERY_EXTRACTION_OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("QUERY_EXTRACTION_OPENAI_MODEL", raising=False)
+
+    response = await understand_query(
+        QueryUnderstandingRequest(
+            query=(
+                "I currently take cetirizine for my pollen allergy. can i take "
+                "both ibuprofen and aspirin against swollen eyes?"
+            ),
+            openfda_limit=1,
+        ),
+        builder=offline_builder(),
+    )
+
+    assert response.state.allergies == ["pollen"]
+    assert "allergy" not in response.state.conditions
+    assert "allergy" not in response.state.patient_context
+
+
+@pytest.mark.asyncio
 async def test_query_understanding_child_question_uses_drug_not_patient_context(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1976,6 +1999,22 @@ def test_query_extraction_extracts_multiple_patient_context_items() -> None:
     )
 
     assert result.state.patient_context == ["breastfeeding", "female", "adult"]
+
+
+def test_query_extraction_sanitizes_wrong_bucket_allergy_terms() -> None:
+    state = HybridQueryExtractor()._parse_llm_state(
+        {
+            "primary_drug": "ibuprofen",
+            "allergies": ["pollen"],
+            "conditions": ["allergy", "migraine"],
+            "patient_context": ["adult", "allergies"],
+            "intents": ["allergy_context_check"],
+        }
+    )
+
+    assert state.allergies == ["pollen"]
+    assert state.conditions == ["migraine"]
+    assert state.patient_context == ["adult"]
 
 
 def test_query_understanding_scanner_does_not_fuzzy_match_stop_words(
