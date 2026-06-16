@@ -696,6 +696,115 @@ export function DossierExplorer() {
   return <AskQuestionExperience />;
 }
 
+type PageNavSection = {
+  id: string;
+  label: string;
+  ref: RefObject<HTMLDivElement | null>;
+  isVisible: boolean;
+  indent?: boolean;
+};
+
+function useActivePageSection(sections: PageNavSection[]) {
+  const [activeId, setActiveId] = useState(sections[0]?.id ?? "");
+
+  useEffect(() => {
+    const visibleSections = sections.filter(
+      (section) => section.isVisible && section.ref.current
+    );
+    if (!visibleSections.length) {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visibleEntry = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort(
+            (left, right) =>
+              left.boundingClientRect.top - right.boundingClientRect.top
+          )[0];
+        if (!visibleEntry) {
+          return;
+        }
+        const matchingSection = visibleSections.find(
+          (section) => section.ref.current === visibleEntry.target
+        );
+        if (matchingSection) {
+          setActiveId(matchingSection.id);
+        }
+      },
+      {
+        rootMargin: "-18% 0px -65% 0px",
+        threshold: [0, 0.08, 0.2],
+      }
+    );
+
+    visibleSections.forEach((section) => {
+      if (section.ref.current) {
+        observer.observe(section.ref.current);
+      }
+    });
+
+    return () => observer.disconnect();
+  }, [sections]);
+
+  useEffect(() => {
+    if (!sections.some((section) => section.isVisible && section.id === activeId)) {
+      setActiveId(sections.find((section) => section.isVisible)?.id ?? "");
+    }
+  }, [activeId, sections]);
+
+  return activeId;
+}
+
+function AskPageNavigation({
+  activeId,
+  sections,
+}: {
+  activeId: string;
+  sections: PageNavSection[];
+}) {
+  const visibleSections = sections.filter((section) => section.isVisible);
+
+  function scrollToSection(section: PageNavSection) {
+    section.ref.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+  }
+
+  return (
+    <aside className="hidden xl:block">
+      <nav className="sticky top-6 space-y-1">
+        <p className="px-2 pb-2 text-[14px] font-semibold uppercase tracking-wide text-slate-500">
+          On this page
+        </p>
+        {visibleSections.map((section) => (
+          <button
+            key={section.id}
+            type="button"
+            onClick={() => scrollToSection(section)}
+            className={cn(
+              "flex w-full items-center rounded-md px-2 py-1.5 text-left font-semibold uppercase tracking-wide transition",
+              section.indent && "pl-5 font-medium italic",
+              activeId === section.id
+                ? "bg-[#F1ECFB] text-[#371E8F]"
+                : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
+            )}
+            style={{
+              fontSize: "14px",
+              fontStyle: section.indent ? "italic" : "normal",
+              lineHeight: "16px",
+            }}
+          >
+            <span>{section.label}</span>
+          </button>
+        ))}
+      </nav>
+    </aside>
+  );
+}
+
 export function AskQuestionExperience() {
   const [question, setQuestion] = useState(
     "Can I take ibuprofen for my migraine if I'm allergic to aspirin?"
@@ -713,12 +822,74 @@ export function AskQuestionExperience() {
     useState<EvidenceCitation | null>(null);
   const [highlightEvidenceRxcui, setHighlightEvidenceRxcui] =
     useState<string | null>(null);
+  const askQuestionRef = useRef<HTMLDivElement>(null);
+  const generatedResponseRef = useRef<HTMLDivElement>(null);
+  const evidenceMapRef = useRef<HTMLDivElement>(null);
   const supportingEvidenceRef = useRef<HTMLDivElement>(null);
+  const supportingEvidenceContentRef = useRef<HTMLDivElement>(null);
+  const supportingEvidencePanelRef = useRef<HTMLDivElement>(null);
+  const drugNetworkNavRef = useRef<HTMLDivElement>(null);
+  const drugLabelsNavRef = useRef<HTMLDivElement>(null);
   const queryRequestRef = useRef(0);
   const evidenceMapSourceProfilesById = useMemo(
     () => labelSourceProfilesFromEvidence(dossier, queryAnswer),
     [dossier, queryAnswer]
   );
+  const hasGeneratedResponseContent = Boolean(
+    isUnderstandingLoading ||
+      isAnswerLoading ||
+      queryError ||
+      queryUnderstanding ||
+      queryAnswer
+  );
+  const hasSupportingEvidence = Boolean(
+    dossier && queryAnswer && !isAnswerLoading && !isUnderstandingLoading
+  );
+  const navigationSections = useMemo(
+    () =>
+      [
+        {
+          id: "ask",
+          label: "Ask a question",
+          ref: askQuestionRef,
+          isVisible: true,
+        },
+        {
+          id: "response",
+          label: "Generated response",
+          ref: generatedResponseRef,
+          isVisible: hasGeneratedResponseContent,
+        },
+        {
+          id: "map",
+          label: "Evidence map",
+          ref: evidenceMapRef,
+          isVisible: hasSupportingEvidence && isEvidenceOpen,
+        },
+        {
+          id: "evidence",
+          label: "Supporting evidence",
+          ref: supportingEvidencePanelRef,
+          isVisible: hasSupportingEvidence && isEvidenceOpen,
+        },
+        {
+          id: "network",
+          label: "Drug network",
+          ref: drugNetworkNavRef,
+          isVisible: hasSupportingEvidence && isEvidenceOpen,
+          indent: true,
+        },
+        {
+          id: "labels",
+          label: "Drug labels",
+          ref: drugLabelsNavRef,
+          isVisible: hasSupportingEvidence && isEvidenceOpen,
+          indent: true,
+        },
+      ] satisfies PageNavSection[],
+    [hasGeneratedResponseContent, hasSupportingEvidence, isEvidenceOpen]
+  );
+  const activeNavSection = useActivePageSection(navigationSections);
 
   function handleAnswerCitationClick(citation: EvidenceCitation) {
     setHighlightCitation(citation);
@@ -857,51 +1028,65 @@ export function AskQuestionExperience() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <QueryUnderstandingPanel
-        answerResponse={queryAnswer}
-        error={queryError}
-        isAnswerLoading={isAnswerLoading}
-        isUnderstandingLoading={isUnderstandingLoading}
-        onQuestionChange={setQuestion}
-        onDemoModeChange={(enabled) => {
-          setIsDemoMode(enabled);
-          if (enabled) {
-            setQuestion(DEMO_QUERY);
-          }
-        }}
-        onSubmit={handleQuestionSubmit}
-        question={question}
-        result={queryUnderstanding}
-        isDemoMode={isDemoMode}
-        onAnswerCitationClick={handleAnswerCitationClick}
-        onCoverageTargetClick={handleCoverageTargetClick}
+    <div className="grid gap-6 xl:-ml-48 xl:grid-cols-[10rem_minmax(0,1fr)]">
+      <AskPageNavigation
+        activeId={activeNavSection}
+        sections={navigationSections}
       />
+      <div className="flex min-w-0 flex-col gap-6">
+        <QueryUnderstandingPanel
+          answerResponse={queryAnswer}
+          askRef={askQuestionRef}
+          error={queryError}
+          generatedResponseRef={generatedResponseRef}
+          isAnswerLoading={isAnswerLoading}
+          isUnderstandingLoading={isUnderstandingLoading}
+          onQuestionChange={setQuestion}
+          onDemoModeChange={(enabled) => {
+            setIsDemoMode(enabled);
+            if (enabled) {
+              setQuestion(DEMO_QUERY);
+            }
+          }}
+          onSubmit={handleQuestionSubmit}
+          question={question}
+          result={queryUnderstanding}
+          isDemoMode={isDemoMode}
+          onAnswerCitationClick={handleAnswerCitationClick}
+          onCoverageTargetClick={handleCoverageTargetClick}
+        />
 
-      {dossier && queryAnswer && !isAnswerLoading && !isUnderstandingLoading ? (
-        <EvidenceReveal
-          evidenceRef={supportingEvidenceRef}
-          isOpen={isEvidenceOpen}
-          onOpenChange={setIsEvidenceOpen}
-        >
-          {queryAnswer.question_evidence_map?.nodes.length ? (
-            <EvidenceMapD3
-              map={queryAnswer.question_evidence_map}
-              sourceProfilesBySourceId={evidenceMapSourceProfilesById}
-              onCitationClick={handleAnswerCitationClick}
-              onRxcuiClick={handleCoverageTargetClick}
+        {dossier && queryAnswer && !isAnswerLoading && !isUnderstandingLoading ? (
+          <EvidenceReveal
+            contentRef={supportingEvidenceContentRef}
+            evidenceRef={supportingEvidenceRef}
+            isOpen={isEvidenceOpen}
+            onOpenChange={setIsEvidenceOpen}
+          >
+            {queryAnswer.question_evidence_map?.nodes.length ? (
+              <div ref={evidenceMapRef} className="scroll-mt-6">
+                <EvidenceMapD3
+                  map={queryAnswer.question_evidence_map}
+                  sourceProfilesBySourceId={evidenceMapSourceProfilesById}
+                  onCitationClick={handleAnswerCitationClick}
+                  onRxcuiClick={handleCoverageTargetClick}
+                />
+              </div>
+            ) : null}
+            <SupportingEvidence
+              dossier={dossier}
+              drugLabelsNavRef={drugLabelsNavRef}
+              drugNetworkNavRef={drugNetworkNavRef}
+              evidenceNavRef={supportingEvidencePanelRef}
+              highlightCitation={highlightCitation}
+              highlightRxcui={highlightEvidenceRxcui}
+              secondaryEvidence={queryAnswer.secondary_evidence ?? []}
+              onCitationHandled={() => setHighlightCitation(null)}
+              onRxcuiHandled={() => setHighlightEvidenceRxcui(null)}
             />
-          ) : null}
-          <SupportingEvidence
-            dossier={dossier}
-            highlightCitation={highlightCitation}
-            highlightRxcui={highlightEvidenceRxcui}
-            secondaryEvidence={queryAnswer.secondary_evidence ?? []}
-            onCitationHandled={() => setHighlightCitation(null)}
-            onRxcuiHandled={() => setHighlightEvidenceRxcui(null)}
-          />
-        </EvidenceReveal>
-      ) : null}
+          </EvidenceReveal>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -1043,11 +1228,13 @@ export function DrugDossierExperience() {
 
 function EvidenceReveal({
   children,
+  contentRef,
   evidenceRef,
   isOpen,
   onOpenChange,
 }: {
   children: ReactNode;
+  contentRef: RefObject<HTMLDivElement | null>;
   evidenceRef: RefObject<HTMLDivElement | null>;
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
@@ -1070,13 +1257,20 @@ function EvidenceReveal({
         </Button>
         <div className="flex-1 border-t border-[#D7C8F4]" />
       </div>
-      {isOpen ? <div className="space-y-6">{children}</div> : null}
+      {isOpen ? (
+        <div ref={contentRef} className="space-y-6 scroll-mt-6">
+          {children}
+        </div>
+      ) : null}
     </div>
   );
 }
 
 function SupportingEvidence({
   dossier,
+  drugLabelsNavRef,
+  drugNetworkNavRef,
+  evidenceNavRef,
   highlightCitation,
   highlightRxcui,
   secondaryEvidence,
@@ -1084,6 +1278,9 @@ function SupportingEvidence({
   onRxcuiHandled,
 }: {
   dossier: DrugDossier;
+  drugLabelsNavRef?: RefObject<HTMLDivElement | null>;
+  drugNetworkNavRef?: RefObject<HTMLDivElement | null>;
+  evidenceNavRef?: RefObject<HTMLDivElement | null>;
   highlightCitation: EvidenceCitation | null;
   highlightRxcui: string | null;
   secondaryEvidence: SecondaryDrugEvidence[];
@@ -1137,49 +1334,53 @@ function SupportingEvidence({
       : null;
 
   return (
-    <Card className="border-[#C7B4EF] shadow-md">
-      <CardHeader>
-        <CardTitle>Supporting Evidence</CardTitle>
-        <p className="mt-1 text-sm leading-6 text-slate-500">
-          Inspect the retrieved dossier behind the generated response.
-        </p>
-      </CardHeader>
-      <CardContent className="space-y-5">
-        <div className="flex flex-wrap items-end gap-1">
-          {evidenceTabs.map((tab) => (
-            <button
-              key={tab.key}
-              type="button"
-              onClick={() => setActiveTabKey(tab.key)}
-              className={cn(
-                "rounded-t-md px-4 py-2 text-sm font-semibold shadow-sm",
-                activeTab.key === tab.key
-                  ? "bg-[#371E8F] text-white"
-                  : "border border-slate-200 bg-slate-50 text-slate-700"
-              )}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-        <div className="-mt-5 rounded-b-md rounded-tr-md border border-slate-200 bg-white p-4 shadow-sm">
-          {activeTab.kind === "primary" ? (
-            <DossierResults
-              dossier={dossier}
-              highlightCitation={activeTabHighlightCitation}
-              variant="embedded"
-              onCitationHandled={onCitationHandled}
-            />
-          ) : (
-            <SecondaryEvidenceResults
-              evidence={activeTab.evidence}
-              highlightCitation={activeTabHighlightCitation}
-              onCitationHandled={onCitationHandled}
-            />
-          )}
-        </div>
-      </CardContent>
-    </Card>
+    <div ref={evidenceNavRef} className="scroll-mt-6">
+      <Card className="border-[#C7B4EF] shadow-md">
+        <CardHeader>
+          <CardTitle>Supporting Evidence</CardTitle>
+          <p className="mt-1 text-sm leading-6 text-slate-500">
+            Inspect the retrieved dossier behind the generated response.
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          <div className="flex flex-wrap items-end gap-1">
+            {evidenceTabs.map((tab) => (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => setActiveTabKey(tab.key)}
+                className={cn(
+                  "rounded-t-md px-4 py-2 text-sm font-semibold shadow-sm",
+                  activeTab.key === tab.key
+                    ? "bg-[#371E8F] text-white"
+                    : "border border-slate-200 bg-slate-50 text-slate-700"
+                )}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+          <div className="-mt-5 rounded-b-md rounded-tr-md border border-slate-200 bg-white p-4 shadow-sm">
+            {activeTab.kind === "primary" ? (
+              <DossierResults
+                dossier={dossier}
+                drugLabelsNavRef={drugLabelsNavRef}
+                drugNetworkNavRef={drugNetworkNavRef}
+                highlightCitation={activeTabHighlightCitation}
+                variant="embedded"
+                onCitationHandled={onCitationHandled}
+              />
+            ) : (
+              <SecondaryEvidenceResults
+                evidence={activeTab.evidence}
+                highlightCitation={activeTabHighlightCitation}
+                onCitationHandled={onCitationHandled}
+              />
+            )}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 
@@ -1422,11 +1623,15 @@ function RxNormPairContextPanel({
 
 function DossierResults({
   dossier,
+  drugLabelsNavRef,
+  drugNetworkNavRef,
   highlightCitation = null,
   onCitationHandled,
   variant = "cards",
 }: {
   dossier: DrugDossier;
+  drugLabelsNavRef?: RefObject<HTMLDivElement | null>;
+  drugNetworkNavRef?: RefObject<HTMLDivElement | null>;
   highlightCitation?: EvidenceCitation | null;
   onCitationHandled?: () => void;
   variant?: "cards" | "embedded";
@@ -1582,7 +1787,14 @@ function DossierResults({
         onJumpToLabels={() => scrollToSection(labelEvidencePanelRef)}
         onJumpToNetwork={() => scrollToSection(drugNetworkPanelRef)}
       />
-      <div ref={drugNetworkPanelRef}>
+      <div
+        ref={(element) => {
+          drugNetworkPanelRef.current = element;
+          if (drugNetworkNavRef) {
+            drugNetworkNavRef.current = element;
+          }
+        }}
+      >
         <RxNormKnowledgeGraph
           key={dossier.resolved_drug?.rxcui ?? dossier.query}
           dossier={dossier}
@@ -1592,6 +1804,7 @@ function DossierResults({
       </div>
       <LabelEvidencePanel
         ref={labelEvidencePanelRef}
+        navRef={drugLabelsNavRef}
         activeSection={activeSection}
         activeTexts={activeTexts}
         displayEvidence={displayEvidence}
@@ -1613,7 +1826,9 @@ function DossierResults({
 
 function QueryUnderstandingPanel({
   answerResponse,
+  askRef,
   error,
+  generatedResponseRef,
   isDemoMode,
   isAnswerLoading,
   isUnderstandingLoading,
@@ -1626,7 +1841,9 @@ function QueryUnderstandingPanel({
   result,
 }: {
   answerResponse: QueryAnswerResponse | null;
+  askRef: RefObject<HTMLDivElement | null>;
   error: string | null;
+  generatedResponseRef: RefObject<HTMLDivElement | null>;
   isDemoMode: boolean;
   isAnswerLoading: boolean;
   isUnderstandingLoading: boolean;
@@ -1645,99 +1862,103 @@ function QueryUnderstandingPanel({
 
   return (
     <div className="space-y-5">
-      <Card>
-        <CardContent className="pb-7 pt-6">
-          <div className="flex items-center justify-center gap-2">
-            <CardTitle>Ask a Question</CardTitle>
-            <InfoTooltip text="This extracts a structured medication state from your question, resolves drug mentions through RxNorm, and loads the primary drug into the explorer below. It does not generate medical advice." />
-          </div>
-          <p className="mx-auto mt-1 max-w-1xl text-center text-sm leading-6 text-slate-500">
-            What can we help you explore? Ask in plain language, then inspect
-            the generated response and its evidence.
-          </p>
-          <form
-            onSubmit={onSubmit}
-            className="mx-auto mt-5 flex max-w-4xl items-stretch gap-2"
-          >
-            <textarea
-              value={question}
-              onChange={(event) => onQuestionChange(event.target.value)}
-              placeholder="Can I take ibuprofen for my migraine if I'm allergic to aspirin?"
-              rows={1}
-              maxLength={frontendLimits.maxUserQueryCharacters}
-              aria-label="Question"
-              className="min-h-11 flex-1 resize-y rounded-md border border-[#C7B4EF] bg-white px-3 py-2 text-slate-950 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-[#371E8F] focus:ring-2 focus:ring-[#E8DDF9]"
-              style={{ fontSize: "15px", lineHeight: "27px" }}
-            />
-            <Button
-              type="submit"
-              aria-label="Explore"
-              className="h-11 w-11 shrink-0 px-0"
-              disabled={
-                isUnderstandingLoading || isAnswerLoading || !question.trim()
-              }
-            >
-              {isUnderstandingLoading || isAnswerLoading ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <Search className="size-4" />
-              )}
-            </Button>
-          </form>
-          <div className="mx-auto mt-3 flex max-w-4xl flex-wrap items-center justify-between gap-2 text-sm text-slate-500">
-            <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={isDemoMode}
-                onChange={(event) => onDemoModeChange(event.target.checked)}
-                className="size-4 rounded border-slate-300 text-[#371E8F] focus:ring-[#371E8F]"
-              />
-              Demo mode
-            </label>
-            <span className="text-xs leading-5">
-              Uses a local fixture for the cetirizine, ibuprofen, and aspirin
-              query. No LLM or live API calls.
-            </span>
-          </div>
-        </CardContent>
-      </Card>
-
-      {hasResultContent ? (
+      <div ref={askRef} className="scroll-mt-6">
         <Card>
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <CardTitle>Generated response</CardTitle>
-              <InfoTooltip text="This response is generated by an LLM from the extracted query state and retrieved public evidence. It is intended for exploration only and does not provide medical advice." />
+          <CardContent className="pb-7 pt-6">
+            <div className="flex items-center justify-center gap-2">
+              <CardTitle>Ask a Question</CardTitle>
+              <InfoTooltip text="This extracts a structured medication state from your question, resolves drug mentions through RxNorm, and loads the primary drug into the explorer below. It does not generate medical advice." />
             </div>
-            <p className="mt-1 text-sm leading-6 text-slate-500">
-              Educational summary grounded in the retrieved public evidence for
-              the mentioned drugs.
+            <p className="mx-auto mt-1 max-w-1xl text-center text-sm leading-6 text-slate-500">
+              What can we help you explore? Ask in plain language, then inspect
+              the generated response and its evidence.
             </p>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {error ? (
-              <div className="flex items-center gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
-                <AlertTriangle className="size-4" />
-                {error}
-              </div>
-            ) : null}
-
-            {isUnderstandingLoading ? <QueryUnderstandingLoadingState /> : null}
-            {!isUnderstandingLoading && result ? (
-              <QueryUnderstandingResult result={result} />
-            ) : null}
-            {isAnswerLoading && canGenerateAnswer ? (
-              <AnswerSynthesisLoadingState />
-            ) : null}
-            {!isUnderstandingLoading && !isAnswerLoading && answerResponse ? (
-              <EvidenceAnswerResult
-                response={answerResponse}
-                onCitationClick={onAnswerCitationClick}
-                onCoverageTargetClick={onCoverageTargetClick}
+            <form
+              onSubmit={onSubmit}
+              className="mx-auto mt-5 flex max-w-4xl items-stretch gap-2"
+            >
+              <textarea
+                value={question}
+                onChange={(event) => onQuestionChange(event.target.value)}
+                placeholder="Can I take ibuprofen for my migraine if I'm allergic to aspirin?"
+                rows={1}
+                maxLength={frontendLimits.maxUserQueryCharacters}
+                aria-label="Question"
+                className="min-h-11 flex-1 resize-y rounded-md border border-[#C7B4EF] bg-white px-3 py-2 text-slate-950 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-[#371E8F] focus:ring-2 focus:ring-[#E8DDF9]"
+                style={{ fontSize: "15px", lineHeight: "27px" }}
               />
-            ) : null}
+              <Button
+                type="submit"
+                aria-label="Explore"
+                className="h-11 w-11 shrink-0 px-0"
+                disabled={
+                  isUnderstandingLoading || isAnswerLoading || !question.trim()
+                }
+              >
+                {isUnderstandingLoading || isAnswerLoading ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Search className="size-4" />
+                )}
+              </Button>
+            </form>
+            <div className="mx-auto mt-3 flex max-w-4xl flex-wrap items-center justify-between gap-2 text-sm text-slate-500">
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={isDemoMode}
+                  onChange={(event) => onDemoModeChange(event.target.checked)}
+                  className="size-4 rounded border-slate-300 text-[#371E8F] focus:ring-[#371E8F]"
+                />
+                Demo mode
+              </label>
+              <span className="text-xs leading-5">
+                Uses a local fixture for the cetirizine, ibuprofen, and aspirin
+                query. No LLM or live API calls.
+              </span>
+            </div>
           </CardContent>
         </Card>
+      </div>
+
+      {hasResultContent ? (
+        <div ref={generatedResponseRef} className="scroll-mt-6">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <CardTitle>Generated response</CardTitle>
+                <InfoTooltip text="This response is generated by an LLM from the extracted query state and retrieved public evidence. It is intended for exploration only and does not provide medical advice." />
+              </div>
+              <p className="mt-1 text-sm leading-6 text-slate-500">
+                Educational summary grounded in the retrieved public evidence for
+                the mentioned drugs.
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {error ? (
+                <div className="flex items-center gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+                  <AlertTriangle className="size-4" />
+                  {error}
+                </div>
+              ) : null}
+
+              {isUnderstandingLoading ? <QueryUnderstandingLoadingState /> : null}
+              {!isUnderstandingLoading && result ? (
+                <QueryUnderstandingResult result={result} />
+              ) : null}
+              {isAnswerLoading && canGenerateAnswer ? (
+                <AnswerSynthesisLoadingState />
+              ) : null}
+              {!isUnderstandingLoading && !isAnswerLoading && answerResponse ? (
+                <EvidenceAnswerResult
+                  response={answerResponse}
+                  onCitationClick={onAnswerCitationClick}
+                  onCoverageTargetClick={onCoverageTargetClick}
+                />
+              ) : null}
+            </CardContent>
+          </Card>
+        </div>
       ) : null}
     </div>
   );
@@ -2616,6 +2837,7 @@ function OverviewJumpCard({
 
 function LabelEvidencePanel({
   ref,
+  navRef,
   activeSection,
   activeTexts,
   displayEvidence,
@@ -2633,6 +2855,7 @@ function LabelEvidencePanel({
   onSelectSourceFromStrip,
 }: {
   ref: RefObject<HTMLDivElement | null>;
+  navRef?: RefObject<HTMLDivElement | null>;
   activeSection: string | null;
   activeTexts: DisplayLabelSection[];
   displayEvidence: DisplayEvidenceModel;
@@ -2767,7 +2990,14 @@ function LabelEvidencePanel({
   }, [scrollToEvidenceCardForSource, selectedSourceKey]);
 
   return (
-    <div ref={ref}>
+    <div
+      ref={(element) => {
+        ref.current = element;
+        if (navRef) {
+          navRef.current = element;
+        }
+      }}
+    >
       <section
         className={cn(
           variant === "cards" && "rounded-lg border border-slate-200 bg-white shadow-sm"
