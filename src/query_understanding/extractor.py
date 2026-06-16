@@ -365,12 +365,6 @@ class HybridQueryExtractor:
         return deduped
 
     @staticmethod
-    @classmethod
-    def _infer_intent(cls, normalized_query: str) -> str | None:
-        intents = cls._infer_intents(normalized_query)
-        return intents[0] if intents else None
-
-    @staticmethod
     def _infer_intents(normalized_query: str) -> list[str]:
         intents: list[str] = []
         if re.search(
@@ -434,18 +428,6 @@ class HybridQueryExtractor:
             seen.add(key)
             values.append(mention.text)
         return values
-
-    @staticmethod
-    def _merge_lists(first: list[str], second: list[str]) -> list[str]:
-        merged: list[str] = []
-        seen: set[str] = set()
-        for value in [*first, *second]:
-            key = value.casefold()
-            if key in seen:
-                continue
-            seen.add(key)
-            merged.append(value)
-        return merged
 
     @classmethod
     def _sanitize_state(cls, state: QueryState) -> QueryState:
