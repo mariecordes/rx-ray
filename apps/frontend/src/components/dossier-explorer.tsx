@@ -698,7 +698,7 @@ export function DossierExplorer() {
 
 export function AskQuestionExperience() {
   const [question, setQuestion] = useState(
-    "I take ibuprofen for migraine and want to use tretinoin for acne. I am pregnant."
+    "Can I take ibuprofen for my migraine if I'm allergic to aspirin?"
   );
   const [queryUnderstanding, setQueryUnderstanding] =
     useState<QueryUnderstandingResponse | null>(null);
@@ -1662,7 +1662,7 @@ function QueryUnderstandingPanel({
             <textarea
               value={question}
               onChange={(event) => onQuestionChange(event.target.value)}
-              placeholder="Can I use tretinoin if I am pregnant and already take ibuprofen?"
+              placeholder="Can I take ibuprofen for my migraine if I'm allergic to aspirin?"
               rows={1}
               maxLength={frontendLimits.maxUserQueryCharacters}
               aria-label="Question"
@@ -1838,7 +1838,7 @@ function EvidenceAnswerCard({
   const evidenceSummary = (answer.evidence_summary || "").trim();
   const shouldShowEvidenceSummary =
     evidenceSummary.length > 0 && evidenceSummary !== directResponse;
-
+  
   return (
     <div className="space-y-3">
       <div className="rounded-md border border-[#C7B4EF] bg-[#FBF9FE] px-4 py-4 shadow-sm">
@@ -1846,7 +1846,7 @@ function EvidenceAnswerCard({
           <h3
             className="mb-2 font-semibold text-slate-800"
             style={{ fontSize: "15px", lineHeight: "24px" }}
-        >
+          >
             Evidence-based answer
           </h3>
 
