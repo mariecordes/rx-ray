@@ -1021,10 +1021,7 @@ def test_question_evidence_map_links_context_concepts_to_labels() -> None:
     context_edges = [
         edge for edge in evidence_map.edges if edge.kind.startswith("context_lookup")
     ]
-    assert {edge.kind for edge in context_edges} == {
-        "context_lookup_source",
-        "context_lookup_section",
-    }
+    assert {edge.kind for edge in context_edges} == {"context_lookup_source"}
     assert all(edge.context_terms == ["acne"] for edge in context_edges)
     assert any(
         node.kind == "label_source"

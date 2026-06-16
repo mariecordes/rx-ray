@@ -74,7 +74,6 @@ const edgeRelationshipLabels: Record<string, string> = {
   has_label_source: "Label source retrieval",
   interaction_lookup_source: "Interaction-specific lookup",
   context_lookup_source: "Context-specific lookup",
-  context_lookup_section: "Context-specific lookup",
   has_label_section: "Label section retrieval",
   mentions_in_interaction_section: "Interaction-text evidence",
   has_terminology_context: "RxNorm terminology context",
@@ -685,8 +684,7 @@ export function EvidenceMapD3({
                       isSelected
                         ? "3 2"
                         : node.kind === "label_source" &&
-                            (node.tags.includes("interaction_targeted_lookup") ||
-                              node.tags.includes("context_targeted_lookup"))
+                            node.tags.includes("interaction_targeted_lookup")
                           ? "4 3"
                           : undefined
                     }
@@ -958,15 +956,6 @@ function EvidenceMapSidePanel({
               <span className="w-3 border-t border-dashed border-[#371E8F]" />
             </span>
             <span className="truncate">Interaction-specific</span>
-          </div>
-          <div
-            className="flex min-w-0 items-center gap-2 rounded-md px-2 py-1 text-left text-slate-700"
-            style={{ fontSize: "12px", lineHeight: "13px" }}
-          >
-            <span className="flex h-3 w-3 shrink-0 items-center">
-              <span className="w-3 border-t border-dashed border-[#0E7490]" />
-            </span>
-            <span className="truncate">Context-specific</span>
           </div>
         </div>
       </div>
@@ -1685,9 +1674,6 @@ function edgeStroke(kind: string) {
   ) {
     return "#371E8F";
   }
-  if (kind === "context_lookup_source" || kind === "context_lookup_section") {
-    return "#0E7490";
-  }
   if (kind === "has_terminology_context") {
     return "#D97706";
   }
@@ -1695,11 +1681,7 @@ function edgeStroke(kind: string) {
 }
 
 function edgeDashArray(kind: string) {
-  if (
-    kind === "interaction_lookup_source" ||
-    kind === "context_lookup_source" ||
-    kind === "context_lookup_section"
-  ) {
+  if (kind === "interaction_lookup_source") {
     return "5 4";
   }
   if (kind === "has_terminology_context") {
@@ -1767,7 +1749,6 @@ function edgeTooltipContent(link: VisualLink) {
         ),
       };
     case "context_lookup_source":
-    case "context_lookup_section":
       const contextTerms = link.context_terms?.length
         ? link.context_terms.map((term) => term.toUpperCase())
         : [source.toUpperCase()];
@@ -1776,8 +1757,7 @@ function edgeTooltipContent(link: VisualLink) {
         body: (
           <>
             A context-specific lookup for{" "}
-            <strong>{formatList(contextTerms)}</strong> returned{" "}
-            {link.kind === "context_lookup_section" ? "the label section" : "the drug label"}{" "}
+            <strong>{formatList(contextTerms)}</strong> returned the drug label{" "}
             <strong>{target}</strong>.
           </>
         ),

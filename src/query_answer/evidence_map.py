@@ -425,34 +425,6 @@ def _add_label_evidence(
                     tags=section_tags,
                 )
             )
-            for target in context_targets_for_section(
-                source_id,
-                section_name,
-                section_tags,
-                context_evidence,
-            ):
-                state_id = state_node_id(target.target_label)
-                if state_id not in builder.nodes:
-                    continue
-                builder.add_edge(
-                    QuestionEvidenceMapEdge(
-                        id=f"{state_id}->{section_node_id}:context_lookup_section",
-                        source=state_id,
-                        target=section_node_id,
-                        kind="context_lookup_section",
-                        label="Context-specific lookup returned this label section",
-                        rxcui=owner_rxcui,
-                        source_id=source_id,
-                        section=section_name,
-                        evidence_scope=scope,
-                        context_terms=[target.target_label],
-                        tags=merge_tags(
-                            section_tags,
-                            [CONTEXT_TARGETED_TAG, target.target_category],
-                        ),
-                    )
-                )
-
 
 def context_evidence_for_concept(
     context_evidence: list[ContextTargetedEvidence],
@@ -482,27 +454,6 @@ def context_targets_for_record(
         if any(
             stable_record_key(candidate) == record_key
             for candidate in evidence.label_records
-        ):
-            targets.append(item)
-    return targets
-
-
-def context_targets_for_section(
-    source_id: str,
-    section_name: str,
-    section_tags: list[str],
-    context_evidence: list[ContextTargetedEvidence],
-) -> list[ContextTargetedEvidence]:
-    if CONTEXT_TARGETED_TAG not in section_tags:
-        return []
-    targets: list[ContextTargetedEvidence] = []
-    for item in context_evidence:
-        evidence = item.label_evidence
-        if evidence is None:
-            continue
-        if any(
-            entry.source_id == source_id
-            for entry in evidence.sections.get(section_name, [])
         ):
             targets.append(item)
     return targets
