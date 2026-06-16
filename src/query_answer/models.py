@@ -140,6 +140,7 @@ class QueryAnswerResponse(BaseModel):
     understanding: QueryUnderstandingResponse
     answer: EvidenceAnswer | None = None
     secondary_evidence: list[SecondaryDrugEvidence] = Field(default_factory=list)
+    context_evidence: list[ContextTargetedEvidence] = Field(default_factory=list)
     question_evidence_map: QuestionEvidenceMap = Field(
         default_factory=QuestionEvidenceMap
     )

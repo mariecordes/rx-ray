@@ -9,6 +9,7 @@ from typing import Any, Protocol
 from src.dossier.models import DrugDossier, LabelSection, OpenFDALabelRecord, RxNormEdge
 from src.query_answer.config import QueryAnswerParameters, load_query_answer_parameters
 from src.query_answer.models import (
+    ContextTargetedEvidence,
     EvidenceAnswer,
     EvidenceBullet,
     EvidenceCitation,
@@ -78,6 +79,7 @@ class EvidenceAnswerSynthesizer:
         query: str,
         understanding: QueryUnderstandingResponse,
         secondary_evidence: list[SecondaryDrugEvidence] | None = None,
+        context_evidence: list[ContextTargetedEvidence] | None = None,
     ) -> AnswerSynthesisResult:
         if understanding.primary_dossier is None:
             return AnswerSynthesisResult(
@@ -98,6 +100,7 @@ class EvidenceAnswerSynthesizer:
         evidence_packet = self.build_evidence_packet(
             understanding,
             secondary_evidence=secondary_evidence or [],
+            context_evidence=context_evidence or [],
         )
         messages = self._format_messages(
             prompt_config.get("messages", []),
@@ -223,6 +226,7 @@ class EvidenceAnswerSynthesizer:
     def build_evidence_packet(
         understanding: QueryUnderstandingResponse,
         secondary_evidence: list[SecondaryDrugEvidence] | None = None,
+        context_evidence: list[ContextTargetedEvidence] | None = None,
     ) -> dict[str, Any]:
         dossier = understanding.primary_dossier
         if dossier is None:
@@ -230,6 +234,7 @@ class EvidenceAnswerSynthesizer:
 
         label_evidence = dossier.label_evidence
         secondary_evidence = secondary_evidence or []
+        context_evidence = context_evidence or []
         primary_sources = [
             label_record_payload(record, evidence_scope="primary")
             for record in (label_evidence.label_records if label_evidence else [])
@@ -270,6 +275,9 @@ class EvidenceAnswerSynthesizer:
             "rxnorm_relationship_summary": rxnorm_relationship_summary(dossier),
             "secondary_drug_evidence": [
                 secondary_evidence_payload(item) for item in secondary_evidence
+            ],
+            "context_targeted_evidence": [
+                context_evidence_payload(item) for item in context_evidence
             ],
             "label_sources": [*primary_sources, *secondary_sources],
             "label_sections": [*primary_sections, *secondary_sections],
@@ -483,6 +491,19 @@ def secondary_evidence_payload(item: SecondaryDrugEvidence) -> dict[str, Any]:
         "rxnorm_context": (
             item.rxnorm_context.model_dump() if item.rxnorm_context else None
         ),
+    }
+
+
+def context_evidence_payload(item: ContextTargetedEvidence) -> dict[str, Any]:
+    label_evidence = item.label_evidence
+    return {
+        "target_label": item.target_label,
+        "target_category": item.target_category,
+        "drug_name": item.resolved_concept.name,
+        "rxcui": item.resolved_concept.rxcui,
+        "searched_fields": item.searched_fields,
+        "retrieval_modes": item.retrieval_modes,
+        "labels_found": label_evidence.labels_found if label_evidence else 0,
     }
 
 

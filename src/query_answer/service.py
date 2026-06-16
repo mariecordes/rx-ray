@@ -4,6 +4,11 @@ import logging
 
 from src.dossier.builder import DossierBuilder
 from src.query_answer.config import load_query_answer_parameters
+from src.query_answer.context import (
+    build_context_targeted_evidence,
+    merge_context_evidence_into_secondary,
+    merge_context_evidence_into_understanding,
+)
 from src.query_answer.coverage import add_coverage_limitations, build_evidence_coverage
 from src.query_answer.evidence_map import build_question_evidence_map
 from src.query_answer.models import QueryAnswerResponse
@@ -49,18 +54,35 @@ class QueryAnswerService:
             self.builder,
             parameters,
         )
+        context_evidence = build_context_targeted_evidence(
+            understanding,
+            secondary_evidence,
+            self.builder,
+            parameters,
+        )
+        understanding = merge_context_evidence_into_understanding(
+            understanding,
+            context_evidence,
+        )
+        secondary_evidence = merge_context_evidence_into_secondary(
+            secondary_evidence,
+            context_evidence,
+        )
         synthesis = self.synthesizer.synthesize(
             query,
             understanding,
             secondary_evidence=secondary_evidence,
+            context_evidence=context_evidence,
         )
         coverage = build_evidence_coverage(
             understanding,
             secondary_evidence=secondary_evidence,
+            context_evidence=context_evidence,
         )
         question_evidence_map = build_question_evidence_map(
             understanding,
             secondary_evidence=secondary_evidence,
+            context_evidence=context_evidence,
         )
         answer = add_coverage_limitations(
             synthesis.answer,
@@ -81,6 +103,7 @@ class QueryAnswerService:
             understanding=understanding,
             answer=answer,
             secondary_evidence=secondary_evidence,
+            context_evidence=context_evidence,
             question_evidence_map=question_evidence_map,
             coverage=coverage,
             warnings=warnings,

@@ -79,9 +79,12 @@ evidence_answer_synthesis:
         mentions multiple drugs, distinguish primary-drug evidence from secondary-drug
         evidence. If interaction-targeted label text is supplied, describe it only as
         retrieved label text mentioning the other medication; do not claim that a clinical
-        interaction exists unless the supplied label text explicitly says so. Clearly refer
-        to the evidence packet as retrieved evidence or retrieved drug labels but do not
-        refer to it as "evidence packet" in the final answer.
+        interaction exists unless the supplied label text explicitly says so. If
+        context-targeted label text is supplied, describe it only as retrieved label text
+        mentioning the extracted condition, allergy, or patient context; do not claim that
+        the medication is appropriate for the user because that context was mentioned.
+        Clearly refer to the evidence packet as retrieved evidence or retrieved drug labels
+        but do not refer to it as "evidence packet" in the final answer.
 
         Return JSON only with this exact shape:
         {
@@ -107,6 +110,7 @@ evidence_answer_synthesis:
         - Do not invent citations, labels, studies, contraindications, interactions, or patient-specific advice.
         - Do not treat RxNorm terminology relationships as clinical interaction evidence.
         - When secondary-drug evidence is supplied, cite primary and secondary label sections as appropriate.
+        - When context-targeted evidence is supplied, cite it only as label-text coverage for that context.
         - Keep snippets short and quote-like, but do not copy long passages.
         - If no relevant label text exists, return an empty bullets array and explain the limitation.
     - role: user
