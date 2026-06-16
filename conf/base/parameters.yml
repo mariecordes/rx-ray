@@ -3,5 +3,8 @@ query_answer:
   secondary_openfda_limit: 3
   max_secondary_drugs: 3
   interaction_lookup_limit: 3
+  context_lookup_limit: 3
+  max_context_targets: 5
+  context_lookup_enabled: true
   max_synthesis_retries: 1
   require_citations_when_evidence_exists: true

@@ -26,9 +26,14 @@ from src.query_answer.config import QueryAnswerParameters
 from src.query_answer.coverage import evidence_snippet
 from src.query_answer.evidence_map import build_question_evidence_map
 from src.query_answer.models import (
+    ContextTargetedEvidence,
     EvidenceAnswer,
     RxNormPairContext,
     SecondaryDrugEvidence,
+)
+from src.query_answer.context import (
+    build_context_targeted_evidence,
+    select_context_targets,
 )
 from src.query_answer.secondary import build_secondary_evidence
 from src.query_answer.service import QueryAnswerService
@@ -218,6 +223,29 @@ async def test_query_understanding_allergy_state(
         mention.text == "aspirin" and mention.role == "allergy"
         for mention in response.resolved_drugs
     )
+
+
+@pytest.mark.asyncio
+async def test_query_understanding_does_not_extract_allergy_as_condition(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("QUERY_EXTRACTION_OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("QUERY_EXTRACTION_OPENAI_MODEL", raising=False)
+
+    response = await understand_query(
+        QueryUnderstandingRequest(
+            query=(
+                "I currently take cetirizine for my pollen allergy. can i take "
+                "both ibuprofen and aspirin against swollen eyes?"
+            ),
+            openfda_limit=1,
+        ),
+        builder=offline_builder(),
+    )
+
+    assert response.state.allergies == ["pollen"]
+    assert "allergy" not in response.state.conditions
+    assert "allergy" not in response.state.patient_context
 
 
 @pytest.mark.asyncio
@@ -710,6 +738,513 @@ def test_query_answer_response_includes_secondary_evidence() -> None:
     )
 
 
+def test_query_answer_response_includes_secondary_evidence_for_drug_allergy() -> None:
+    ibuprofen_concept = RxNormConcept(rxcui="5640", name="ibuprofen", tty="IN")
+    aspirin_concept = RxNormConcept(rxcui="1191", name="aspirin", tty="IN")
+    understanding = QueryUnderstandingResponse(
+        query="Can I take ibuprofen for migraine if I have an aspirin allergy?",
+        state=QueryState(
+            primary_drug="ibuprofen",
+            all_drugs_mentioned=["ibuprofen", "aspirin"],
+            allergies=["aspirin"],
+            conditions=["migraine"],
+            intents=["allergy_context_check", "safety_context_check"],
+        ),
+        resolved_drugs=[
+            ResolvedDrugMention(
+                text="ibuprofen",
+                role="primary_drug",
+                selected_concept=ibuprofen_concept,
+            ),
+            ResolvedDrugMention(
+                text="aspirin",
+                role="allergy",
+                selected_concept=aspirin_concept,
+            ),
+        ],
+        primary_dossier=DrugDossier(
+            query="ibuprofen",
+            resolved_drug=ibuprofen_concept,
+            label_evidence=OpenFDALabelEvidence(
+                rxcui="5640",
+                labels_found=1,
+                label_records=[
+                    OpenFDALabelRecord(source_id="label-primary"),
+                ],
+                sections={
+                    "warnings": [
+                        LabelSection(
+                            section="warnings",
+                            text="Ibuprofen warning text.",
+                            source_id="label-primary",
+                        )
+                    ]
+                },
+            ),
+        ),
+    )
+    service = QueryAnswerService(
+        builder=fake_aspirin_secondary_builder(),
+        understanding_service=FakeUnderstandingService(understanding),
+        synthesizer=FakeAnswerSynthesizer(),
+    )
+
+    response = service.answer(
+        "Can I take ibuprofen for migraine if I have an aspirin allergy?"
+    )
+
+    assert len(response.secondary_evidence) == 1
+    secondary = response.secondary_evidence[0]
+    assert secondary.role == "allergy"
+    assert secondary.resolved_concept.name == "aspirin"
+    assert secondary.label_evidence is not None
+    assert secondary.label_evidence.labels_found == 1
+    assert any(
+        item.category == "mentioned_drug"
+        and item.label == "aspirin"
+        and item.status == "addressed"
+        for item in response.coverage.items
+    )
+    assert any(
+        node.kind == "resolved_medication" and node.rxcui == "1191"
+        for node in response.question_evidence_map.nodes
+    )
+
+
+def test_context_targets_dedupe_and_skip_medication_terms() -> None:
+    state = QueryState(
+        primary_drug="tretinoin",
+        all_drugs_mentioned=["tretinoin"],
+        conditions=["acne", "acne", "tretinoin"],
+        allergies=["benzoyl peroxide"],
+        patient_context=["pregnant", "x"],
+    )
+
+    targets = select_context_targets(
+        state,
+        [RxNormConcept(rxcui="9033", name="tretinoin", tty="IN")],
+        max_items=5,
+    )
+
+    assert [(target.category, target.label) for target in targets] == [
+        ("patient_context", "pregnant"),
+        ("allergy", "benzoyl peroxide"),
+        ("condition", "acne"),
+    ]
+    assert targets[1].search_label == "benzoyl peroxide allergy"
+    assert targets[2].search_label == "acne"
+
+
+def test_context_targeted_evidence_triggers_condition_lookup() -> None:
+    class TrackingOpenFDAStore(OpenFDALabelStore):
+        def __init__(self) -> None:
+            super().__init__(allow_live=False, use_cache=False)
+            self.context_calls: list[
+                tuple[str, str, tuple[str, ...], str | None, int]
+            ] = []
+
+        def get_context_label_evidence(
+            self,
+            rxcui: str,
+            *,
+            target: str,
+            section_fields: list[str],
+            fallback_name: str | None = None,
+            limit: int = 3,
+        ) -> OpenFDALabelEvidence:
+            self.context_calls.append(
+                (rxcui, target, tuple(section_fields), fallback_name, limit)
+            )
+            return OpenFDALabelEvidence(
+                rxcui=rxcui,
+                labels_found=1,
+                label_limit=limit,
+                retrieval_mode="context_targeted_lookup",
+                label_records=[
+                    OpenFDALabelRecord(
+                        source_id="label-acne",
+                        brand_names=["Tretinoin"],
+                    )
+                ],
+                sections={
+                    "indications_and_usage": [
+                        LabelSection(
+                            section="indications_and_usage",
+                            text="Tretinoin is indicated for acne.",
+                            source_id="label-acne",
+                        )
+                    ]
+                },
+            )
+
+    store = TrackingOpenFDAStore()
+    builder = DossierBuilder(
+        rxnorm_store=RxNormParquetStore(),
+        openfda_store=store,
+    )
+    understanding = QueryUnderstandingResponse(
+        query="Can I use tretinoin for acne?",
+        state=QueryState(
+            primary_drug="tretinoin",
+            all_drugs_mentioned=["tretinoin"],
+            conditions=["acne"],
+        ),
+        primary_dossier=DrugDossier(
+            query="tretinoin",
+            resolved_drug=RxNormConcept(rxcui="9033", name="tretinoin", tty="IN"),
+            label_evidence=OpenFDALabelEvidence(rxcui="9033"),
+        ),
+    )
+
+    evidence = build_context_targeted_evidence(
+        understanding,
+        [],
+        builder,
+        QueryAnswerParameters(context_lookup_limit=2, max_context_targets=5),
+    )
+
+    assert store.context_calls == [
+        (
+            "9033",
+            "acne",
+            (
+                "indications_and_usage",
+                "warnings",
+                "contraindications",
+                "adverse_reactions",
+            ),
+            "tretinoin",
+            2,
+        )
+    ]
+    assert len(evidence) == 1
+    assert evidence[0].target_label == "acne"
+    assert evidence[0].label_evidence is not None
+    assert evidence[0].label_evidence.label_records[0].provenance_tags == [
+        "context_targeted_lookup"
+    ]
+
+
+def test_context_targeted_evidence_uses_allergy_phrase_for_search() -> None:
+    class TrackingOpenFDAStore(OpenFDALabelStore):
+        def __init__(self) -> None:
+            super().__init__(allow_live=False, use_cache=False)
+            self.context_calls: list[str] = []
+
+        def get_context_label_evidence(
+            self,
+            rxcui: str,
+            *,
+            target: str,
+            section_fields: list[str],
+            fallback_name: str | None = None,
+            limit: int = 3,
+        ) -> OpenFDALabelEvidence:
+            self.context_calls.append(target)
+            return OpenFDALabelEvidence(rxcui=rxcui, label_limit=limit)
+
+    store = TrackingOpenFDAStore()
+    builder = DossierBuilder(
+        rxnorm_store=RxNormParquetStore(),
+        openfda_store=store,
+    )
+    understanding = QueryUnderstandingResponse(
+        query="Can I take ibuprofen with an aspirin allergy?",
+        state=QueryState(
+            primary_drug="ibuprofen",
+            all_drugs_mentioned=["ibuprofen"],
+            allergies=["aspirin"],
+        ),
+        primary_dossier=DrugDossier(
+            query="ibuprofen",
+            resolved_drug=RxNormConcept(rxcui="5640", name="ibuprofen", tty="IN"),
+            label_evidence=OpenFDALabelEvidence(rxcui="5640"),
+        ),
+    )
+
+    build_context_targeted_evidence(
+        understanding,
+        [],
+        builder,
+        QueryAnswerParameters(context_lookup_limit=2, max_context_targets=5),
+    )
+
+    assert store.context_calls == ["aspirin allergy"]
+
+
+def test_query_answer_response_merges_context_evidence_into_primary_labels() -> None:
+    class ContextOpenFDAStore(OpenFDALabelStore):
+        def __init__(self) -> None:
+            super().__init__(allow_live=False, use_cache=False)
+
+        def get_context_label_evidence(
+            self,
+            rxcui: str,
+            *,
+            target: str,
+            section_fields: list[str],
+            fallback_name: str | None = None,
+            limit: int = 3,
+        ) -> OpenFDALabelEvidence:
+            return OpenFDALabelEvidence(
+                rxcui=rxcui,
+                labels_found=1,
+                label_limit=limit,
+                retrieval_mode="context_targeted_lookup",
+                label_records=[
+                    OpenFDALabelRecord(
+                        source_id="label-acne",
+                        brand_names=["Tretinoin"],
+                        provenance_tags=["context_targeted_lookup"],
+                    )
+                ],
+                sections={
+                    "indications_and_usage": [
+                        LabelSection(
+                            section="indications_and_usage",
+                            text="Tretinoin label text mentions acne.",
+                            source_id="label-acne",
+                            provenance_tags=["context_targeted_lookup"],
+                        )
+                    ]
+                },
+            )
+
+    understanding = response_with_label_evidence().model_copy(
+        update={
+            "query": "Can I use aspirin for acne?",
+            "state": QueryState(
+                primary_drug="aspirin",
+                all_drugs_mentioned=["aspirin"],
+                conditions=["acne"],
+            ),
+        }
+    )
+    service = QueryAnswerService(
+        builder=DossierBuilder(
+            rxnorm_store=RxNormParquetStore(),
+            openfda_store=ContextOpenFDAStore(),
+        ),
+        understanding_service=FakeUnderstandingService(understanding),
+        synthesizer=FakeAnswerSynthesizer(),
+    )
+
+    response = service.answer("Can I use aspirin for acne?")
+
+    assert len(response.context_evidence) == 1
+    label_evidence = response.understanding.primary_dossier.label_evidence
+    assert label_evidence is not None
+    assert any(
+        record.source_id == "label-acne"
+        and "context_targeted_lookup" in record.provenance_tags
+        for record in label_evidence.label_records
+    )
+    assert any(
+        item.category == "condition"
+        and item.label == "acne"
+        and item.status == "addressed"
+        for item in response.coverage.items
+    )
+
+
+def test_context_coverage_requires_actual_text_match() -> None:
+    class ContextOpenFDAStore(OpenFDALabelStore):
+        def __init__(self) -> None:
+            super().__init__(allow_live=False, use_cache=False)
+
+        def get_context_label_evidence(
+            self,
+            rxcui: str,
+            *,
+            target: str,
+            section_fields: list[str],
+            fallback_name: str | None = None,
+            limit: int = 3,
+        ) -> OpenFDALabelEvidence:
+            return OpenFDALabelEvidence(
+                rxcui=rxcui,
+                labels_found=1,
+                label_limit=limit,
+                retrieval_mode="context_targeted_lookup",
+                label_records=[
+                    OpenFDALabelRecord(
+                        source_id="label-1",
+                        brand_names=["Ibuprofen"],
+                        provenance_tags=["context_targeted_lookup"],
+                    )
+                ],
+                sections={
+                    "warnings": [
+                        LabelSection(
+                            section="warnings",
+                            text="This warning text mentions a rash only.",
+                            source_id="label-1",
+                            provenance_tags=["context_targeted_lookup"],
+                        )
+                    ]
+                },
+            )
+
+    understanding = QueryUnderstandingResponse(
+        query="Can I take ibuprofen with an aspirin allergy?",
+        state=QueryState(
+            primary_drug="ibuprofen",
+            all_drugs_mentioned=["ibuprofen"],
+            allergies=["aspirin"],
+        ),
+        primary_dossier=DrugDossier(
+            query="ibuprofen",
+            resolved_drug=RxNormConcept(rxcui="5640", name="ibuprofen", tty="IN"),
+            label_evidence=OpenFDALabelEvidence(rxcui="5640"),
+        ),
+    )
+    service = QueryAnswerService(
+        builder=DossierBuilder(
+            rxnorm_store=RxNormParquetStore(),
+            openfda_store=ContextOpenFDAStore(),
+        ),
+        understanding_service=FakeUnderstandingService(understanding),
+        synthesizer=FakeAnswerSynthesizer(),
+    )
+
+    response = service.answer("Can I take ibuprofen with an aspirin allergy?")
+
+    assert any(
+        item.category == "allergy"
+        and item.label == "aspirin"
+        and item.status == "not_found_in_evidence"
+        for item in response.coverage.items
+    )
+
+
+def test_context_merge_preserves_tags_on_duplicate_primary_label() -> None:
+    class ContextOpenFDAStore(OpenFDALabelStore):
+        def __init__(self) -> None:
+            super().__init__(allow_live=False, use_cache=False)
+
+        def get_context_label_evidence(
+            self,
+            rxcui: str,
+            *,
+            target: str,
+            section_fields: list[str],
+            fallback_name: str | None = None,
+            limit: int = 3,
+        ) -> OpenFDALabelEvidence:
+            return OpenFDALabelEvidence(
+                rxcui=rxcui,
+                labels_found=1,
+                label_limit=limit,
+                retrieval_mode="context_targeted_lookup",
+                label_records=[
+                    OpenFDALabelRecord(
+                        source_id="label-1",
+                        brand_names=["Aspirin"],
+                        provenance_tags=["context_targeted_lookup"],
+                    )
+                ],
+                sections={
+                    "warnings": [
+                        LabelSection(
+                            section="warnings",
+                            text="Aspirin warning text.",
+                            source_id="label-1",
+                            provenance_tags=["context_targeted_lookup"],
+                        )
+                    ]
+                },
+            )
+
+    understanding = response_with_label_evidence().model_copy(
+        update={
+            "state": QueryState(
+                primary_drug="aspirin",
+                all_drugs_mentioned=["aspirin"],
+                conditions=["acne"],
+            )
+        }
+    )
+    service = QueryAnswerService(
+        builder=DossierBuilder(
+            rxnorm_store=RxNormParquetStore(),
+            openfda_store=ContextOpenFDAStore(),
+        ),
+        understanding_service=FakeUnderstandingService(understanding),
+        synthesizer=FakeAnswerSynthesizer(),
+    )
+
+    response = service.answer("Can I use aspirin for acne?")
+    label_evidence = response.understanding.primary_dossier.label_evidence
+    assert label_evidence is not None
+    assert label_evidence.label_records[0].source_id == "label-1"
+    assert "context_targeted_lookup" in label_evidence.label_records[0].provenance_tags
+    assert (
+        "context_targeted_lookup"
+        in label_evidence.sections["warnings"][0].provenance_tags
+    )
+
+
+def test_question_evidence_map_links_context_concepts_to_labels() -> None:
+    understanding = response_with_label_evidence().model_copy(
+        update={
+            "state": QueryState(
+                primary_drug="aspirin",
+                all_drugs_mentioned=["aspirin"],
+                conditions=["acne"],
+            )
+        }
+    )
+    context_evidence = ContextTargetedEvidence(
+        target_label="acne",
+        target_category="condition",
+        resolved_concept=RxNormConcept(rxcui="1191", name="aspirin", tty="IN"),
+        searched_fields=["indications_and_usage"],
+        retrieval_modes=["context_targeted_lookup"],
+        label_evidence=OpenFDALabelEvidence(
+            rxcui="1191",
+            labels_found=1,
+            retrieval_mode="context_targeted_lookup",
+            label_records=[
+                OpenFDALabelRecord(
+                    source_id="label-acne",
+                    brand_names=["Aspirin"],
+                    provenance_tags=["context_targeted_lookup"],
+                )
+            ],
+            sections={
+                "indications_and_usage": [
+                    LabelSection(
+                        section="indications_and_usage",
+                        text="Label text mentions acne.",
+                        source_id="label-acne",
+                        provenance_tags=["context_targeted_lookup"],
+                    )
+                ]
+            },
+        ),
+    )
+    merged_dossier = understanding.primary_dossier.model_copy(
+        update={"label_evidence": context_evidence.label_evidence}
+    )
+    understanding = understanding.model_copy(update={"primary_dossier": merged_dossier})
+
+    evidence_map = build_question_evidence_map(
+        understanding,
+        context_evidence=[context_evidence],
+    )
+
+    context_edges = [
+        edge for edge in evidence_map.edges if edge.kind.startswith("context_lookup")
+    ]
+    assert {edge.kind for edge in context_edges} == {"context_lookup_source"}
+    assert all(edge.context_terms == ["acne"] for edge in context_edges)
+    assert any(
+        node.kind == "label_source"
+        and "context_targeted_lookup" in node.tags
+        for node in evidence_map.nodes
+    )
+
+
 def test_question_evidence_map_marks_interaction_targeted_label_sources() -> None:
     fixture = secondary_evidence_fixture()
     assert fixture.label_evidence is not None
@@ -775,7 +1310,8 @@ def test_question_evidence_map_marks_interaction_targeted_label_sources() -> Non
     assert "clinical interaction" not in edge_text.lower()
 
 
-def test_question_evidence_map_shares_interaction_label_source_across_medications() -> None:
+def test_question_evidence_map_shares_interaction_label_source_across_medications(
+) -> None:
     interaction_evidence = OpenFDALabelEvidence(
         rxcui="5640",
         labels_found=1,
@@ -1222,6 +1758,7 @@ class FakeAnswerSynthesizer:
         query: str,
         understanding: QueryUnderstandingResponse,
         secondary_evidence: list[SecondaryDrugEvidence] | None = None,
+        context_evidence: list[ContextTargetedEvidence] | None = None,
     ) -> AnswerSynthesisResult:
         return AnswerSynthesisResult(
             answer=EvidenceAnswer(
@@ -1262,6 +1799,61 @@ def fake_secondary_builder() -> DossierBuilder:
     return DossierBuilder(
         rxnorm_store=RxNormParquetStore(),
         openfda_store=FakeSecondaryOpenFDAStore(),
+    )
+
+
+def fake_aspirin_secondary_builder() -> DossierBuilder:
+    class FakeAspirinOpenFDAStore(OpenFDALabelStore):
+        def __init__(self) -> None:
+            super().__init__(allow_live=False, use_cache=False)
+
+        def get_label_evidence(
+            self,
+            rxcui: str,
+            fallback_name: str | None = None,
+            limit: int = 5,
+        ) -> OpenFDALabelEvidence:
+            if rxcui == "1191":
+                return OpenFDALabelEvidence(
+                    rxcui=rxcui,
+                    labels_found=1,
+                    label_limit=limit,
+                    retrieval_mode="standard_secondary_label_lookup",
+                    label_records=[
+                        OpenFDALabelRecord(
+                            source_id="label-aspirin",
+                            brand_names=["Aspirin"],
+                            generic_names=["ASPIRIN"],
+                            provenance_tags=["standard_secondary_label_lookup"],
+                        )
+                    ],
+                    sections={
+                        "warnings": [
+                            LabelSection(
+                                section="warnings",
+                                text="Aspirin warning text.",
+                                source_id="label-aspirin",
+                                provenance_tags=[
+                                    "standard_secondary_label_lookup"
+                                ],
+                            )
+                        ]
+                    },
+                )
+            return OpenFDALabelEvidence(rxcui=rxcui, label_limit=limit)
+
+        def get_interaction_label_evidence(
+            self,
+            rxcui: str,
+            interaction_name: str,
+            fallback_name: str | None = None,
+            limit: int = 3,
+        ) -> OpenFDALabelEvidence:
+            return OpenFDALabelEvidence(rxcui=rxcui, label_limit=limit)
+
+    return DossierBuilder(
+        rxnorm_store=RxNormParquetStore(),
+        openfda_store=FakeAspirinOpenFDAStore(),
     )
 
 
@@ -1407,6 +1999,22 @@ def test_query_extraction_extracts_multiple_patient_context_items() -> None:
     )
 
     assert result.state.patient_context == ["breastfeeding", "female", "adult"]
+
+
+def test_query_extraction_sanitizes_wrong_bucket_allergy_terms() -> None:
+    state = HybridQueryExtractor()._parse_llm_state(
+        {
+            "primary_drug": "ibuprofen",
+            "allergies": ["pollen"],
+            "conditions": ["allergy", "migraine"],
+            "patient_context": ["adult", "allergies"],
+            "intents": ["allergy_context_check"],
+        }
+    )
+
+    assert state.allergies == ["pollen"]
+    assert state.conditions == ["migraine"]
+    assert state.patient_context == ["adult"]
 
 
 def test_query_understanding_scanner_does_not_fuzzy_match_stop_words(

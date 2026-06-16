@@ -64,6 +64,10 @@ const sectionLabels: Record<string, string> = {
   adverse_reactions: "Adverse Reactions",
   indications_and_usage: "Indications & Usage",
   use_in_specific_populations: "Specific Populations",
+  pediatric_use: "Pediatric Use",
+  geriatric_use: "Geriatric Use",
+  active_ingredient: "Active Ingredient",
+  inactive_ingredient: "Inactive Ingredient",
 };
 
 function displaySectionName(section: string) {
@@ -92,6 +96,8 @@ const nodeSpecificBadgeClasses =
 const searchSpecificBadgeClasses =
   "border-slate-300 bg-slate-100 text-slate-700";
 const interactionSpecificBadgeClasses =
+  "border-slate-300 bg-slate-100 text-slate-700";
+const contextSpecificBadgeClasses =
   "border-slate-300 bg-slate-100 text-slate-700";
 const sourceNumberBadgeClasses =
   "border-slate-200 bg-white text-slate-800";
@@ -369,6 +375,7 @@ type DisplayLabelSection = LabelSection & {
   displaySourceKey?: string;
   isSelectedNodeEvidence: boolean;
   isInteractionTargeted: boolean;
+  isContextTargeted: boolean;
 };
 
 type DisplaySourceRecord = {
@@ -378,6 +385,7 @@ type DisplaySourceRecord = {
   isSelectedNodeMatch: boolean;
   isSelectedNodeOnly: boolean;
   isInteractionTargeted: boolean;
+  isContextTargeted: boolean;
 };
 
 type DisplayEvidenceModel = {
@@ -401,6 +409,7 @@ type GroupedLabelSection = {
   chunkCount: number;
   isSelectedNodeEvidence: boolean;
   isInteractionTargeted: boolean;
+  isContextTargeted: boolean;
 };
 
 function hasInteractionTargetedTag(
@@ -409,6 +418,27 @@ function hasInteractionTargetedTag(
   return Boolean(
     item.provenance_tags?.includes("interaction_targeted_lookup")
   );
+}
+
+function hasContextTargetedTag(
+  item: { provenance_tags?: string[] | null }
+) {
+  return Boolean(item.provenance_tags?.includes("context_targeted_lookup"));
+}
+
+function sectionTagSources(
+  sections: Record<string, LabelSection[]> | undefined,
+  hasTag: (item: { provenance_tags?: string[] | null }) => boolean
+) {
+  const sourceIds = new Set<string>();
+  for (const entries of Object.values(sections ?? {})) {
+    for (const entry of entries) {
+      if (entry.source_id && hasTag(entry)) {
+        sourceIds.add(entry.source_id);
+      }
+    }
+  }
+  return sourceIds;
 }
 
 function sortEvidenceSources(records: DisplaySourceRecord[]) {
@@ -471,13 +501,34 @@ function buildDisplayEvidenceModel(
 ): DisplayEvidenceModel {
   const baselineRecords = baselineEvidence?.label_records ?? [];
   const selectedRecords = selectedEvidence?.label_records ?? [];
+  const baselineInteractionSourceIds = sectionTagSources(
+    baselineEvidence?.sections,
+    hasInteractionTargetedTag
+  );
+  const baselineContextSourceIds = sectionTagSources(
+    baselineEvidence?.sections,
+    hasContextTargetedTag
+  );
+  const selectedInteractionSourceIds = sectionTagSources(
+    selectedEvidence?.sections,
+    hasInteractionTargetedTag
+  );
+  const selectedContextSourceIds = sectionTagSources(
+    selectedEvidence?.sections,
+    hasContextTargetedTag
+  );
   const baselineItems = baselineRecords.map((record, index) => ({
     key: recordKey(record, index, "baseline"),
     record,
     sourceNumber: index + 1,
     isSelectedNodeMatch: false,
     isSelectedNodeOnly: false,
-    isInteractionTargeted: hasInteractionTargetedTag(record),
+    isInteractionTargeted:
+      hasInteractionTargetedTag(record) ||
+      Boolean(record.source_id && baselineInteractionSourceIds.has(record.source_id)),
+    isContextTargeted:
+      hasContextTargetedTag(record) ||
+      Boolean(record.source_id && baselineContextSourceIds.has(record.source_id)),
   }));
   const baselineSectionKeyBySourceId = new Map<string, string>();
   for (const item of baselineItems) {
@@ -508,7 +559,18 @@ function buildDisplayEvidenceModel(
       sourceNumber: 0,
       isSelectedNodeMatch: false,
       isSelectedNodeOnly: true,
-      isInteractionTargeted: hasInteractionTargetedTag(selectedRecord),
+      isInteractionTargeted:
+        hasInteractionTargetedTag(selectedRecord) ||
+        Boolean(
+          selectedRecord.source_id &&
+            selectedInteractionSourceIds.has(selectedRecord.source_id)
+        ),
+      isContextTargeted:
+        hasContextTargetedTag(selectedRecord) ||
+        Boolean(
+          selectedRecord.source_id &&
+            selectedContextSourceIds.has(selectedRecord.source_id)
+        ),
     };
     selectedOnlyItems.push(selectedOnlyItem);
     if (selectedRecord.source_id) {
@@ -543,6 +605,7 @@ function buildDisplayEvidenceModel(
         : undefined,
       isSelectedNodeEvidence: false,
       isInteractionTargeted: hasInteractionTargetedTag(entry),
+      isContextTargeted: hasContextTargetedTag(entry),
     }));
   }
 
@@ -557,6 +620,7 @@ function buildDisplayEvidenceModel(
           : undefined,
         isSelectedNodeEvidence: true,
         isInteractionTargeted: hasInteractionTargetedTag(entry),
+        isContextTargeted: hasContextTargetedTag(entry),
       }))
       .filter(
         (entry) =>
@@ -599,6 +663,8 @@ function groupLabelSectionsBySource(
         existing.isSelectedNodeEvidence || entry.isSelectedNodeEvidence;
       existing.isInteractionTargeted =
         existing.isInteractionTargeted || entry.isInteractionTargeted;
+      existing.isContextTargeted =
+        existing.isContextTargeted || entry.isContextTargeted;
       return;
     }
 
@@ -612,6 +678,7 @@ function groupLabelSectionsBySource(
       chunkCount: 1,
       isSelectedNodeEvidence: entry.isSelectedNodeEvidence,
       isInteractionTargeted: entry.isInteractionTargeted,
+      isContextTargeted: entry.isContextTargeted,
     });
   });
 
@@ -2540,6 +2607,7 @@ function LabelEvidencePanel({
 }) {
   const records = displayEvidence.records;
   const evidenceCardsRef = useRef<HTMLDivElement>(null);
+  const evidenceCardRefs = useRef<Map<string, HTMLElement>>(new Map());
   const [expandedSourceKeys, setExpandedSourceKeys] = useState<Set<string>>(
     new Set()
   );
@@ -2562,12 +2630,44 @@ function LabelEvidencePanel({
   function handleSourceStripClick(sourceKey: string) {
     onSelectSourceFromStrip(sourceKey);
     window.requestAnimationFrame(() => {
-      evidenceCardsRef.current?.scrollIntoView({
-        behavior: "smooth",
-        block: "nearest",
-      });
+      scrollToEvidenceCardForSource(sourceKey);
     });
   }
+
+  function evidenceCardRefKey(sourceKey: string | null, entryKey: string) {
+    return `${sourceKey ?? "unknown"}::${entryKey}`;
+  }
+
+  function setEvidenceCardRef(
+    sourceKey: string | null,
+    entryKey: string,
+    element: HTMLElement | null
+  ) {
+    const refKey = evidenceCardRefKey(sourceKey, entryKey);
+    if (element) {
+      evidenceCardRefs.current.set(refKey, element);
+    } else {
+      evidenceCardRefs.current.delete(refKey);
+    }
+  }
+
+  const scrollToEvidenceCardForSource = useCallback((sourceKey: string) => {
+    const match = groupedActiveTexts.find((entry) => entry.sourceKey === sourceKey);
+    const element = match
+      ? evidenceCardRefs.current.get(evidenceCardRefKey(sourceKey, match.key))
+      : null;
+    if (element) {
+      element.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+      return;
+    }
+    evidenceCardsRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "nearest",
+    });
+  }, [groupedActiveTexts]);
 
   function toggleEvidenceExpansion(key: string) {
     setExpandedEvidenceKeys((current) => {
@@ -2612,6 +2712,15 @@ function LabelEvidencePanel({
   useEffect(() => {
     setExpandedSourceKeys(new Set());
   }, [labelEvidence, nodeLabelEvidence]);
+
+  useEffect(() => {
+    if (!selectedSourceKey) {
+      return;
+    }
+    window.requestAnimationFrame(() => {
+      scrollToEvidenceCardForSource(selectedSourceKey);
+    });
+  }, [scrollToEvidenceCardForSource, selectedSourceKey]);
 
   return (
     <div ref={ref}>
@@ -2742,6 +2851,11 @@ function LabelEvidencePanel({
                               Interaction-specific
                             </Badge>
                           ) : null}
+                          {source.isContextTargeted ? (
+                            <Badge className={contextSpecificBadgeClasses}>
+                              Context-specific
+                            </Badge>
+                          ) : null}
                         </div>
                         <div className="mt-1.5 truncate font-medium text-slate-900">
                           {brandName
@@ -2847,10 +2961,13 @@ function LabelEvidencePanel({
                           ? nodeSpecificClasses
                           : "border-slate-200 bg-slate-50 hover:border-slate-300 hover:bg-white";
                       const isExpanded = expandedEvidenceKeys.has(entry.key);
-                      const canExpand = entry.text.length > 900;
+                      const canExpand = entry.text.length > 420;
                       return (
                         <article
                           key={entry.key}
+                          ref={(element) =>
+                            setEvidenceCardRef(sourceKey ?? null, entry.key, element)
+                          }
                           role="button"
                           tabIndex={0}
                           onClick={() => onSelectSource(sourceKey)}
@@ -2893,7 +3010,7 @@ function LabelEvidencePanel({
                             className={cn(
                               "whitespace-pre-wrap text-sm leading-6 text-slate-800",
                               canExpand && !isExpanded
-                                ? "max-h-56 overflow-hidden"
+                                ? "max-h-24 overflow-hidden"
                                 : ""
                             )}
                           >

@@ -100,6 +100,7 @@ class QuestionEvidenceMapEdge(BaseModel):
     section: str | None = None
     evidence_scope: str | None = None
     interaction_terms: list[str] = Field(default_factory=list)
+    context_terms: list[str] = Field(default_factory=list)
     tags: list[str] = Field(default_factory=list)
 
 
@@ -123,12 +124,24 @@ class SecondaryDrugEvidence(BaseModel):
     rxnorm_context: RxNormPairContext | None = None
 
 
+class ContextTargetedEvidence(BaseModel):
+    """Label evidence retrieved because a non-drug query context was mentioned."""
+
+    target_label: str
+    target_category: str
+    resolved_concept: RxNormConcept
+    searched_fields: list[str] = Field(default_factory=list)
+    label_evidence: OpenFDALabelEvidence | None = None
+    retrieval_modes: list[str] = Field(default_factory=list)
+
+
 class QueryAnswerResponse(BaseModel):
     """Natural-language query understanding plus optional answer synthesis."""
 
     understanding: QueryUnderstandingResponse
     answer: EvidenceAnswer | None = None
     secondary_evidence: list[SecondaryDrugEvidence] = Field(default_factory=list)
+    context_evidence: list[ContextTargetedEvidence] = Field(default_factory=list)
     question_evidence_map: QuestionEvidenceMap = Field(
         default_factory=QuestionEvidenceMap
     )

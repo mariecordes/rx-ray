@@ -223,3 +223,41 @@ def test_openfda_interaction_lookup_falls_back_after_strict_query_error(
             3,
         ),
     ]
+
+
+def test_openfda_context_lookup_searches_target_fields() -> None:
+    class ContextOpenFDAStore(OpenFDALabelStore):
+        def __init__(self) -> None:
+            super().__init__(use_cache=False, allow_live=True)
+            self.queries: list[tuple[str, int]] = []
+
+        def _query(self, search: str, limit: int) -> list[dict[str, object]]:
+            self.queries.append((search, limit))
+            if search.startswith("openfda.rxcui:9033"):
+                return []
+            return [
+                {
+                    **label_fixture("context-label"),
+                    "indications_and_usage": ["Tretinoin label mentions acne."],
+                }
+            ]
+
+    store = ContextOpenFDAStore()
+
+    evidence = store.get_context_label_evidence(
+        "9033",
+        target="acne",
+        section_fields=["indications_and_usage", "warnings"],
+        fallback_name="tretinoin",
+        limit=3,
+    )
+
+    assert evidence.retrieval_mode == "context_targeted_lookup"
+    assert evidence.labels_found == 1
+    assert "indications_and_usage" in evidence.sections
+    assert store.queries == [
+        ("openfda.rxcui:9033 AND indications_and_usage:acne", 3),
+        ("openfda.generic_name:tretinoin AND indications_and_usage:acne", 3),
+        ("openfda.rxcui:9033 AND warnings:acne", 3),
+        ("openfda.generic_name:tretinoin AND warnings:acne", 3),
+    ]
