@@ -69,6 +69,25 @@ export type OpenFDALabelEvidence = {
   errors: string[];
 };
 
+export type LabelSourceProfile = {
+  source_id?: string | null;
+  brand_name?: string | null;
+  generic_name?: string | null;
+  manufacturer_name?: string | null;
+  route?: string | null;
+  product_type?: string | null;
+  substances: string[];
+  rxcuis: string[];
+  product_ndcs: string[];
+  spl_ids: string[];
+  spl_set_ids: string[];
+  label_id?: string | null;
+  set_id?: string | null;
+  effective_time?: string | null;
+  version?: string | null;
+  provenance_tags: string[];
+};
+
 export type DrugDossier = {
   query: string;
   generated_at: string;
