@@ -34,23 +34,32 @@ const MIN_ZOOM = 0.28;
 const MAX_ZOOM = 2;
 const FOCUS_ZOOM = 1.25;
 const FIT_PADDING = 0;
-const QUERY_CENTER_STRENGTH = 0.025;
-const CONCEPT_SPREAD_DISTANCE = 160;
-const CONCEPT_SPREAD_STRENGTH = 0.55;
-const CONCEPT_SPREAD_MAX_PUSH = 8;
-const CONCEPT_LABEL_REPULSION_DISTANCE = 140;
+const QUERY_CENTER_STRENGTH = 0.014;
+const CONCEPT_SPREAD_DISTANCE = 240;
+const CONCEPT_SPREAD_STRENGTH = 0.78;
+const CONCEPT_SPREAD_MAX_PUSH = 12;
+const CONCEPT_LABEL_REPULSION_DISTANCE = 240;
 const CONCEPT_LABEL_REPULSION_STRENGTH = 0.5;
 const QUERY_LABEL_REPULSION_DISTANCE = 600;
-const QUERY_LABEL_REPULSION_STRENGTH = 0.2;
-const SHARED_LABEL_CLUSTER_STRENGTH = 0.48;
-const SHARED_LABEL_CLUSTER_MAX_PULL = 18;
+const QUERY_LABEL_REPULSION_STRENGTH = 0.5;
+const QUERY_EVIDENCE_REPULSION_DISTANCE = 280;
+const QUERY_EVIDENCE_REPULSION_STRENGTH = 0.42;
+const LABEL_PARENT_CLUSTER_PULL_STRENGTH = 0.74;
+const LABEL_PARENT_CLUSTER_MAX_PULL = 14;
+const LABEL_PARENT_CLUSTER_REPEL_DISTANCE = 350;
+const LABEL_PARENT_CLUSTER_REPEL_STRENGTH = 0.56;
+const LABEL_PARENT_CLUSTER_MAX_PUSH = 16;
 const MEDICATION_SPREAD_DISTANCE = 820;
 const MEDICATION_SPREAD_STRENGTH = 0.72;
 const MEDICATION_SPREAD_MAX_PUSH = 14;
-const CONCEPT_RING_RADIUS = 118;
+const CONCEPT_RING_RADIUS = 215;
 const MEDICATION_RING_RADIUS = 310;
-const HIERARCHY_RING_STRENGTH = 0.22;
-const INITIAL_LAYOUT_TICKS = 160;
+const HIERARCHY_RING_STRENGTH = 0.58;
+const LABEL_SOURCE_OUTER_RADIUS = 345;
+const LABEL_SECTION_OUTER_RADIUS = 330;
+const LABEL_OUTWARD_STRENGTH = 0.1;
+const LABEL_SECTION_OUTWARD_STRENGTH = 0.1;
+const INITIAL_LAYOUT_TICKS = 360;
 
 const sectionLabels: Record<string, string> = {
   boxed_warning: "Boxed Warning",
@@ -182,6 +191,9 @@ type VisualNode = QuestionEvidenceMapNode &
   medicationIndex: number;
   medicationCount: number;
   medicationParentCount: number;
+  labelParentKey: string | null;
+  incomingLinkCount: number;
+  outgoingLinkCount: number;
 };
 
 type SimulationLink = {
@@ -1031,6 +1043,9 @@ function buildD3EvidenceGraph(map: QuestionEvidenceMap) {
       medicationIndex,
       medicationCount: medicationIds.length,
       medicationParentCount: 0,
+      labelParentKey: null,
+      incomingLinkCount: 0,
+      outgoingLinkCount: 0,
     };
   });
   const nodeById = new Map(nodes.map((node) => [node.id, node]));
@@ -1090,8 +1105,20 @@ function buildHierarchyAngles(map: QuestionEvidenceMap) {
 function applyEvidenceGraphMetrics(nodes: VisualNode[], links: VisualLink[]) {
   const labelSectionIdsBySourceId = new Map<string, Set<string>>();
   const medicationParentIdsByLabelId = new Map<string, Set<string>>();
+  const parentIdsByLabelId = new Map<string, Set<string>>();
+  const incomingCountsById = new Map<string, number>();
+  const outgoingCountsById = new Map<string, number>();
 
   for (const link of links) {
+    incomingCountsById.set(
+      link.targetNode.id,
+      (incomingCountsById.get(link.targetNode.id) ?? 0) + 1
+    );
+    outgoingCountsById.set(
+      link.sourceNode.id,
+      (outgoingCountsById.get(link.sourceNode.id) ?? 0) + 1
+    );
+
     if (
       link.kind === "has_label_section" &&
       link.sourceNode.kind === "label_source" &&
@@ -1114,12 +1141,27 @@ function applyEvidenceGraphMetrics(nodes: VisualNode[], links: VisualLink[]) {
       medicationParentIds.add(link.sourceNode.id);
       medicationParentIdsByLabelId.set(link.targetNode.id, medicationParentIds);
     }
+
+    if (
+      isLabelSourceParentLink(link) &&
+      link.targetNode.kind === "label_source"
+    ) {
+      const parentIds =
+        parentIdsByLabelId.get(link.targetNode.id) ?? new Set<string>();
+      parentIds.add(link.sourceNode.id);
+      parentIdsByLabelId.set(link.targetNode.id, parentIds);
+    }
   }
 
   for (const node of nodes) {
     node.labelSectionCount = labelSectionIdsBySourceId.get(node.id)?.size ?? 0;
     node.medicationParentCount =
       medicationParentIdsByLabelId.get(node.id)?.size ?? 0;
+    const parentIds = parentIdsByLabelId.get(node.id);
+    node.labelParentKey =
+      parentIds && parentIds.size > 0 ? Array.from(parentIds).sort().join("|") : null;
+    node.incomingLinkCount = incomingCountsById.get(node.id) ?? 0;
+    node.outgoingLinkCount = outgoingCountsById.get(node.id) ?? 0;
   }
 }
 
@@ -1141,10 +1183,12 @@ function createEvidenceMapSimulation(
     .force("medicationSpread", medicationSpreadForce())
     .force("hierarchyRing", hierarchyRingForce())
     .force("interactionLabelCentroid", interactionLabelCentroidForce(links))
-    .force("sharedLabelCluster", sharedLabelClusterForce())
+    .force("labelParentCluster", labelParentClusterForce())
+    .force("labelOutward", labelOutwardForce())
     .force("conceptSpread", conceptSpreadForce())
     .force("conceptLabelRepulsion", conceptLabelRepulsionForce())
     .force("queryLabelRepulsion", queryLabelRepulsionForce())
+    .force("queryEvidenceRepulsion", queryEvidenceRepulsionForce())
     .force(
       "collide",
       forceCollide<VisualNode>(
@@ -1156,11 +1200,11 @@ function createEvidenceMapSimulation(
     .force("center", forceCenter(GRAPH_WIDTH / 2, GRAPH_HEIGHT / 2))
     .force(
       "x",
-      forceX<VisualNode>(GRAPH_WIDTH / 2).strength(0.025)
+      forceX<VisualNode>(GRAPH_WIDTH / 2).strength(0.01)
     )
     .force(
       "y",
-      forceY<VisualNode>(GRAPH_HEIGHT / 2).strength(0.025)
+      forceY<VisualNode>(GRAPH_HEIGHT / 2).strength(0.01)
     )
     .alpha(0.95);
 }
@@ -1289,6 +1333,40 @@ function queryLabelRepulsionForce(): Force<VisualNode, SimulationLink> {
   return force;
 }
 
+function queryEvidenceRepulsionForce(): Force<VisualNode, SimulationLink> {
+  let queryNodes: VisualNode[] = [];
+  let evidenceNodes: VisualNode[] = [];
+
+  function force(alpha: number) {
+    for (const query of queryNodes) {
+      for (const evidence of evidenceNodes) {
+        const dx = (evidence.x ?? GRAPH_WIDTH / 2) - (query.x ?? GRAPH_WIDTH / 2);
+        const dy = (evidence.y ?? GRAPH_HEIGHT / 2) - (query.y ?? GRAPH_HEIGHT / 2);
+        const distance = Math.hypot(dx, dy) || 1;
+        if (distance >= QUERY_EVIDENCE_REPULSION_DISTANCE) {
+          continue;
+        }
+
+        const push =
+          ((QUERY_EVIDENCE_REPULSION_DISTANCE - distance) / distance) *
+          alpha *
+          QUERY_EVIDENCE_REPULSION_STRENGTH;
+        evidence.vx = (evidence.vx ?? 0) + dx * push;
+        evidence.vy = (evidence.vy ?? 0) + dy * push;
+      }
+    }
+  }
+
+  force.initialize = (nodes: VisualNode[]) => {
+    queryNodes = nodes.filter((node) => node.kind === "question");
+    evidenceNodes = nodes.filter(
+      (node) => node.kind === "label_source" || node.kind === "label_section"
+    );
+  };
+
+  return force;
+}
+
 function medicationSpreadForce(): Force<VisualNode, SimulationLink> {
   let medicationNodes: VisualNode[] = [];
 
@@ -1396,41 +1474,125 @@ function interactionLabelCentroidForce(links: SimulationLink[]): Force<VisualNod
   return force;
 }
 
-function sharedLabelClusterForce(): Force<VisualNode, SimulationLink> {
-  let sharedLabelNodes: VisualNode[] = [];
+function labelParentClusterForce(): Force<VisualNode, SimulationLink> {
+  let labelNodes: VisualNode[] = [];
 
   function force(alpha: number) {
-    if (sharedLabelNodes.length < 2) {
+    if (labelNodes.length < 2) {
       return;
     }
 
-    const centroidX =
-      sharedLabelNodes.reduce(
-        (sum, node) => sum + (node.x ?? GRAPH_WIDTH / 2),
-        0
-      ) / sharedLabelNodes.length;
-    const centroidY =
-      sharedLabelNodes.reduce(
-        (sum, node) => sum + (node.y ?? GRAPH_HEIGHT / 2),
-        0
-      ) / sharedLabelNodes.length;
+    pullExactParentGroups(labelNodes, alpha);
+    repelDifferentParentGroups(labelNodes, alpha);
+  }
 
-    for (const node of sharedLabelNodes) {
-      const dx = centroidX - (node.x ?? centroidX);
-      const dy = centroidY - (node.y ?? centroidY);
+  force.initialize = (nodes: VisualNode[]) => {
+    labelNodes = nodes.filter(
+      (node) => node.kind === "label_source" && Boolean(node.labelParentKey)
+    );
+  };
+
+  return force;
+}
+
+function pullExactParentGroups(nodes: VisualNode[], alpha: number) {
+  const groups = new Map<string, VisualNode[]>();
+  for (const node of nodes) {
+    if (!node.labelParentKey) {
+      continue;
+    }
+    const group = groups.get(node.labelParentKey) ?? [];
+    group.push(node);
+    groups.set(node.labelParentKey, group);
+  }
+
+  for (const group of groups.values()) {
+    if (group.length < 2) {
+      continue;
+    }
+    const centroid = centroidForNodes(group);
+    for (const node of group) {
+      const dx = centroid.x - (node.x ?? centroid.x);
+      const dy = centroid.y - (node.y ?? centroid.y);
       const distance = Math.hypot(dx, dy) || 1;
       const pull = Math.min(
-        SHARED_LABEL_CLUSTER_MAX_PULL,
-        distance * alpha * SHARED_LABEL_CLUSTER_STRENGTH
+        LABEL_PARENT_CLUSTER_MAX_PULL,
+        distance * alpha * LABEL_PARENT_CLUSTER_PULL_STRENGTH
       );
+      node.vx = (node.vx ?? 0) + (dx / distance) * pull;
+      node.vy = (node.vy ?? 0) + (dy / distance) * pull;
+    }
+  }
+}
+
+function repelDifferentParentGroups(nodes: VisualNode[], alpha: number) {
+  for (let i = 0; i < nodes.length; i += 1) {
+    const source = nodes[i];
+    for (let j = i + 1; j < nodes.length; j += 1) {
+      const target = nodes[j];
+      if (source.labelParentKey === target.labelParentKey) {
+        continue;
+      }
+      const dx = (target.x ?? GRAPH_WIDTH / 2) - (source.x ?? GRAPH_WIDTH / 2);
+      const dy = (target.y ?? GRAPH_HEIGHT / 2) - (source.y ?? GRAPH_HEIGHT / 2);
+      const distance = Math.hypot(dx, dy) || 1;
+      if (distance >= LABEL_PARENT_CLUSTER_REPEL_DISTANCE) {
+        continue;
+      }
+
+      const push = Math.min(
+        LABEL_PARENT_CLUSTER_MAX_PUSH,
+        ((LABEL_PARENT_CLUSTER_REPEL_DISTANCE - distance) / distance) *
+          alpha *
+          LABEL_PARENT_CLUSTER_REPEL_STRENGTH
+      );
+      const pushX = dx * push * 0.5;
+      const pushY = dy * push * 0.5;
+      source.vx = (source.vx ?? 0) - pushX;
+      source.vy = (source.vy ?? 0) - pushY;
+      target.vx = (target.vx ?? 0) + pushX;
+      target.vy = (target.vy ?? 0) + pushY;
+    }
+  }
+}
+
+function centroidForNodes(nodes: VisualNode[]) {
+  return {
+    x:
+      nodes.reduce((sum, node) => sum + (node.x ?? GRAPH_WIDTH / 2), 0) /
+      nodes.length,
+    y:
+      nodes.reduce((sum, node) => sum + (node.y ?? GRAPH_HEIGHT / 2), 0) /
+      nodes.length,
+  };
+}
+
+function labelOutwardForce(): Force<VisualNode, SimulationLink> {
+  let labelNodes: VisualNode[] = [];
+
+  function force(alpha: number) {
+    const center = graphCenter();
+    for (const node of labelNodes) {
+      const dx = (node.x ?? center.x) - center.x;
+      const dy = (node.y ?? center.y) - center.y;
+      const distance = Math.hypot(dx, dy) || 1;
+      const targetRadius =
+        node.kind === "label_section"
+          ? LABEL_SECTION_OUTER_RADIUS
+          : LABEL_SOURCE_OUTER_RADIUS;
+      const strength =
+        node.kind === "label_section"
+          ? LABEL_SECTION_OUTWARD_STRENGTH
+          : LABEL_OUTWARD_STRENGTH;
+      const pull = (targetRadius - distance) * alpha * strength;
       node.vx = (node.vx ?? 0) + (dx / distance) * pull;
       node.vy = (node.vy ?? 0) + (dy / distance) * pull;
     }
   }
 
   force.initialize = (nodes: VisualNode[]) => {
-    sharedLabelNodes = nodes.filter(
-      (node) => node.kind === "label_source" && node.medicationParentCount > 1
+    labelNodes = nodes.filter(
+      (node) => node.kind === "label_source" || node.kind === "label_section"
     );
   };
 
@@ -1492,7 +1654,7 @@ function medicationLabelPairKey(sourceId: string, targetId: string) {
 
 function evidenceMapLinkDistance(link: SimulationLink) {
   if (link.kind === "has_label_section") {
-    return 30 + Math.min(5, link.sourceNode.labelSectionCount) * 4;
+    return 24 + Math.min(5, link.sourceNode.labelSectionCount) * 3;
   }
 
   if (isMedicationLabelLink(link.kind)) {
@@ -1511,18 +1673,73 @@ function evidenceMapLinkDistance(link: SimulationLink) {
       : 150;
   }
 
+  if (link.kind === "resolved_as") {
+    return resolvedAsLinkDistance(link);
+  }
+
+  if (link.kind === "has_role") {
+    return roleLinkDistance(link);
+  }
+
+  if (
+    link.kind === "mentions_in_interaction_section" ||
+    link.kind === "context_lookup_source"
+  ) {
+    return contextualEvidenceLinkDistance(link);
+  }
+
   const distances: Record<string, number> = {
-    resolved_as: 170,
-    has_role: 190,
-    mentions_in_interaction_section: 120,
     has_terminology_context: 96,
   };
   return distances[link.kind] ?? 104;
 }
 
+function resolvedAsLinkDistance(link: SimulationLink) {
+  const target = link.targetNode;
+  const isSimpleLeaf =
+    target.outgoingLinkCount === 0 &&
+    target.incomingLinkCount <= 1 &&
+    target.medicationParentCount <= 1;
+  if (isSimpleLeaf) {
+    return 50;
+  }
+
+  if (target.outgoingLinkCount >= 6) {
+    return 160;
+  }
+
+  if (target.outgoingLinkCount >= 3 || target.incomingLinkCount > 1) {
+    return 132;
+  }
+
+  return 108;
+}
+
+function roleLinkDistance(link: SimulationLink) {
+  const target = link.targetNode;
+  if (target.outgoingLinkCount === 0 && target.incomingLinkCount <= 1) {
+    return 120;
+  }
+  if (target.outgoingLinkCount >= 3) {
+    return 210;
+  }
+  return 170;
+}
+
+function contextualEvidenceLinkDistance(link: SimulationLink) {
+  const target = link.targetNode;
+  if (target.kind === "label_section") {
+    return 90;
+  }
+  if (target.kind === "label_source" && target.incomingLinkCount > 1) {
+    return 170;
+  }
+  return 125;
+}
+
 function evidenceMapLinkStrength(link: SimulationLink) {
   if (link.kind === "has_label_section") {
-    return 1.15;
+    return 1.3;
   }
 
   if (isMedicationLabelLink(link.kind)) {
@@ -1548,6 +1765,15 @@ function isMedicationLabelLink(kind: string) {
   return kind === "has_label_source" || kind === "interaction_lookup_source";
 }
 
+function isLabelSourceParentLink(link: VisualLink) {
+  return (
+    link.targetNode.kind === "label_source" &&
+    (isMedicationLabelLink(link.kind) || link.kind === "context_lookup_source") &&
+    (link.sourceNode.kind === "resolved_medication" ||
+      link.sourceNode.kind === "query_concept")
+  );
+}
+
 function nodeChargeStrength(node: VisualNode) {
   if (node.kind === "question") {
     return -620;
@@ -1562,7 +1788,7 @@ function nodeChargeStrength(node: VisualNode) {
     return -320;
   }
   if (node.kind === "label_section") {
-    return -30;
+    return -8;
   }
   return -150;
 }
@@ -1578,7 +1804,7 @@ function nodeCollisionPadding(node: VisualNode) {
     return 20;
   }
   if (node.kind === "label_section") {
-    return 10;
+    return 5;
   }
   return 14;
 }
