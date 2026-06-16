@@ -19,12 +19,15 @@ from src.dossier.models import (
     OpenFDALabelEvidence,
     OpenFDALabelRecord,
     RxNormConcept,
+    RxNormEdge,
+    RxNormNeighborhood,
 )
 from src.dossier.openfda_store import OpenFDALabelStore
 from src.dossier.rxnorm_store import RxNormParquetStore
 from src.query_answer.config import QueryAnswerParameters
 from src.query_answer.coverage import evidence_snippet
 from src.query_answer.evidence_map import build_question_evidence_map
+from src.query_answer.medication_network import build_medication_network
 from src.query_answer.models import (
     ContextTargetedEvidence,
     EvidenceAnswer,
@@ -552,6 +555,8 @@ def test_query_answer_parameters_load_from_yaml() -> None:
     assert parameters["query_answer"]["secondary_openfda_limit"] == 3
     assert parameters["query_answer"]["max_secondary_drugs"] == 3
     assert parameters["query_answer"]["interaction_lookup_limit"] == 3
+    assert parameters["query_answer"]["medication_network_depth"] == 1
+    assert parameters["query_answer"]["medication_network_edges_per_root"] == 60
     assert parameters["query_answer"]["max_synthesis_retries"] == 1
     assert parameters["query_answer"]["require_citations_when_evidence_exists"] is True
 
@@ -721,6 +726,23 @@ def test_query_answer_response_includes_question_evidence_map() -> None:
     assert response.question_evidence_map.summary_counts["nodes"] >= 4
 
 
+def test_query_answer_response_includes_single_drug_medication_network() -> None:
+    understanding = response_with_label_evidence()
+    service = QueryAnswerService(
+        builder=fake_medication_network_builder(),
+        understanding_service=FakeUnderstandingService(understanding),
+        synthesizer=FakeAnswerSynthesizer(),
+    )
+
+    response = service.answer("Can I take aspirin?")
+
+    assert len(response.medication_network.roots) == 1
+    assert response.medication_network.roots[0].concept.rxcui == "1191"
+    assert response.medication_network.roots[0].roles == ["primary medication"]
+    assert response.medication_network.summary_counts["roots"] == 1
+    assert response.medication_network.summary_counts["edges"] == 1
+
+
 def test_query_answer_response_includes_secondary_evidence() -> None:
     understanding = response_with_secondary_mention()
     service = QueryAnswerService(
@@ -741,6 +763,44 @@ def test_query_answer_response_includes_secondary_evidence() -> None:
         node.kind == "resolved_medication" and node.rxcui == "5640"
         for node in response.question_evidence_map.nodes
     )
+
+
+def test_query_answer_response_includes_multi_drug_medication_network() -> None:
+    understanding = response_with_secondary_mention()
+    service = QueryAnswerService(
+        builder=fake_medication_network_builder(),
+        understanding_service=FakeUnderstandingService(understanding),
+        synthesizer=FakeAnswerSynthesizer(),
+    )
+
+    response = service.answer("Can I take aspirin with ibuprofen?")
+
+    root_rxcuis = {
+        root.concept.rxcui: root.roles for root in response.medication_network.roots
+    }
+    assert root_rxcuis["1191"] == ["primary medication"]
+    assert root_rxcuis["5640"] == ["mentioned medication"]
+    assert response.medication_network.summary_counts["roots"] == 2
+    assert {node.rxcui for node in response.medication_network.neighborhood.nodes} == {
+        "1191",
+        "5640",
+        "shared-form",
+    }
+    assert response.medication_network.summary_counts["edges"] == 2
+
+
+def test_medication_network_dedupes_roots_and_preserves_truncation() -> None:
+    network = build_medication_network(
+        response_with_secondary_mention(),
+        [secondary_evidence_fixture()],
+        fake_medication_network_builder(),
+        QueryAnswerParameters(medication_network_edges_per_root=1),
+    )
+
+    assert len(network.roots) == 2
+    assert network.summary_counts["roots"] == 2
+    assert network.truncated is True
+    assert network.neighborhood.truncated is True
 
 
 def test_query_answer_response_includes_secondary_evidence_for_drug_allergy() -> None:
@@ -1804,6 +1864,74 @@ def fake_secondary_builder() -> DossierBuilder:
     return DossierBuilder(
         rxnorm_store=RxNormParquetStore(),
         openfda_store=FakeSecondaryOpenFDAStore(),
+    )
+
+
+class FakeMedicationNetworkRxNormStore:
+    aspirin = RxNormConcept(rxcui="1191", name="aspirin", tty="IN")
+    ibuprofen = RxNormConcept(rxcui="5640", name="ibuprofen", tty="IN")
+    shared = RxNormConcept(rxcui="shared-form", name="shared oral product", tty="SCD")
+
+    def get_neighborhood(
+        self,
+        rxcui: str,
+        depth: int = 1,
+        max_edges: int = 75,
+        keep_relations: set[str] | None = None,
+    ) -> RxNormNeighborhood:
+        if rxcui == "1191":
+            return RxNormNeighborhood(
+                nodes=[self.aspirin, self.shared],
+                edges=[
+                    RxNormEdge(
+                        source_rxcui="shared-form",
+                        source_name="shared oral product",
+                        source_tty="SCD",
+                        target_rxcui="1191",
+                        target_name="aspirin",
+                        target_tty="IN",
+                        relation="has_ingredient",
+                    )
+                ],
+                depth=depth,
+                truncated=max_edges < 2,
+            )
+        if rxcui == "5640":
+            return RxNormNeighborhood(
+                nodes=[self.ibuprofen, self.shared],
+                edges=[
+                    RxNormEdge(
+                        source_rxcui="shared-form",
+                        source_name="shared oral product",
+                        source_tty="SCD",
+                        target_rxcui="5640",
+                        target_name="ibuprofen",
+                        target_tty="IN",
+                        relation="has_ingredient",
+                    )
+                ],
+                depth=depth,
+                truncated=max_edges < 2,
+            )
+        return RxNormNeighborhood(nodes=[], edges=[], depth=depth)
+
+    def get_concepts(self, rxcuis: set[str]) -> dict[str, RxNormConcept]:
+        concepts = {
+            self.aspirin.rxcui: self.aspirin,
+            self.ibuprofen.rxcui: self.ibuprofen,
+            self.shared.rxcui: self.shared,
+        }
+        return {
+            rxcui: concept
+            for rxcui, concept in concepts.items()
+            if rxcui in rxcuis
+        }
+
+
+def fake_medication_network_builder() -> DossierBuilder:
+    return DossierBuilder(
+        rxnorm_store=FakeMedicationNetworkRxNormStore(),  # type: ignore[arg-type]
+        openfda_store=OpenFDALabelStore(allow_live=False, use_cache=False),
     )
 
 

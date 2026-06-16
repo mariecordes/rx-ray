@@ -4,7 +4,12 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from src.dossier.models import OpenFDALabelEvidence, RxNormConcept, RxNormEdge
+from src.dossier.models import (
+    OpenFDALabelEvidence,
+    RxNormConcept,
+    RxNormEdge,
+    RxNormNeighborhood,
+)
 from src.query_understanding.models import QueryUnderstandingResponse
 
 
@@ -71,6 +76,22 @@ class RxNormPairContext(BaseModel):
     summary: str
     direct_edges: list[RxNormEdge] = Field(default_factory=list)
     shared_neighbors: list[RxNormConcept] = Field(default_factory=list)
+
+
+class MedicationNetworkRoot(BaseModel):
+    """A medication concept used as a root in the combined terminology network."""
+
+    concept: RxNormConcept
+    roles: list[str] = Field(default_factory=list)
+
+
+class MedicationNetwork(BaseModel):
+    """Combined RxNorm terminology network for medications in one question."""
+
+    roots: list[MedicationNetworkRoot] = Field(default_factory=list)
+    neighborhood: RxNormNeighborhood = Field(default_factory=RxNormNeighborhood)
+    summary_counts: dict[str, int] = Field(default_factory=dict)
+    truncated: bool = False
 
 
 class QuestionEvidenceMapNode(BaseModel):
@@ -144,6 +165,7 @@ class QueryAnswerResponse(BaseModel):
     answer: EvidenceAnswer | None = None
     secondary_evidence: list[SecondaryDrugEvidence] = Field(default_factory=list)
     context_evidence: list[ContextTargetedEvidence] = Field(default_factory=list)
+    medication_network: MedicationNetwork = Field(default_factory=MedicationNetwork)
     question_evidence_map: QuestionEvidenceMap = Field(
         default_factory=QuestionEvidenceMap
     )

@@ -15,6 +15,8 @@ class QueryAnswerParameters:
     context_lookup_limit: int = 3
     max_context_targets: int = 5
     context_lookup_enabled: bool = True
+    medication_network_depth: int = 1
+    medication_network_edges_per_root: int = 60
     max_synthesis_retries: int = 1
     require_citations_when_evidence_exists: bool = True
 
@@ -64,6 +66,18 @@ def load_query_answer_parameters() -> QueryAnswerParameters:
         ),
         context_lookup_enabled=bool(
             query_answer.get("context_lookup_enabled", True)
+        ),
+        medication_network_depth=bounded_int(
+            query_answer.get("medication_network_depth"),
+            default=1,
+            minimum=1,
+            maximum=2,
+        ),
+        medication_network_edges_per_root=bounded_int(
+            query_answer.get("medication_network_edges_per_root"),
+            default=60,
+            minimum=10,
+            maximum=150,
         ),
         max_synthesis_retries=bounded_int(
             query_answer.get("max_synthesis_retries"),

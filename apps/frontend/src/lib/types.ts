@@ -98,6 +98,18 @@ export type DrugDossier = {
   notes: string[];
 };
 
+export type MedicationNetworkRoot = {
+  concept: RxNormConcept;
+  roles: string[];
+};
+
+export type MedicationNetwork = {
+  roots: MedicationNetworkRoot[];
+  neighborhood: RxNormNeighborhood;
+  summary_counts: Record<string, number>;
+  truncated: boolean;
+};
+
 export type QueryState = {
   primary_drug?: string | null;
   all_drugs_mentioned: string[];
@@ -243,6 +255,7 @@ export type QueryAnswerResponse = {
   answer?: EvidenceAnswer | null;
   secondary_evidence: SecondaryDrugEvidence[];
   context_evidence?: ContextTargetedEvidence[];
+  medication_network?: MedicationNetwork;
   question_evidence_map: QuestionEvidenceMap;
   coverage: EvidenceCoverageReport;
   warnings: string[];

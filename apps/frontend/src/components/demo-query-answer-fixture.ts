@@ -489,6 +489,86 @@ export const demoQueryAnswer: QueryAnswerResponse = {
       interaction_label_evidence: null,
     },
   ],
+  medication_network: {
+    roots: [
+      {
+        concept: { rxcui: "5640", name: "ibuprofen", tty: "IN", sab: "RXNORM" },
+        roles: ["primary medication"],
+      },
+      {
+        concept: {
+          rxcui: "20610",
+          name: "cetirizine",
+          tty: "IN",
+          sab: "RXNORM",
+        },
+        roles: ["current medication"],
+      },
+      {
+        concept: { rxcui: "1191", name: "aspirin", tty: "IN", sab: "RXNORM" },
+        roles: ["mentioned medication"],
+      },
+    ],
+    neighborhood: {
+      depth: 1,
+      truncated: false,
+      nodes: [
+        { rxcui: "5640", name: "ibuprofen", tty: "IN", sab: "RXNORM" },
+        { rxcui: "1191", name: "aspirin", tty: "IN", sab: "RXNORM" },
+        { rxcui: "20610", name: "cetirizine", tty: "IN", sab: "RXNORM" },
+        {
+          rxcui: "analgesic-demo",
+          name: "analgesic terminology group",
+          tty: "MIN",
+          sab: "RXNORM",
+        },
+        {
+          rxcui: "antihistamine-demo",
+          name: "antihistamine terminology group",
+          tty: "MIN",
+          sab: "RXNORM",
+        },
+      ],
+      edges: [
+        {
+          source_rxcui: "analgesic-demo",
+          source_name: "analgesic terminology group",
+          source_tty: "MIN",
+          target_rxcui: "5640",
+          target_name: "ibuprofen",
+          target_tty: "IN",
+          relation: "has_ingredient",
+          source: "rxnorm",
+        },
+        {
+          source_rxcui: "analgesic-demo",
+          source_name: "analgesic terminology group",
+          source_tty: "MIN",
+          target_rxcui: "1191",
+          target_name: "aspirin",
+          target_tty: "IN",
+          relation: "has_ingredient",
+          source: "rxnorm",
+        },
+        {
+          source_rxcui: "antihistamine-demo",
+          source_name: "antihistamine terminology group",
+          source_tty: "MIN",
+          target_rxcui: "20610",
+          target_name: "cetirizine",
+          target_tty: "IN",
+          relation: "has_ingredient",
+          source: "rxnorm",
+        },
+      ],
+    },
+    summary_counts: {
+      roots: 3,
+      nodes: 5,
+      edges: 3,
+    },
+    truncated: false,
+  },
   question_evidence_map: {
     nodes: [
       {
