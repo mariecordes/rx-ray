@@ -145,6 +145,8 @@ export type EvidenceBullet = {
 };
 
 export type EvidenceAnswer = {
+  response?: string | null;
+  evidence_summary?: string | null;
   summary: string;
   bullets: EvidenceBullet[];
   limitations: string[];

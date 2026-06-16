@@ -1834,16 +1834,47 @@ function EvidenceAnswerCard({
   const hasVisibleCoverage = coverage.items.some(
     (item) => !hiddenCoverageCategories.has(item.category)
   );
+  const directResponse = (answer.response || answer.summary || "").trim();
+  const evidenceSummary = (answer.evidence_summary || "").trim();
+  const shouldShowEvidenceSummary =
+    evidenceSummary.length > 0 && evidenceSummary !== directResponse;
 
   return (
     <div className="space-y-3">
       <div className="rounded-md border border-[#C7B4EF] bg-[#FBF9FE] px-4 py-4 shadow-sm">
-        <p
-          className="text-slate-800"
-          style={{ fontSize: "15px", lineHeight: "27px" }}
+        <section>
+          <h3
+            className="mb-2 font-semibold text-slate-800"
+            style={{ fontSize: "15px", lineHeight: "24px" }}
         >
-          {answer.summary}
-        </p>
+            Evidence-based answer
+          </h3>
+
+          <p
+            className="text-slate-700"
+            style={{ fontSize: "15px", lineHeight: "26px" }}
+          >
+            <InlineBoldMarkdown text={directResponse} />
+          </p>
+        </section>
+
+        {shouldShowEvidenceSummary ? (
+          <section className="mt-4 border-t border-slate-200 pt-4">
+            <h3
+              className="mb-2 font-semibold text-slate-800"
+              style={{ fontSize: "15px", lineHeight: "24px" }}
+            >
+              Evidence summary
+            </h3>
+
+            <p
+              className="text-slate-700"
+              style={{ fontSize: "15px", lineHeight: "26px" }}
+            >
+              <InlineBoldMarkdown text={evidenceSummary} />
+            </p>
+          </section>
+        ) : null}
       </div>
 
       {answer.bullets.length ? (
@@ -1943,6 +1974,19 @@ function EvidenceAnswerCard({
         </div>
       ) : null}
     </div>
+  );
+}
+
+function InlineBoldMarkdown({ text }: { text: string }) {
+  const segments = text.split(/(\*\*[^*]+\*\*)/g);
+  return (
+    <>
+      {segments.map((segment, index) => {
+        const isBold = segment.startsWith("**") && segment.endsWith("**");
+        const value = isBold ? segment.slice(2, -2) : segment;
+        return isBold ? <strong key={index}>{value}</strong> : value;
+      })}
+    </>
   );
 }
 

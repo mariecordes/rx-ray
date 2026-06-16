@@ -34,7 +34,9 @@ class EvidenceBullet(BaseModel):
 class EvidenceAnswer(BaseModel):
     """LLM-generated educational answer grounded in retrieved evidence."""
 
-    summary: str
+    response: str = ""
+    evidence_summary: str = ""
+    summary: str = ""
     bullets: list[EvidenceBullet] = Field(default_factory=list)
     limitations: list[str] = Field(default_factory=list)
     safety_note: str

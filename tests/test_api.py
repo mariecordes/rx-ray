@@ -496,6 +496,8 @@ def test_answer_synthesis_filters_citations_to_supplied_evidence() -> None:
     )
     answer = EvidenceAnswerSynthesizer.parse_answer_data(
         {
+            "response": "Retrieved labels raise caution about the question.",
+            "evidence_summary": "The warning evidence is relevant to the query.",
             "summary": "Retrieved label evidence mentions aspirin warnings.",
             "bullets": [
                 {
@@ -525,6 +527,9 @@ def test_answer_synthesis_filters_citations_to_supplied_evidence() -> None:
         EvidenceAnswerSynthesizer.allowed_citations(packet),
     )
 
+    assert answer.response == "Retrieved labels raise caution about the question."
+    assert answer.evidence_summary == "The warning evidence is relevant to the query."
+    assert answer.summary == "The warning evidence is relevant to the query."
     assert [citation.model_dump() for citation in answer.bullets[0].citations] == [
         {
             "source_id": "label-1",

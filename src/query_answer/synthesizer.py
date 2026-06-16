@@ -309,8 +309,14 @@ class EvidenceAnswerSynthesizer:
             for item in list_value(data.get("bullets"))
             if str(item.get("text", "")).strip()
         ]
+        response = str(data.get("response") or data.get("summary") or "").strip()
+        evidence_summary = str(
+            data.get("evidence_summary") or data.get("summary") or ""
+        ).strip()
         return EvidenceAnswer(
-            summary=str(data.get("summary", "")).strip(),
+            response=response,
+            evidence_summary=evidence_summary,
+            summary=evidence_summary or response,
             bullets=bullets[:5],
             limitations=string_list(data.get("limitations")),
             safety_note=STANDARD_SAFETY_NOTE,
