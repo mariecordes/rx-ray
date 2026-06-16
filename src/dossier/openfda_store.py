@@ -28,6 +28,10 @@ SECTION_ALIASES = {
     "adverse_reactions": ("adverse_reactions",),
     "indications_and_usage": ("indications_and_usage",),
     "use_in_specific_populations": ("use_in_specific_populations",),
+    "pediatric_use": ("pediatric_use",),
+    "geriatric_use": ("geriatric_use",),
+    "active_ingredient": ("active_ingredient",),
+    "inactive_ingredient": ("inactive_ingredient",),
 }
 
 
@@ -175,6 +179,83 @@ class OpenFDALabelStore:
             )
         return evidence
 
+    def get_context_label_evidence(
+        self,
+        rxcui: str,
+        *,
+        target: str,
+        section_fields: list[str],
+        fallback_name: str | None = None,
+        limit: int = 3,
+    ) -> OpenFDALabelEvidence:
+        """Fetch labels where selected label fields mention a context target."""
+
+        errors: list[str] = []
+        labels: list[dict[str, Any]] = []
+        retrieval_mode = "none"
+        target_query = self._format_query_term(target)
+        fields = [field for field in section_fields if field]
+
+        if self.allow_live and limit > 0 and target_query and fields:
+            attempt_errors: list[str] = []
+            for field in fields:
+                queries = [
+                    f"openfda.rxcui:{rxcui} AND {field}:{target_query}"
+                ]
+                fallback_query = self._format_query_term(fallback_name)
+                if fallback_query:
+                    queries.append(
+                        f"openfda.generic_name:{fallback_query} "
+                        f"AND {field}:{target_query}"
+                    )
+
+                for search in queries:
+                    try:
+                        found = self._query(search, limit=limit)
+                    except requests.RequestException as exc:
+                        attempt_errors.append(
+                            f"OpenFDA context request failed: {exc}"
+                        )
+                        continue
+                    except ValueError as exc:
+                        attempt_errors.append(
+                            f"OpenFDA context response could not be parsed: {exc}"
+                        )
+                        continue
+
+                    labels = self._merge_raw_labels(labels, found, limit=limit)
+                    if len(labels) >= limit:
+                        break
+                if len(labels) >= limit:
+                    break
+
+            if labels:
+                retrieval_mode = "context_targeted_lookup"
+                if attempt_errors:
+                    logger.warning(
+                        "OpenFDA context lookup recovered after earlier "
+                        "failed attempt(s). rxcui=%s fallback_name=%s "
+                        "target=%s fields=%s suppressed_errors=%s",
+                        rxcui,
+                        fallback_name,
+                        target,
+                        fields,
+                        attempt_errors,
+                    )
+            else:
+                errors.extend(attempt_errors)
+
+        evidence = self._normalize_labels(
+            rxcui,
+            labels,
+            retrieval_mode,
+            label_limit=limit,
+        )
+        evidence.errors.extend(errors)
+        if not labels and not errors and not self.allow_live:
+            evidence.errors.append("Live OpenFDA context lookup disabled.")
+        return evidence
+
     def _query(self, search: str, limit: int) -> list[dict[str, Any]]:
         logger.info(
             "OpenFDA request starting: search=%s limit=%s base_url=%s",
@@ -228,6 +309,44 @@ class OpenFDALabelStore:
         path = self.cache_dir / f"{rxcui}.json"
         with path.open("w") as f:
             json.dump(labels, f, indent=2)
+
+    def _merge_raw_labels(
+        self,
+        existing: list[dict[str, Any]],
+        new: list[dict[str, Any]],
+        *,
+        limit: int,
+    ) -> list[dict[str, Any]]:
+        merged = list(existing)
+        seen = {self._raw_label_key(label) for label in merged}
+        for label in new:
+            key = self._raw_label_key(label)
+            if key in seen:
+                continue
+            seen.add(key)
+            merged.append(label)
+            if len(merged) >= limit:
+                break
+        return merged
+
+    @staticmethod
+    def _raw_label_key(label: dict[str, Any]) -> str:
+        openfda = label.get("openfda", {})
+        spl_ids = openfda.get("spl_id") or []
+        spl_set_ids = openfda.get("spl_set_id") or []
+        if isinstance(spl_ids, str):
+            spl_ids = [spl_ids]
+        if isinstance(spl_set_ids, str):
+            spl_set_ids = [spl_set_ids]
+        for value in [
+            label.get("id"),
+            label.get("set_id"),
+            *spl_ids,
+            *spl_set_ids,
+        ]:
+            if value:
+                return str(value)
+        return json.dumps(label, sort_keys=True)[:500]
 
     def _normalize_labels(
         self,

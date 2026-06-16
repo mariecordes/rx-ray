@@ -207,6 +207,7 @@ export type QuestionEvidenceMapEdge = {
   section?: string | null;
   evidence_scope?: string | null;
   interaction_terms?: string[];
+  context_terms?: string[];
   tags: string[];
 };
 
@@ -226,10 +227,20 @@ export type SecondaryDrugEvidence = {
   rxnorm_context?: RxNormPairContext | null;
 };
 
+export type ContextTargetedEvidence = {
+  target_label: string;
+  target_category: string;
+  resolved_concept: RxNormConcept;
+  searched_fields: string[];
+  label_evidence?: OpenFDALabelEvidence | null;
+  retrieval_modes: string[];
+};
+
 export type QueryAnswerResponse = {
   understanding: QueryUnderstandingResponse;
   answer?: EvidenceAnswer | null;
   secondary_evidence: SecondaryDrugEvidence[];
+  context_evidence?: ContextTargetedEvidence[];
   question_evidence_map: QuestionEvidenceMap;
   coverage: EvidenceCoverageReport;
   warnings: string[];

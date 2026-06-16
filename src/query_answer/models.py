@@ -123,6 +123,17 @@ class SecondaryDrugEvidence(BaseModel):
     rxnorm_context: RxNormPairContext | None = None
 
 
+class ContextTargetedEvidence(BaseModel):
+    """Label evidence retrieved because a non-drug query context was mentioned."""
+
+    target_label: str
+    target_category: str
+    resolved_concept: RxNormConcept
+    searched_fields: list[str] = Field(default_factory=list)
+    label_evidence: OpenFDALabelEvidence | None = None
+    retrieval_modes: list[str] = Field(default_factory=list)
+
+
 class QueryAnswerResponse(BaseModel):
     """Natural-language query understanding plus optional answer synthesis."""
 
