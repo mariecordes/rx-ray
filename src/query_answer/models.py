@@ -100,6 +100,7 @@ class QuestionEvidenceMapEdge(BaseModel):
     section: str | None = None
     evidence_scope: str | None = None
     interaction_terms: list[str] = Field(default_factory=list)
+    context_terms: list[str] = Field(default_factory=list)
     tags: list[str] = Field(default_factory=list)
 
 

@@ -9,6 +9,7 @@ from src.dossier.models import (
     RxNormConcept,
 )
 from src.query_answer.models import (
+    ContextTargetedEvidence,
     QuestionEvidenceMap,
     QuestionEvidenceMapEdge,
     QuestionEvidenceMapNode,
@@ -19,16 +20,19 @@ from src.query_understanding.models import QueryUnderstandingResponse
 
 
 INTERACTION_TARGETED_TAG = "interaction_targeted_lookup"
+CONTEXT_TARGETED_TAG = "context_targeted_lookup"
 
 
 def build_question_evidence_map(
     understanding: QueryUnderstandingResponse,
     secondary_evidence: list[SecondaryDrugEvidence] | None = None,
+    context_evidence: list[ContextTargetedEvidence] | None = None,
 ) -> QuestionEvidenceMap:
     """Build a request-time map from extracted state to retrieved evidence."""
 
     builder = EvidenceMapBuilder()
     secondary_evidence = secondary_evidence or []
+    context_evidence = context_evidence or []
 
     builder.add_node(
         QuestionEvidenceMapNode(
@@ -59,6 +63,10 @@ def build_question_evidence_map(
             scope="primary",
             source_concept_node_id=rxnorm_node_id(primary.rxcui),
             resolved_concepts=resolved_concepts,
+            context_evidence=context_evidence_for_concept(
+                context_evidence,
+                primary.rxcui,
+            ),
         )
 
     for item in secondary_evidence:
@@ -72,6 +80,10 @@ def build_question_evidence_map(
             source_concept_node_id=concept_node_id,
             resolved_concepts=resolved_concepts,
             interaction_partner_concept=primary,
+            context_evidence=context_evidence_for_concept(
+                context_evidence,
+                concept.rxcui,
+            ),
         )
         # Keep RxNorm pair context available on SecondaryDrugEvidence, but do not
         # render it into the question-level evidence map for now. In practice it
@@ -118,6 +130,10 @@ class EvidenceMapBuilder:
                     "interaction_terms": merge_tags(
                         existing.interaction_terms,
                         edge.interaction_terms,
+                    ),
+                    "context_terms": merge_tags(
+                        existing.context_terms,
+                        edge.context_terms,
                     ),
                 }
             )
@@ -256,10 +272,12 @@ def _add_label_evidence(
     source_concept_node_id: str,
     resolved_concepts: list[RxNormConcept],
     interaction_partner_concept: RxNormConcept | None = None,
+    context_evidence: list[ContextTargetedEvidence] | None = None,
 ) -> None:
     if evidence is None:
         return
 
+    context_evidence = context_evidence or []
     sections_by_source = _sections_by_source(evidence)
     for record in evidence.label_records:
         source_id = record.source_id
@@ -299,7 +317,9 @@ def _add_label_evidence(
                 )
             )
 
-        is_interaction_targeted_record = INTERACTION_TARGETED_TAG in record.provenance_tags
+        is_interaction_targeted_record = (
+            INTERACTION_TARGETED_TAG in record.provenance_tags
+        )
         if is_interaction_targeted_record:
             interaction_terms = unique_values(
                 [
@@ -340,6 +360,29 @@ def _add_label_evidence(
                         ),
                     )
                 )
+
+        context_targets = context_targets_for_record(record, context_evidence)
+        for target in context_targets:
+            state_id = state_node_id(target.target_label)
+            if state_id not in builder.nodes:
+                continue
+            builder.add_edge(
+                QuestionEvidenceMapEdge(
+                    id=f"{state_id}->{source_node_id}:context_lookup_source",
+                    source=state_id,
+                    target=source_node_id,
+                    kind="context_lookup_source",
+                    label="Context-specific lookup returned this label source",
+                    rxcui=owner_rxcui,
+                    source_id=source_id,
+                    evidence_scope=scope,
+                    context_terms=[target.target_label],
+                    tags=merge_tags(
+                        record.provenance_tags,
+                        [CONTEXT_TARGETED_TAG, target.target_category],
+                    ),
+                )
+            )
 
         for section_name, entries in sections_by_source.get(source_id, {}).items():
             section_tags = merge_tags(
@@ -382,6 +425,87 @@ def _add_label_evidence(
                     tags=section_tags,
                 )
             )
+            for target in context_targets_for_section(
+                source_id,
+                section_name,
+                section_tags,
+                context_evidence,
+            ):
+                state_id = state_node_id(target.target_label)
+                if state_id not in builder.nodes:
+                    continue
+                builder.add_edge(
+                    QuestionEvidenceMapEdge(
+                        id=f"{state_id}->{section_node_id}:context_lookup_section",
+                        source=state_id,
+                        target=section_node_id,
+                        kind="context_lookup_section",
+                        label="Context-specific lookup returned this label section",
+                        rxcui=owner_rxcui,
+                        source_id=source_id,
+                        section=section_name,
+                        evidence_scope=scope,
+                        context_terms=[target.target_label],
+                        tags=merge_tags(
+                            section_tags,
+                            [CONTEXT_TARGETED_TAG, target.target_category],
+                        ),
+                    )
+                )
+
+
+def context_evidence_for_concept(
+    context_evidence: list[ContextTargetedEvidence],
+    rxcui: str,
+) -> list[ContextTargetedEvidence]:
+    return [
+        item
+        for item in context_evidence
+        if item.resolved_concept.rxcui == rxcui
+        and item.label_evidence
+        and item.label_evidence.labels_found
+    ]
+
+
+def context_targets_for_record(
+    record: OpenFDALabelRecord,
+    context_evidence: list[ContextTargetedEvidence],
+) -> list[ContextTargetedEvidence]:
+    if CONTEXT_TARGETED_TAG not in record.provenance_tags:
+        return []
+    record_key = stable_record_key(record)
+    targets: list[ContextTargetedEvidence] = []
+    for item in context_evidence:
+        evidence = item.label_evidence
+        if evidence is None:
+            continue
+        if any(
+            stable_record_key(candidate) == record_key
+            for candidate in evidence.label_records
+        ):
+            targets.append(item)
+    return targets
+
+
+def context_targets_for_section(
+    source_id: str,
+    section_name: str,
+    section_tags: list[str],
+    context_evidence: list[ContextTargetedEvidence],
+) -> list[ContextTargetedEvidence]:
+    if CONTEXT_TARGETED_TAG not in section_tags:
+        return []
+    targets: list[ContextTargetedEvidence] = []
+    for item in context_evidence:
+        evidence = item.label_evidence
+        if evidence is None:
+            continue
+        if any(
+            entry.source_id == source_id
+            for entry in evidence.sections.get(section_name, [])
+        ):
+            targets.append(item)
+    return targets
 
 
 def _add_rxnorm_context(
@@ -475,6 +599,22 @@ def matching_label_owner_concepts(
         if concept.rxcui in record_rxcuis or slug(concept.name) in record_names:
             matches.append(concept)
     return matches
+
+
+def stable_record_key(record: OpenFDALabelRecord) -> str:
+    for value in [record.source_id, record.id, record.set_id]:
+        if value:
+            return value
+    for values in [record.spl_ids, record.spl_set_ids]:
+        if values:
+            return "|".join(sorted(values))
+    return "|".join(
+        [
+            ",".join(record.brand_names),
+            ",".join(record.generic_names),
+            ",".join(record.manufacturer_names),
+        ]
+    )
 
 
 def state_node_id(value: str) -> str:
