@@ -806,7 +806,7 @@ function AskPageNavigation({
   }
 
   return (
-    <aside className="hidden xl:block">
+    <aside className="hidden md:block">
       <nav className="sticky top-6 space-y-1">
         <p className="px-2 pb-2 text-[14px] font-semibold uppercase tracking-wide text-slate-500">
           On this page
@@ -1061,13 +1061,14 @@ export function AskQuestionExperience() {
   }
 
   return (
-    <div className="grid gap-6 xl:-ml-48 xl:grid-cols-[10rem_minmax(0,1fr)]">
-      <AskPageNavigation
-        activeId={activeNavSection}
-        onActivate={activateNavSection}
-        sections={navigationSections}
-      />
-      <div className="flex min-w-0 flex-col gap-6">
+    <div>
+      <div className="grid gap-6 md:grid-cols-[clamp(7.5rem,14vw,10rem)_minmax(0,1fr)]">
+        <AskPageNavigation
+          activeId={activeNavSection}
+          onActivate={activateNavSection}
+          sections={navigationSections}
+        />
+        <div className="flex min-w-0 flex-col gap-6">
         <QueryUnderstandingPanel
           answerResponse={queryAnswer}
           askRef={askQuestionRef}
@@ -1120,6 +1121,7 @@ export function AskQuestionExperience() {
             />
           </EvidenceReveal>
         ) : null}
+        </div>
       </div>
     </div>
   );

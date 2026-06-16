@@ -20,7 +20,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen bg-[#F8F4FC]">
       <header className="w-full bg-[#05021D] py-3">
-        <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-4 sm:flex-row sm:items-center sm:gap-8 sm:px-6 lg:px-8">
+        <div className="mx-auto flex w-full max-w-[92rem] flex-col gap-4 px-4 sm:flex-row sm:items-center sm:gap-8 sm:px-6 lg:px-8">
           <Link href="/" className="block w-fit" aria-label="rx-ray home">
             <Image
               priority
@@ -59,7 +59,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
       </header>
 
-      <main className="mx-auto flex w-full max-w-7xl flex-col gap-5 px-4 py-5 sm:px-6 lg:px-8">
+      <main className="mx-auto flex w-full max-w-[92rem] flex-col gap-5 px-4 py-5 sm:px-6 lg:px-8">
         <div className="mx-auto flex w-full items-center gap-2 rounded-md border border-[#D7C8F4] bg-[#EEE7FA] px-3 py-2 text-sm leading-5 text-[#3B2478]">
           <Info className="size-4 shrink-0" />
           <span>
