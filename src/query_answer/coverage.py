@@ -4,8 +4,9 @@ import re
 from collections import Counter
 from dataclasses import dataclass
 
-from src.dossier.models import LabelSection
+from src.dossier.models import LabelSection, OpenFDALabelEvidence
 from src.query_answer.models import (
+    ContextTargetedEvidence,
     EvidenceAnswer,
     EvidenceCoverageItem,
     EvidenceCoverageReport,
@@ -35,10 +36,12 @@ SECONDARY_MATCH_SECTION_PRIORITY = (
 def build_evidence_coverage(
     understanding: QueryUnderstandingResponse,
     secondary_evidence: list[SecondaryDrugEvidence] | None = None,
+    context_evidence: list[ContextTargetedEvidence] | None = None,
 ) -> EvidenceCoverageReport:
     """Build deterministic coverage metadata from extracted state and evidence."""
 
     secondary_evidence = secondary_evidence or []
+    context_evidence = context_evidence or []
     secondary_by_name = {
         normalize(item.resolved_concept.name): item for item in secondary_evidence
     }
@@ -160,6 +163,14 @@ def build_evidence_coverage(
         )
 
     for allergy in unique_values(understanding.state.allergies):
+        context_item = coverage_from_context_evidence(
+            category="allergy",
+            label=allergy,
+            context_evidence=context_evidence,
+        )
+        if context_item:
+            items.append(context_item)
+            continue
         items.append(
             coverage_from_text(
                 category="allergy",
@@ -174,6 +185,14 @@ def build_evidence_coverage(
         )
 
     for condition in unique_values(understanding.state.conditions):
+        context_item = coverage_from_context_evidence(
+            category="condition",
+            label=condition,
+            context_evidence=context_evidence,
+        )
+        if context_item:
+            items.append(context_item)
+            continue
         items.append(
             coverage_from_text(
                 category="condition",
@@ -188,6 +207,14 @@ def build_evidence_coverage(
         )
 
     for context in unique_values(understanding.state.patient_context):
+        context_item = coverage_from_context_evidence(
+            category="patient_context",
+            label=context,
+            context_evidence=context_evidence,
+        )
+        if context_item:
+            items.append(context_item)
+            continue
         items.append(
             patient_context_coverage(
                 context,
@@ -340,6 +367,55 @@ def has_interaction_evidence(
         if interaction and interaction.sections.get("drug_interactions"):
             return True
     return False
+
+
+def coverage_from_context_evidence(
+    *,
+    category: str,
+    label: str,
+    context_evidence: list[ContextTargetedEvidence],
+) -> EvidenceCoverageItem | None:
+    for item in context_evidence:
+        if item.target_category != category or not same_concept(
+            item.target_label,
+            label,
+        ):
+            continue
+        evidence = item.label_evidence
+        if evidence is None or not any(evidence.sections.values()):
+            continue
+        match = first_context_evidence_match(evidence)
+        return EvidenceCoverageItem(
+            category=category,
+            label=label,
+            status="addressed",
+            reason=(
+                "Context-specific label text was retrieved for "
+                f"{item.resolved_concept.name}. This means the label text "
+                "mentions the extracted context, not that suitability was "
+                "validated."
+            ),
+            matched_evidence=match.snippet if match else None,
+            source_id=match.source_id if match else None,
+            section=match.section if match else None,
+            target_rxcui=item.resolved_concept.rxcui,
+        )
+    return None
+
+
+def first_context_evidence_match(
+    evidence: OpenFDALabelEvidence,
+) -> CoverageEvidenceMatch | None:
+    for section_name, entries in evidence.sections.items():
+        entry = next(iter(entries), None)
+        if entry is None:
+            continue
+        return CoverageEvidenceMatch(
+            snippet=section_preview(entry.text),
+            source_id=entry.source_id,
+            section=section_name,
+        )
+    return None
 
 
 def coverage_from_text(
