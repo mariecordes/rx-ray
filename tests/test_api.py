@@ -715,6 +715,79 @@ def test_query_answer_response_includes_secondary_evidence() -> None:
     )
 
 
+def test_query_answer_response_includes_secondary_evidence_for_drug_allergy() -> None:
+    ibuprofen_concept = RxNormConcept(rxcui="5640", name="ibuprofen", tty="IN")
+    aspirin_concept = RxNormConcept(rxcui="1191", name="aspirin", tty="IN")
+    understanding = QueryUnderstandingResponse(
+        query="Can I take ibuprofen for migraine if I have an aspirin allergy?",
+        state=QueryState(
+            primary_drug="ibuprofen",
+            all_drugs_mentioned=["ibuprofen", "aspirin"],
+            allergies=["aspirin"],
+            conditions=["migraine"],
+            intents=["allergy_context_check", "safety_context_check"],
+        ),
+        resolved_drugs=[
+            ResolvedDrugMention(
+                text="ibuprofen",
+                role="primary_drug",
+                selected_concept=ibuprofen_concept,
+            ),
+            ResolvedDrugMention(
+                text="aspirin",
+                role="allergy",
+                selected_concept=aspirin_concept,
+            ),
+        ],
+        primary_dossier=DrugDossier(
+            query="ibuprofen",
+            resolved_drug=ibuprofen_concept,
+            label_evidence=OpenFDALabelEvidence(
+                rxcui="5640",
+                labels_found=1,
+                label_records=[
+                    OpenFDALabelRecord(source_id="label-primary"),
+                ],
+                sections={
+                    "warnings": [
+                        LabelSection(
+                            section="warnings",
+                            text="Ibuprofen warning text.",
+                            source_id="label-primary",
+                        )
+                    ]
+                },
+            ),
+        ),
+    )
+    service = QueryAnswerService(
+        builder=fake_aspirin_secondary_builder(),
+        understanding_service=FakeUnderstandingService(understanding),
+        synthesizer=FakeAnswerSynthesizer(),
+    )
+
+    response = service.answer(
+        "Can I take ibuprofen for migraine if I have an aspirin allergy?"
+    )
+
+    assert len(response.secondary_evidence) == 1
+    secondary = response.secondary_evidence[0]
+    assert secondary.role == "allergy"
+    assert secondary.resolved_concept.name == "aspirin"
+    assert secondary.label_evidence is not None
+    assert secondary.label_evidence.labels_found == 1
+    assert any(
+        item.category == "mentioned_drug"
+        and item.label == "aspirin"
+        and item.status == "addressed"
+        for item in response.coverage.items
+    )
+    assert any(
+        node.kind == "resolved_medication" and node.rxcui == "1191"
+        for node in response.question_evidence_map.nodes
+    )
+
+
 def test_context_targets_dedupe_and_skip_medication_terms() -> None:
     state = QueryState(
         primary_drug="tretinoin",
@@ -735,6 +808,8 @@ def test_context_targets_dedupe_and_skip_medication_terms() -> None:
         ("allergy", "benzoyl peroxide"),
         ("condition", "acne"),
     ]
+    assert targets[1].search_label == "benzoyl peroxide allergy"
+    assert targets[2].search_label == "acne"
 
 
 def test_context_targeted_evidence_triggers_condition_lookup() -> None:
@@ -827,6 +902,53 @@ def test_context_targeted_evidence_triggers_condition_lookup() -> None:
     ]
 
 
+def test_context_targeted_evidence_uses_allergy_phrase_for_search() -> None:
+    class TrackingOpenFDAStore(OpenFDALabelStore):
+        def __init__(self) -> None:
+            super().__init__(allow_live=False, use_cache=False)
+            self.context_calls: list[str] = []
+
+        def get_context_label_evidence(
+            self,
+            rxcui: str,
+            *,
+            target: str,
+            section_fields: list[str],
+            fallback_name: str | None = None,
+            limit: int = 3,
+        ) -> OpenFDALabelEvidence:
+            self.context_calls.append(target)
+            return OpenFDALabelEvidence(rxcui=rxcui, label_limit=limit)
+
+    store = TrackingOpenFDAStore()
+    builder = DossierBuilder(
+        rxnorm_store=RxNormParquetStore(),
+        openfda_store=store,
+    )
+    understanding = QueryUnderstandingResponse(
+        query="Can I take ibuprofen with an aspirin allergy?",
+        state=QueryState(
+            primary_drug="ibuprofen",
+            all_drugs_mentioned=["ibuprofen"],
+            allergies=["aspirin"],
+        ),
+        primary_dossier=DrugDossier(
+            query="ibuprofen",
+            resolved_drug=RxNormConcept(rxcui="5640", name="ibuprofen", tty="IN"),
+            label_evidence=OpenFDALabelEvidence(rxcui="5640"),
+        ),
+    )
+
+    build_context_targeted_evidence(
+        understanding,
+        [],
+        builder,
+        QueryAnswerParameters(context_lookup_limit=2, max_context_targets=5),
+    )
+
+    assert store.context_calls == ["aspirin allergy"]
+
+
 def test_query_answer_response_merges_context_evidence_into_primary_labels() -> None:
     class ContextOpenFDAStore(OpenFDALabelStore):
         def __init__(self) -> None:
@@ -898,6 +1020,76 @@ def test_query_answer_response_merges_context_evidence_into_primary_labels() -> 
         item.category == "condition"
         and item.label == "acne"
         and item.status == "addressed"
+        for item in response.coverage.items
+    )
+
+
+def test_context_coverage_requires_actual_text_match() -> None:
+    class ContextOpenFDAStore(OpenFDALabelStore):
+        def __init__(self) -> None:
+            super().__init__(allow_live=False, use_cache=False)
+
+        def get_context_label_evidence(
+            self,
+            rxcui: str,
+            *,
+            target: str,
+            section_fields: list[str],
+            fallback_name: str | None = None,
+            limit: int = 3,
+        ) -> OpenFDALabelEvidence:
+            return OpenFDALabelEvidence(
+                rxcui=rxcui,
+                labels_found=1,
+                label_limit=limit,
+                retrieval_mode="context_targeted_lookup",
+                label_records=[
+                    OpenFDALabelRecord(
+                        source_id="label-1",
+                        brand_names=["Ibuprofen"],
+                        provenance_tags=["context_targeted_lookup"],
+                    )
+                ],
+                sections={
+                    "warnings": [
+                        LabelSection(
+                            section="warnings",
+                            text="This warning text mentions a rash only.",
+                            source_id="label-1",
+                            provenance_tags=["context_targeted_lookup"],
+                        )
+                    ]
+                },
+            )
+
+    understanding = QueryUnderstandingResponse(
+        query="Can I take ibuprofen with an aspirin allergy?",
+        state=QueryState(
+            primary_drug="ibuprofen",
+            all_drugs_mentioned=["ibuprofen"],
+            allergies=["aspirin"],
+        ),
+        primary_dossier=DrugDossier(
+            query="ibuprofen",
+            resolved_drug=RxNormConcept(rxcui="5640", name="ibuprofen", tty="IN"),
+            label_evidence=OpenFDALabelEvidence(rxcui="5640"),
+        ),
+    )
+    service = QueryAnswerService(
+        builder=DossierBuilder(
+            rxnorm_store=RxNormParquetStore(),
+            openfda_store=ContextOpenFDAStore(),
+        ),
+        understanding_service=FakeUnderstandingService(understanding),
+        synthesizer=FakeAnswerSynthesizer(),
+    )
+
+    response = service.answer("Can I take ibuprofen with an aspirin allergy?")
+
+    assert any(
+        item.category == "allergy"
+        and item.label == "aspirin"
+        and item.status == "not_found_in_evidence"
         for item in response.coverage.items
     )
 
@@ -1584,6 +1776,61 @@ def fake_secondary_builder() -> DossierBuilder:
     return DossierBuilder(
         rxnorm_store=RxNormParquetStore(),
         openfda_store=FakeSecondaryOpenFDAStore(),
+    )
+
+
+def fake_aspirin_secondary_builder() -> DossierBuilder:
+    class FakeAspirinOpenFDAStore(OpenFDALabelStore):
+        def __init__(self) -> None:
+            super().__init__(allow_live=False, use_cache=False)
+
+        def get_label_evidence(
+            self,
+            rxcui: str,
+            fallback_name: str | None = None,
+            limit: int = 5,
+        ) -> OpenFDALabelEvidence:
+            if rxcui == "1191":
+                return OpenFDALabelEvidence(
+                    rxcui=rxcui,
+                    labels_found=1,
+                    label_limit=limit,
+                    retrieval_mode="standard_secondary_label_lookup",
+                    label_records=[
+                        OpenFDALabelRecord(
+                            source_id="label-aspirin",
+                            brand_names=["Aspirin"],
+                            generic_names=["ASPIRIN"],
+                            provenance_tags=["standard_secondary_label_lookup"],
+                        )
+                    ],
+                    sections={
+                        "warnings": [
+                            LabelSection(
+                                section="warnings",
+                                text="Aspirin warning text.",
+                                source_id="label-aspirin",
+                                provenance_tags=[
+                                    "standard_secondary_label_lookup"
+                                ],
+                            )
+                        ]
+                    },
+                )
+            return OpenFDALabelEvidence(rxcui=rxcui, label_limit=limit)
+
+        def get_interaction_label_evidence(
+            self,
+            rxcui: str,
+            interaction_name: str,
+            fallback_name: str | None = None,
+            limit: int = 3,
+        ) -> OpenFDALabelEvidence:
+            return OpenFDALabelEvidence(rxcui=rxcui, label_limit=limit)
+
+    return DossierBuilder(
+        rxnorm_store=RxNormParquetStore(),
+        openfda_store=FakeAspirinOpenFDAStore(),
     )
 
 

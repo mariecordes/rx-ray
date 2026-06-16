@@ -17,7 +17,7 @@ from src.query_understanding.models import (
 )
 
 
-SECONDARY_ROLES = {"current_medication", "mentioned_drug"}
+SECONDARY_ROLES = {"allergy", "current_medication", "mentioned_drug"}
 
 
 def build_secondary_evidence(
@@ -137,7 +137,11 @@ def select_secondary_mentions(
 def state_drug_keys(state: QueryState) -> set[str]:
     return {
         normalized
-        for value in [*state.all_drugs_mentioned, *state.current_medications]
+        for value in [
+            *state.all_drugs_mentioned,
+            *state.current_medications,
+            *state.allergies,
+        ]
         if (normalized := normalize_drug_key(value))
     }
 
