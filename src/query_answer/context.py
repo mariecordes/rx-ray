@@ -56,6 +56,7 @@ class ContextTarget:
     label: str
     category: str
     fields: tuple[str, ...]
+    search_label: str
 
 
 def build_context_targeted_evidence(
@@ -85,7 +86,7 @@ def build_context_targeted_evidence(
         for concept in concepts:
             evidence = builder.openfda_store.get_context_label_evidence(
                 concept.rxcui,
-                target=target.label,
+                target=target.search_label,
                 section_fields=list(target.fields),
                 fallback_name=concept.name,
                 limit=parameters.context_lookup_limit,
@@ -175,6 +176,7 @@ def select_context_targets(
                     label=label,
                     category=category,
                     fields=tuple(fields_for_value(label)),
+                    search_label=context_search_label(category, label),
                 )
             )
             if len(selected) >= max_items:
@@ -191,6 +193,14 @@ def patient_context_fields(value: str) -> tuple[str, ...]:
 
 def clean_context_label(value: str) -> str:
     return " ".join(value.strip().split())
+
+
+def context_search_label(category: str, label: str) -> str:
+    if category == "allergy":
+        normalized = normalize_context_key(label)
+        if "allergy" not in normalized:
+            return f"{label} allergy"
+    return label
 
 
 def normalize_context_key(value: str) -> str:

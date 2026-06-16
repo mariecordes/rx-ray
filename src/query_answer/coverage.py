@@ -4,7 +4,7 @@ import re
 from collections import Counter
 from dataclasses import dataclass
 
-from src.dossier.models import LabelSection, OpenFDALabelEvidence
+from src.dossier.models import LabelSection
 from src.query_answer.models import (
     ContextTargetedEvidence,
     EvidenceAnswer,
@@ -108,7 +108,7 @@ def build_evidence_coverage(
                 EvidenceCoverageItem(
                     category="mentioned_drug",
                     label=drug,
-                    status="addressed",
+                    status="addressed", 
                     reason=(
                         "Secondary label evidence was retrieved for "
                         f"{secondary.resolved_concept.name}."
@@ -123,8 +123,7 @@ def build_evidence_coverage(
                 label=drug,
                 status="not_retrieved",
                 reason=(
-                    "V1 retrieves full evidence only for the primary "
-                    "resolved medication."
+                    "Secondary label evidence was not retrieved."
                 ),
             )
         )
@@ -384,36 +383,18 @@ def coverage_from_context_evidence(
         evidence = item.label_evidence
         if evidence is None or not any(evidence.sections.values()):
             continue
-        match = first_context_evidence_match(evidence)
+        match = find_match_in_sections(label, evidence.sections)
+        if not match:
+            continue
         return EvidenceCoverageItem(
             category=category,
             label=label,
             status="addressed",
-            reason=(
-                "Context-specific label text was retrieved for "
-                f"{item.resolved_concept.name}. This means the label text "
-                "mentions the extracted context, not that suitability was "
-                "validated."
-            ),
-            matched_evidence=match.snippet if match else None,
-            source_id=match.source_id if match else None,
-            section=match.section if match else None,
+            reason="The retrieved label text explicitly mentions this item.",
+            matched_evidence=match.snippet,
+            source_id=match.source_id,
+            section=match.section,
             target_rxcui=item.resolved_concept.rxcui,
-        )
-    return None
-
-
-def first_context_evidence_match(
-    evidence: OpenFDALabelEvidence,
-) -> CoverageEvidenceMatch | None:
-    for section_name, entries in evidence.sections.items():
-        entry = next(iter(entries), None)
-        if entry is None:
-            continue
-        return CoverageEvidenceMatch(
-            snippet=section_preview(entry.text),
-            source_id=entry.source_id,
-            section=section_name,
         )
     return None
 
