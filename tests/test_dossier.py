@@ -53,6 +53,25 @@ def test_resolve_returns_preferred_concept_not_matched_synonym() -> None:
     assert cream_drug[0].concept.tty == "SCD"
 
 
+def test_get_ingredient_concepts_walks_specific_concept_to_ingredient() -> None:
+    store = RxNormParquetStore()
+
+    # SCD "tretinoin 1 MG/ML Topical Cream" reaches its ingredient indirectly
+    # (SCD --consists_of--> SCDC --has_ingredient--> IN tretinoin).
+    ingredients = store.get_ingredient_concepts("198300")
+    assert [concept.rxcui for concept in ingredients] == ["10753"]
+    assert all(concept.tty in {"IN", "MIN", "PIN"} for concept in ingredients)
+
+    # A combination Oral Tablet broadens to both component ingredients.
+    combo = store.get_ingredient_concepts("562251")
+    combo_rxcuis = {concept.rxcui for concept in combo}
+    assert {"723", "48203"} <= combo_rxcuis  # amoxicillin + clavulanate
+
+    # A bare ingredient has nothing more general and must not explode into the
+    # co-ingredients of products that share it.
+    assert store.get_ingredient_concepts("1191") == []  # aspirin (IN)
+
+
 def test_builds_offline_rxnorm_dossier() -> None:
     builder = DossierBuilder(
         rxnorm_store=RxNormParquetStore(),

@@ -47,6 +47,21 @@ TTY_PRIORITY = {
     "SBDC": 9,
 }
 
+# Term types that denote an active ingredient.
+INGREDIENT_TTYS = {"IN", "MIN", "PIN"}
+
+# Relations followed to walk from a specific concept down to its active
+# ingredient(s). In the prescribable subset a Semantic Clinical Drug reaches
+# its ingredient indirectly (e.g. SCD --consists_of--> SCDC --has_ingredient-->
+# IN), so this is a small bounded walk rather than a single hop.
+INGREDIENT_PATH_RELATIONS = {
+    "has_ingredient",
+    "has_ingredients",
+    "has_precise_ingredient",
+    "consists_of",
+    "contains",
+}
+
 
 RXNORM_PRESCRIBABLE_DIR = Path("data/01_raw/rxnorm_prescribable")
 
@@ -327,6 +342,54 @@ class RxNormParquetStore:
                 )
 
         return concepts
+
+    def get_ingredient_concepts(
+        self,
+        rxcui: str,
+        max_hops: int = 2,
+    ) -> list[RxNormConcept]:
+        """Return active-ingredient concepts (IN/MIN/PIN) reachable from a concept.
+
+        Follows composition/ingredient relations a couple of hops so a specific
+        Semantic Clinical Drug can be broadened to its ingredient(s) when it has
+        no label evidence of its own. The starting concept is never returned.
+        """
+
+        rel = self.rxnrel
+        start = str(rxcui)
+        # A single ingredient can't be broadened further; expanding from it would
+        # walk back out to the co-ingredients of every product that contains it.
+        start_concept = self.get_concepts({start}).get(start)
+        if start_concept and (start_concept.tty or "") in {"IN", "PIN"}:
+            return []
+
+        seen = {start}
+        frontier = {start}
+        ingredients: dict[str, RxNormConcept] = {}
+
+        for _ in range(max(max_hops, 1)):
+            if not frontier:
+                break
+            mask = rel["RXCUI1"].isin(frontier) | rel["RXCUI2"].isin(frontier)
+            edges = rel[mask]
+            edges = edges[edges["RELA"].isin(INGREDIENT_PATH_RELATIONS)]
+            neighbors = (
+                set(edges["RXCUI1"].astype(str)) | set(edges["RXCUI2"].astype(str))
+            ) - seen
+            if not neighbors:
+                break
+            seen |= neighbors
+            concepts = self.get_concepts(neighbors)
+            for candidate in neighbors:
+                concept = concepts.get(candidate)
+                if concept and (concept.tty or "") in INGREDIENT_TTYS:
+                    ingredients[candidate] = concept
+            # Ingredients are terminal: don't expand from them, or the walk
+            # broadens back out to the co-ingredients of every product that
+            # shares this ingredient.
+            frontier = neighbors - set(ingredients)
+
+        return sorted(ingredients.values(), key=lambda concept: concept.name.casefold())
 
     def get_neighborhood(
         self,
