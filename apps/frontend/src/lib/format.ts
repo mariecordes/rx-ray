@@ -37,6 +37,10 @@ export const rxNormTypeLabels: Record<string, string> = {
   PSN: "Prescribable Name",
   SY: "Synonym",
   TMSY: "Tall Man Lettering Synonym",
+  DP: "Drug Product",
+  SU: "Active Substance",
+  MTH_RXN_DP: "Drug Product",
+  PT: "Preferred Term",
 };
 
 export function sentenceCase(value: string) {
