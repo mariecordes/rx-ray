@@ -778,6 +778,11 @@ function OverviewJumpCard({
   );
 }
 
+function ingredientFallbackNames(evidence: OpenFDALabelEvidence): string[] {
+  const names = evidence.summary_metadata?.generic_names ?? [];
+  return Array.from(new Set(names.map((name) => displayGenericName(name))));
+}
+
 function LabelEvidencePanel({
   ref,
   navRef,
@@ -965,17 +970,33 @@ function LabelEvidencePanel({
             </p>
             {labelEvidence &&
             labelEvidence.labels_found > 0 &&
-            (labelEvidence.retrieval_mode === "live_rxcui" ||
-              labelEvidence.retrieval_mode === "cache") ? (
+            labelEvidence.retrieval_mode === "ingredient_fallback" ? (
+              <p className="mx-auto flex w-full items-center gap-2 mt-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm leading-5 text-amber-900">
+                <Info className="size-4 shrink-0" />
+                <span>
+                  No product-specific labels were found for this medication.
+                  Showing labels for its active ingredient
+                  {ingredientFallbackNames(labelEvidence).length === 1 ? "" : "s"}
+                  {ingredientFallbackNames(labelEvidence).length
+                    ? ` (${ingredientFallbackNames(labelEvidence).join(", ")})`
+                    : ""}
+                  , which may describe other formulations than the one asked
+                  about.
+                </span>
+              </p>
+            ) : labelEvidence &&
+              labelEvidence.labels_found > 0 &&
+              (labelEvidence.retrieval_mode === "live_rxcui" ||
+                labelEvidence.retrieval_mode === "cache") ? (
               <p className="mx-auto flex w-full items-center gap-2 mt-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm leading-5 text-slate-600">
-              <Info className="size-4 shrink-0" />
-              <span>
-                These drug labels are matched to this medication&apos;s RxNorm concept
-                (RXCUI {labelEvidence.rxcui}). Each source card below shows the
-                label&apos;s own brand or generic name (often the active
-                ingredient) which may read more broadly than the matched
-                concept.
-              </span>
+                <Info className="size-4 shrink-0" />
+                <span>
+                  These drug labels are matched to this medication&apos;s RxNorm
+                  concept (RXCUI {labelEvidence.rxcui}). Each source card below
+                  shows the label&apos;s own brand or generic name (often the
+                  active ingredient) which may read more broadly than the matched
+                  concept.
+                </span>
               </p>
             ) : null}
           </div>
