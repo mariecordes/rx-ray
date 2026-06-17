@@ -105,16 +105,19 @@ the safety properties are enforced in code:
   the network and evidence-map visualizations.
 - **Backend:** Python FastAPI, with optional OpenAI API integration for query
   refinement and grounded synthesis.
-- **Data:** RxNorm Current Prescribable Content (June 2026 release, exported to
+- **Data:** RxNorm Current Prescribable Content (April 2026 release, exported to
   parquet for fast local retrieval) and public drug labels via the OpenFDA
   drug-label API. OpenFDA lookups use live-with-cache behavior, storing raw
   responses under `data/cache/openfda_labels/`.
 
 ## Data sources
 
-- **RxNorm Current Prescribable Content** (June 2026 monthly release) —
-  medication terminology, RXCUIs, concept types, and relationships, exported to
-  local parquet in `data/01_raw/`. This is NLM's
+- **RxNorm Current Prescribable Content** (April 2026 release) — medication
+  terminology, RXCUIs, concept types, and relationships. The two runtime tables
+  (`rxnconso`, `rxnrel`) are committed under
+  `data/01_raw/rxnorm_prescribable/<YYYYMMDD>/` so a fresh clone runs with no
+  bulk data download; the app always loads the latest dated release folder. This
+  is NLM's
   [license-free subset](https://www.nlm.nih.gov/research/umls/rxnorm/docs/prescribe.html)
   of currently-prescribable US drugs (plus many OTC), built from the `RXNORM`
   and FDA Structured Product Label (`MTHSPL`) sources. It's a deliberate fit
@@ -156,12 +159,21 @@ tests/                     Backend tests
 
 ## Running locally
 
-> A full setup / bootstrap guide is in progress and will be expanded here.
+A fresh clone runs end-to-end with no extra data wrangling — the minimal RxNorm
+runtime data is committed, and OpenFDA labels are fetched live (no API key
+needed). Requires Python 3.11+ and Node 18+.
 
-In short: a Python backend (`pip install -e ".[dev,llm]"`, run with `uvicorn`)
-and a Next.js frontend (`npm install && npm run dev`). Copy `.env.example` to
-`.env` for configuration; the LLM features are optional and the app runs
-deterministically without an API key.
+```bash
+make setup          # install backend + frontend deps, create .env, verify data
+make api            # backend on http://localhost:8000
+make web            # frontend on http://localhost:3000 (second terminal)
+```
+
+`make setup` is a convenience wrapper; you can also run the steps by hand (create
+a venv, `pip install -e ".[dev,llm]"`, `cd apps/frontend && npm install`, copy
+`.env.example` to `.env`). The LLM features are optional — without an OpenAI key
+the pipeline falls back to deterministic behavior. Run `make test` / `make check`
+for tests and linting.
 
 ## Safety note
 

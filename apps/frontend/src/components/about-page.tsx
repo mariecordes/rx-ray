@@ -260,7 +260,7 @@ export function AboutPage() {
                 >
                   Current Prescribable Content
                 </a>{" "}
-                (June 2026 release, exported to parquet for fast local
+                (April 2026 release, exported to parquet for fast local
                 retrieval) and public drug labels from the{" "}
                 <a
                   href="https://open.fda.gov/apis/drug/label/"
