@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from src.dossier.builder import DossierBuilder
-from src.dossier.models import RxNormConcept, RxNormEdge, RxNormNeighborhood
+from src.dossier.models import RxNormConcept, RxNormEdge
 from src.query_answer.config import QueryAnswerParameters
 from src.query_answer.models import (
     QuestionRxNormNetwork,
@@ -19,12 +19,13 @@ def build_question_rxnorm_network(
 ) -> QuestionRxNormNetwork:
     """Merge each resolved drug's RxNorm neighborhood into one shared network.
 
-    The primary keeps its already-built deeper neighborhood; secondaries are
-    expanded shallowly. Nodes reachable from more than one drug are flagged as
-    ``shared_rxcuis`` so the UI can surface terminology overlap. This is
-    terminology context only and never asserts a clinical interaction.
+    Each drug gets an equal edge budget derived from the global cap divided by
+    the number of centers. Edges from each center are interleaved in round-robin
+    order so the frontend's display logic naturally distributes visual slots
+    fairly across all drugs. Nodes reachable from more than one drug are flagged
+    as ``shared_rxcuis`` — this is RxNorm vocabulary overlap, never a clinical
+    interaction claim.
     """
-
     primary = (
         understanding.primary_dossier.resolved_drug
         if understanding.primary_dossier
@@ -34,92 +35,97 @@ def build_question_rxnorm_network(
     if primary is None:
         return QuestionRxNormNetwork()
 
-    centers: list[RxNormNetworkCenter] = [
-        RxNormNetworkCenter(
-            rxcui=primary.rxcui,
-            name=primary.name,
-            tty=primary.tty,
-            role="primary_drug",
-        )
+    # Pass 1: collect all unique center (rxcui, name, tty, role) tuples.
+    seen_rxcuis: set[str] = {primary.rxcui}
+    center_tuples: list[tuple[str, str, str | None, str]] = [
+        (primary.rxcui, primary.name, primary.tty, "primary_drug")
     ]
-    neighborhoods: list[tuple[str, RxNormNeighborhood]] = [
-        (primary.rxcui, understanding.primary_dossier.rxnorm_neighborhood)
-    ]
-    seen_centers = {primary.rxcui}
-
     for item in secondary_evidence:
         concept = item.resolved_concept
-        if concept.rxcui in seen_centers:
+        if concept.rxcui in seen_rxcuis:
             continue
-        seen_centers.add(concept.rxcui)
-        centers.append(
-            RxNormNetworkCenter(
-                rxcui=concept.rxcui,
-                name=concept.name,
-                tty=concept.tty,
-                role=item.role,
-            )
-        )
-        neighborhoods.append(
-            (
-                concept.rxcui,
-                builder.rxnorm_store.get_neighborhood(
-                    concept.rxcui,
-                    depth=parameters.network_secondary_depth,
-                    max_edges=parameters.network_max_edges_per_center,
-                ),
-            )
-        )
+        seen_rxcuis.add(concept.rxcui)
+        center_tuples.append((concept.rxcui, concept.name, concept.tty, item.role))
 
-    merged_nodes: dict[str, RxNormConcept] = {}
-    membership: dict[str, list[str]] = {}
-    merged_edges: dict[tuple[str, str, str], RxNormEdge] = {}
-    truncated = False
-
-    for center_rxcui, neighborhood in neighborhoods:
-        truncated = truncated or neighborhood.truncated
-        member_ids = {node.rxcui for node in neighborhood.nodes}
-        member_ids.add(center_rxcui)
-        for rxcui in member_ids:
-            centers_for_node = membership.setdefault(rxcui, [])
-            if center_rxcui not in centers_for_node:
-                centers_for_node.append(center_rxcui)
-        for node in neighborhood.nodes:
-            merged_nodes.setdefault(node.rxcui, node)
-        for edge in neighborhood.edges:
-            key = (edge.source_rxcui, edge.target_rxcui, edge.relation)
-            merged_edges.setdefault(key, edge)
-
-    for center in centers:
-        merged_nodes.setdefault(
-            center.rxcui,
-            RxNormConcept(rxcui=center.rxcui, name=center.name, tty=center.tty),
-        )
-
-    center_ids = {center.rxcui for center in centers}
-    shared_ids = {
-        rxcui for rxcui, owners in membership.items() if len(owners) > 1
-    }
-
-    kept_edges, edges_truncated = _budget_edges(
-        list(merged_edges.values()),
-        center_ids=center_ids,
-        shared_ids=shared_ids,
-        max_total_edges=parameters.network_max_total_edges,
+    num_centers = len(center_tuples)
+    per_center_budget = min(
+        parameters.network_max_edges_per_center,
+        parameters.network_max_total_edges // max(num_centers, 1),
     )
-    truncated = truncated or edges_truncated
 
+    # Pass 2: build center list, fetch/cap neighborhoods, track membership.
+    centers: list[RxNormNetworkCenter] = []
+    center_edge_lists: list[list[RxNormEdge]] = []
+    all_nodes: dict[str, RxNormConcept] = {}
+    membership: dict[str, list[str]] = {}
+    truncated = False
+    primary_neighborhood = understanding.primary_dossier.rxnorm_neighborhood
+
+    for rxcui, name, tty, role in center_tuples:
+        centers.append(
+            RxNormNetworkCenter(rxcui=rxcui, name=name, tty=tty, role=role)
+        )
+
+        if rxcui == primary.rxcui:
+            neighborhood_nodes = primary_neighborhood.nodes
+            edges = primary_neighborhood.edges[:per_center_budget]
+            truncated = truncated or primary_neighborhood.truncated
+        else:
+            neighborhood = builder.rxnorm_store.get_neighborhood(
+                rxcui,
+                depth=parameters.network_secondary_depth,
+                max_edges=per_center_budget,
+            )
+            neighborhood_nodes = neighborhood.nodes
+            edges = neighborhood.edges
+            truncated = truncated or neighborhood.truncated
+
+        center_edge_lists.append(edges)
+
+        member_rxcuis = {node.rxcui for node in neighborhood_nodes}
+        member_rxcuis.add(rxcui)
+        for member_rxcui in member_rxcuis:
+            owners = membership.setdefault(member_rxcui, [])
+            if rxcui not in owners:
+                owners.append(rxcui)
+
+        for node in neighborhood_nodes:
+            all_nodes.setdefault(node.rxcui, node)
+
+    for rxcui, name, tty, _ in center_tuples:
+        all_nodes.setdefault(
+            rxcui, RxNormConcept(rxcui=rxcui, name=name, tty=tty)
+        )
+
+    # Interleave edges from each center in round-robin order, deduplicating.
+    seen_edge_keys: set[tuple[str, str, str]] = set()
+    interleaved: list[RxNormEdge] = []
+    max_len = max((len(e) for e in center_edge_lists), default=0)
+    for i in range(max_len):
+        for edge_list in center_edge_lists:
+            if i >= len(edge_list):
+                continue
+            edge = edge_list[i]
+            key = (edge.source_rxcui, edge.target_rxcui, edge.relation)
+            if key not in seen_edge_keys:
+                seen_edge_keys.add(key)
+                interleaved.append(edge)
+
+    kept_edges = interleaved[:parameters.network_max_total_edges]
+    if len(interleaved) > parameters.network_max_total_edges:
+        truncated = True
+
+    center_ids = {rxcui for rxcui, *_ in center_tuples}
     surviving_ids = set(center_ids)
     for edge in kept_edges:
         surviving_ids.add(edge.source_rxcui)
         surviving_ids.add(edge.target_rxcui)
 
+    shared_ids = {
+        rxcui for rxcui, owners in membership.items() if len(owners) > 1
+    }
     nodes = sorted(
-        (
-            node
-            for rxcui, node in merged_nodes.items()
-            if rxcui in surviving_ids
-        ),
+        (node for rxcui, node in all_nodes.items() if rxcui in surviving_ids),
         key=lambda node: node.name.casefold(),
     )
     node_membership = {
@@ -137,28 +143,3 @@ def build_question_rxnorm_network(
         shared_rxcuis=shared_rxcuis,
         truncated=truncated,
     )
-
-
-def _budget_edges(
-    edges: list[RxNormEdge],
-    *,
-    center_ids: set[str],
-    shared_ids: set[str],
-    max_total_edges: int,
-) -> tuple[list[RxNormEdge], bool]:
-    """Cap edges, keeping center- then shared-incident edges first."""
-
-    if len(edges) <= max_total_edges:
-        return edges, False
-
-    def priority(edge: RxNormEdge) -> int:
-        endpoints = {edge.source_rxcui, edge.target_rxcui}
-        if endpoints & center_ids:
-            return 0
-        if endpoints & shared_ids:
-            return 1
-        return 2
-
-    ordered = sorted(enumerate(edges), key=lambda pair: (priority(pair[1]), pair[0]))
-    kept = [edge for _, edge in ordered[:max_total_edges]]
-    return kept, True

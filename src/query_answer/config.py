@@ -17,7 +17,7 @@ class QueryAnswerParameters:
     context_lookup_enabled: bool = True
     max_synthesis_retries: int = 1
     require_citations_when_evidence_exists: bool = True
-    network_secondary_depth: int = 1
+    network_secondary_depth: int = 2
     network_max_edges_per_center: int = 200
     network_max_total_edges: int = 600
 
@@ -79,9 +79,9 @@ def load_query_answer_parameters() -> QueryAnswerParameters:
         ),
         network_secondary_depth=bounded_int(
             query_answer.get("network_secondary_depth"),
-            default=1,
+            default=2,
             minimum=1,
-            maximum=2,
+            maximum=3,
         ),
         network_max_edges_per_center=bounded_int(
             query_answer.get("network_max_edges_per_center"),
