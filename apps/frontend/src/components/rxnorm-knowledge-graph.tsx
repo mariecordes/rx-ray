@@ -10,7 +10,7 @@ import {
   forceY,
 } from "d3-force";
 import type { Simulation } from "d3-force";
-import { Info, Maximize2, Minus, Plus } from "lucide-react";
+import { ExternalLink, Info, Maximize2, Minus, Plus } from "lucide-react";
 import type { MouseEvent, PointerEvent, WheelEvent } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -23,7 +23,10 @@ const GRAPH_WIDTH = 1180;
 const GRAPH_HEIGHT = 1180;
 const MAX_VISUAL_NODES = 80;
 const DEFAULT_DISPLAYED_EDGES = 100;
+const MIN_DISPLAYED_EDGES = 20;
 const MAX_DISPLAYED_EDGES = 400;
+// Default for the unified network when the drugs share no visible RxNorm path.
+const NETWORK_FALLBACK_EDGES = 200;
 const MIN_ZOOM = 0.42;
 const MAX_ZOOM = 2;
 const FOCUS_ZOOM = 1.55;
@@ -251,6 +254,81 @@ function buildVisualGraph(
     }));
 
   return { visualEdges, visualNodes };
+}
+
+function centersAreConnected(
+  visualEdges: RxNormEdge[],
+  centerRxcuis: ReadonlySet<string>
+) {
+  if (centerRxcuis.size < 2) {
+    return false;
+  }
+  const parent = new Map<string, string>();
+  function find(node: string): string {
+    let root = node;
+    while ((parent.get(root) ?? root) !== root) {
+      root = parent.get(root) ?? root;
+    }
+    let cursor = node;
+    while (cursor !== root) {
+      const next = parent.get(cursor) ?? root;
+      parent.set(cursor, root);
+      cursor = next;
+    }
+    return root;
+  }
+  function union(a: string, b: string) {
+    if (!parent.has(a)) parent.set(a, a);
+    if (!parent.has(b)) parent.set(b, b);
+    parent.set(find(a), find(b));
+  }
+  for (const edge of visualEdges) {
+    union(edge.source_rxcui, edge.target_rxcui);
+  }
+  const rootsSeen = new Set<string>();
+  for (const center of centerRxcuis) {
+    if (!parent.has(center)) {
+      continue;
+    }
+    const root = find(center);
+    if (rootsSeen.has(root)) {
+      return true;
+    }
+    rootsSeen.add(root);
+  }
+  return false;
+}
+
+// Smallest "displayed relationships" value that visually connects two or more
+// drug centers through shared RxNorm nodes. Falls back to NETWORK_FALLBACK_EDGES
+// when the drugs share no path (or there is only one drug).
+function computeDefaultEdgeBudget(
+  network: QuestionRxNormNetwork,
+  maxVisualNodes: number
+) {
+  const centerRxcuis = new Set(network.centers.map((center) => center.rxcui));
+  const { edges, nodes } = network;
+  const maxBudget = Math.min(MAX_DISPLAYED_EDGES, edges.length);
+  const fallback = Math.min(
+    NETWORK_FALLBACK_EDGES,
+    Math.max(MIN_DISPLAYED_EDGES, maxBudget)
+  );
+  if (centerRxcuis.size < 2 || edges.length === 0) {
+    return fallback;
+  }
+  for (let limit = MIN_DISPLAYED_EDGES; limit <= maxBudget; limit += 20) {
+    const { visualEdges } = buildVisualGraph(
+      centerRxcuis,
+      nodes,
+      edges,
+      limit,
+      maxVisualNodes
+    );
+    if (centersAreConnected(visualEdges, centerRxcuis)) {
+      return limit;
+    }
+  }
+  return fallback;
 }
 
 function buildDepthLevels(centerRxcuis: ReadonlySet<string>, edges: RxNormEdge[]) {
@@ -1322,6 +1400,15 @@ export function QuestionRxNormNetworkGraph({
   // Scale node budget with number of centers so each drug gets enough room.
   const maxVisualNodes = Math.min(160, MAX_VISUAL_NODES + Math.max(0, centerRxcuis.size - 1) * 30);
 
+  // Default the slider to the fewest relationships that visually link the drugs.
+  const defaultEdgeBudget = useMemo(
+    () => computeDefaultEdgeBudget(network, maxVisualNodes),
+    [network, maxVisualNodes]
+  );
+  useEffect(() => {
+    setDisplayedEdges(defaultEdgeBudget);
+  }, [defaultEdgeBudget]);
+
   const { visualEdges, visualNodes } = useMemo(
     () => buildVisualGraph(centerRxcuis, nodes, edges, edgeLimit, maxVisualNodes),
     [centerRxcuis, edgeLimit, edges, maxVisualNodes, nodes]
@@ -1605,13 +1692,6 @@ export function QuestionRxNormNetworkGraph({
         </div>
         <p className="mt-1 text-sm leading-6 text-slate-500">
           Explore how the mentioned medications relate through RxNorm terminology.
-          {network.shared_rxcuis.length > 0 && (
-            <span className="text-amber-700">
-              {" "}
-              Amber-ringed nodes appear in multiple drug networks — terminology
-              overlap only, not interaction evidence.
-            </span>
-          )}
         </p>
       </div>
       <div className={variant === "embedded" ? "space-y-4 p-0 pt-4" : "space-y-4 p-4"}>
@@ -1774,14 +1854,20 @@ export function QuestionRxNormNetworkGraph({
                 <label className="flex flex-col gap-2 text-xs text-slate-600">
                   <span className="flex items-center justify-between gap-3">
                     <span>Displayed relationships</span>
-                    <span className="font-medium text-slate-900">{edgeLimit}</span>
+                    <span className="font-medium text-slate-900">
+                      {Math.round((displayedEdges / MAX_DISPLAYED_EDGES) * 100)}%
+                    </span>
                   </span>
                   <input
-                    min={20} max={MAX_DISPLAYED_EDGES} step={10} type="range"
+                    min={MIN_DISPLAYED_EDGES} max={MAX_DISPLAYED_EDGES} step={10} type="range"
                     value={displayedEdges}
                     onChange={(e) => setDisplayedEdges(Number(e.target.value))}
                     className="w-full accent-slate-900"
                   />
+                  <span className="flex items-center justify-between text-[11px] text-slate-400">
+                    <span>Fewer</span>
+                    <span>More</span>
+                  </span>
                 </label>
               </div>
 
@@ -1811,24 +1897,26 @@ export function QuestionRxNormNetworkGraph({
                           {ttyBadgeTitle(selectedNode.tty)}
                         </span>
                       </span>
-                      {centerRxcuis.has(selectedNode.rxcui) ? (
-                        <button
-                          type="button"
-                          className="inline-flex shrink-0 items-center rounded-md bg-[#371E8F] px-2 py-0.5 text-xs font-medium text-white transition hover:bg-[#2d1a7a]"
-                          onClick={() => onOpenTab?.(selectedNode.rxcui)}
-                        >
-                          Open {displayNodeName(selectedNode.name)} tab →
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          className="inline-flex shrink-0 items-center rounded-md bg-[#371E8F] px-2 py-0.5 text-xs font-medium text-white transition hover:bg-[#2d1a7a]"
-                          onClick={() => onOpenDossier?.(selectedNode.name)}
-                        >
-                          Open in Drug Dossier →
-                        </button>
-                      )}
                     </div>
+                    {centerRxcuis.has(selectedNode.rxcui) ? (
+                      <button
+                        type="button"
+                        className="inline-flex w-fit items-center gap-1.5 rounded-md bg-[#371E8F] px-2.5 py-1 text-xs font-medium text-white transition hover:bg-[#2d1a7a]"
+                        onClick={() => onOpenTab?.(selectedNode.rxcui)}
+                      >
+                        <ExternalLink className="size-3.5" />
+                        Open {displayNodeName(selectedNode.name)} tab
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        className="inline-flex w-fit items-center gap-1.5 rounded-md bg-[#371E8F] px-2.5 py-1 text-xs font-medium text-white transition hover:bg-[#2d1a7a]"
+                        onClick={() => onOpenDossier?.(selectedNode.name)}
+                      >
+                        <ExternalLink className="size-3.5" />
+                        Open in Drug Dossier
+                      </button>
+                    )}
                   </div>
                 ) : (
                   <div className="mt-2 space-y-2">
@@ -1889,9 +1977,11 @@ export function QuestionRxNormNetworkGraph({
                 </div>
               </div>
               <p className="text-xs leading-5 text-slate-500">
-                Showing {filteredEdges.length} of {edges.length} returned
-                relationships{selectedTypes.size > 0 ? " after type filtering" : ""}. Hover
-                over a line to see the relationship. Double-click a node to focus it.
+                Hover over a line to see the relationship. Double-click a node to
+                focus it.
+                {network.shared_rxcuis.length > 0
+                  ? " Amber-ringed nodes appear in multiple drug networks (terminology overlap only, not interaction evidence)."
+                  : ""}
               </p>
             </div>
           </div>
