@@ -272,6 +272,18 @@ class EvidenceAnswerSynthesizer:
             "resolved_primary_drug": (
                 dossier.resolved_drug.model_dump() if dossier.resolved_drug else None
             ),
+            "label_evidence_scope": dossier.label_evidence_scope,
+            "ingredient_fallback": [
+                {
+                    "ingredient": item.ingredient.model_dump(),
+                    "labels_found": (
+                        item.label_evidence.labels_found
+                        if item.label_evidence
+                        else 0
+                    ),
+                }
+                for item in dossier.ingredient_fallback
+            ],
             "rxnorm_relationship_summary": rxnorm_relationship_summary(dossier),
             "secondary_drug_evidence": [
                 secondary_evidence_payload(item) for item in secondary_evidence
