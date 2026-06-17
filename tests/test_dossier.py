@@ -5,6 +5,11 @@ import pytest
 import requests
 
 from src.dossier.builder import DossierBuilder
+from src.dossier.models import (
+    LabelSection,
+    OpenFDALabelEvidence,
+    OpenFDALabelRecord,
+)
 from src.dossier.openfda_store import OpenFDALabelStore
 from src.dossier.rxnorm_store import RxNormParquetStore
 
@@ -86,6 +91,76 @@ def test_builds_offline_rxnorm_dossier() -> None:
     assert dossier.label_evidence is not None
     assert dossier.label_evidence.labels_found == 0
     assert dossier.label_evidence.label_limit == 5
+
+
+def test_dossier_broadens_to_ingredient_when_concept_has_no_labels() -> None:
+    class IngredientOnlyOpenFDAStore(OpenFDALabelStore):
+        def get_label_evidence(self, rxcui, fallback_name=None, limit=5):
+            if rxcui == "10753":  # tretinoin ingredient has labels
+                return OpenFDALabelEvidence(
+                    rxcui=rxcui,
+                    labels_found=1,
+                    label_limit=limit,
+                    retrieval_mode="live_rxcui",
+                    label_records=[
+                        OpenFDALabelRecord(
+                            source_id="L1",
+                            generic_names=["TRETINOIN"],
+                            rxcuis=["10753"],
+                        )
+                    ],
+                    sections={
+                        "warnings": [
+                            LabelSection(
+                                section="warnings",
+                                text="Warning text",
+                                source_id="L1",
+                            )
+                        ]
+                    },
+                    section_flags={"has_warnings": True},
+                )
+            # The specific cream concept (198300) has no labels of its own.
+            return OpenFDALabelEvidence(
+                rxcui=rxcui,
+                labels_found=0,
+                label_limit=limit,
+                retrieval_mode="none",
+            )
+
+    builder = DossierBuilder(
+        rxnorm_store=RxNormParquetStore(),
+        openfda_store=IngredientOnlyOpenFDAStore(allow_live=False, use_cache=False),
+    )
+
+    dossier = builder.build("tretinoin cream", depth=2, max_edges=50)
+
+    assert dossier.resolved_drug is not None
+    assert dossier.resolved_drug.rxcui == "198300"
+    assert dossier.label_evidence_scope == "ingredient_fallback"
+    assert [item.ingredient.rxcui for item in dossier.ingredient_fallback] == ["10753"]
+    assert dossier.label_evidence is not None
+    assert dossier.label_evidence.labels_found == 1
+    assert dossier.label_evidence.retrieval_mode == "ingredient_fallback"
+    assert (
+        "ingredient_fallback"
+        in dossier.label_evidence.label_records[0].provenance_tags
+    )
+    assert any("active ingredient" in note for note in dossier.notes)
+
+
+def test_dossier_keeps_concept_scope_when_ingredient_has_no_labels() -> None:
+    # Offline: neither the cream concept nor tretinoin return labels, so the
+    # broadening must not be claimed.
+    builder = DossierBuilder(
+        rxnorm_store=RxNormParquetStore(),
+        openfda_store=OpenFDALabelStore(allow_live=False, use_cache=False),
+    )
+
+    dossier = builder.build("tretinoin cream", depth=2, max_edges=50)
+
+    assert dossier.label_evidence_scope == "concept"
+    assert dossier.ingredient_fallback == []
 
 
 def test_openfda_section_normalization() -> None:
