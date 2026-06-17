@@ -10,20 +10,23 @@ import {
   forceY,
 } from "d3-force";
 import type { Simulation } from "d3-force";
-import { Info, Maximize2, Minus, Plus } from "lucide-react";
+import { ExternalLink, Info, Maximize2, Minus, Plus } from "lucide-react";
 import type { MouseEvent, PointerEvent, WheelEvent } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { CardTitle } from "@/components/ui/card";
-import { DrugDossier, RxNormConcept, RxNormEdge } from "@/lib/types";
+import { DrugDossier, QuestionRxNormNetwork, RxNormConcept, RxNormEdge } from "@/lib/types";
 import { displayGraphNodeName as displayNodeName } from "@/lib/format";
 
 const GRAPH_WIDTH = 1180;
 const GRAPH_HEIGHT = 1180;
 const MAX_VISUAL_NODES = 80;
 const DEFAULT_DISPLAYED_EDGES = 100;
+const MIN_DISPLAYED_EDGES = 20;
 const MAX_DISPLAYED_EDGES = 400;
+// Default for the unified network when the drugs share no visible RxNorm path.
+const NETWORK_FALLBACK_EDGES = 200;
 const MIN_ZOOM = 0.42;
 const MAX_ZOOM = 2;
 const FOCUS_ZOOM = 1.55;
@@ -191,22 +194,18 @@ type ForceLink = {
 };
 
 function buildVisualGraph(
-  centerRxcui: string | null,
+  centerRxcuis: ReadonlySet<string>,
   nodes: RxNormConcept[],
   edges: RxNormEdge[],
-  edgeLimit: number
+  edgeLimit: number,
+  maxVisualNodes: number = MAX_VISUAL_NODES
 ) {
   const nodeMap = buildNodeMap(nodes);
-  const centerEdges = centerRxcui
-    ? edges.filter(
-        (edge) =>
-          edge.source_rxcui === centerRxcui || edge.target_rxcui === centerRxcui
-      )
-    : [];
-  const selectedIds = new Set<string>();
-  if (centerRxcui) {
-    selectedIds.add(centerRxcui);
-  }
+  const centerEdges = edges.filter(
+    (edge) =>
+      centerRxcuis.has(edge.source_rxcui) || centerRxcuis.has(edge.target_rxcui)
+  );
+  const selectedIds = new Set<string>(centerRxcuis);
 
   const visualEdges: RxNormEdge[] = [];
   const centerEdgeLimit = Math.max(24, Math.floor(edgeLimit * 0.35));
@@ -217,7 +216,7 @@ function buildVisualGraph(
     const newNodeCount =
       Number(!selectedIds.has(edge.source_rxcui)) +
       Number(!selectedIds.has(edge.target_rxcui));
-    if (selectedIds.size + newNodeCount > MAX_VISUAL_NODES) {
+    if (selectedIds.size + newNodeCount > maxVisualNodes) {
       continue;
     }
     visualEdges.push(edge);
@@ -236,7 +235,7 @@ function buildVisualGraph(
       Number(!selectedIds.has(edge.source_rxcui)) +
       Number(!selectedIds.has(edge.target_rxcui));
 
-    if (!knownEndpoints || selectedIds.size + newNodeCount > MAX_VISUAL_NODES) {
+    if (!knownEndpoints || selectedIds.size + newNodeCount > maxVisualNodes) {
       continue;
     }
 
@@ -245,7 +244,7 @@ function buildVisualGraph(
     selectedIds.add(edge.target_rxcui);
   }
 
-  const depthLevelsByRxcui = buildDepthLevels(centerRxcui, visualEdges);
+  const depthLevelsByRxcui = buildDepthLevels(centerRxcuis, visualEdges);
   const visualNodes: VisualNode[] = Array.from(selectedIds)
     .map((rxcui) => nodeMap.get(rxcui))
     .filter((node): node is RxNormConcept => Boolean(node))
@@ -257,9 +256,84 @@ function buildVisualGraph(
   return { visualEdges, visualNodes };
 }
 
-function buildDepthLevels(centerRxcui: string | null, edges: RxNormEdge[]) {
+function centersAreConnected(
+  visualEdges: RxNormEdge[],
+  centerRxcuis: ReadonlySet<string>
+) {
+  if (centerRxcuis.size < 2) {
+    return false;
+  }
+  const parent = new Map<string, string>();
+  function find(node: string): string {
+    let root = node;
+    while ((parent.get(root) ?? root) !== root) {
+      root = parent.get(root) ?? root;
+    }
+    let cursor = node;
+    while (cursor !== root) {
+      const next = parent.get(cursor) ?? root;
+      parent.set(cursor, root);
+      cursor = next;
+    }
+    return root;
+  }
+  function union(a: string, b: string) {
+    if (!parent.has(a)) parent.set(a, a);
+    if (!parent.has(b)) parent.set(b, b);
+    parent.set(find(a), find(b));
+  }
+  for (const edge of visualEdges) {
+    union(edge.source_rxcui, edge.target_rxcui);
+  }
+  const rootsSeen = new Set<string>();
+  for (const center of centerRxcuis) {
+    if (!parent.has(center)) {
+      continue;
+    }
+    const root = find(center);
+    if (rootsSeen.has(root)) {
+      return true;
+    }
+    rootsSeen.add(root);
+  }
+  return false;
+}
+
+// Smallest "displayed relationships" value that visually connects two or more
+// drug centers through shared RxNorm nodes. Falls back to NETWORK_FALLBACK_EDGES
+// when the drugs share no path (or there is only one drug).
+function computeDefaultEdgeBudget(
+  network: QuestionRxNormNetwork,
+  maxVisualNodes: number
+) {
+  const centerRxcuis = new Set(network.centers.map((center) => center.rxcui));
+  const { edges, nodes } = network;
+  const maxBudget = Math.min(MAX_DISPLAYED_EDGES, edges.length);
+  const fallback = Math.min(
+    NETWORK_FALLBACK_EDGES,
+    Math.max(MIN_DISPLAYED_EDGES, maxBudget)
+  );
+  if (centerRxcuis.size < 2 || edges.length === 0) {
+    return fallback;
+  }
+  for (let limit = MIN_DISPLAYED_EDGES; limit <= maxBudget; limit += 20) {
+    const { visualEdges } = buildVisualGraph(
+      centerRxcuis,
+      nodes,
+      edges,
+      limit,
+      maxVisualNodes
+    );
+    if (centersAreConnected(visualEdges, centerRxcuis)) {
+      return limit;
+    }
+  }
+  return fallback;
+}
+
+function buildDepthLevels(centerRxcuis: ReadonlySet<string>, edges: RxNormEdge[]) {
   const depthLevelsByRxcui = new Map<string, number>();
-  if (!centerRxcui) {
+  if (centerRxcuis.size === 0) {
     return depthLevelsByRxcui;
   }
 
@@ -276,8 +350,11 @@ function buildDepthLevels(centerRxcui: string | null, edges: RxNormEdge[]) {
     neighborsByRxcui.set(edge.target_rxcui, targetNeighbors);
   }
 
-  depthLevelsByRxcui.set(centerRxcui, 0);
-  const queue = [centerRxcui];
+  const queue: string[] = [];
+  for (const rxcui of centerRxcuis) {
+    depthLevelsByRxcui.set(rxcui, 0);
+    queue.push(rxcui);
+  }
   for (let index = 0; index < queue.length; index += 1) {
     const rxcui = queue[index];
     const nextDepth = (depthLevelsByRxcui.get(rxcui) ?? 0) + 1;
@@ -550,9 +627,13 @@ export function RxNormKnowledgeGraph({
   const nodes = dossier.rxnorm_neighborhood.nodes;
   const centerRxcui = dossier.resolved_drug?.rxcui ?? null;
   const edgeLimit = Math.min(displayedEdges, MAX_DISPLAYED_EDGES, edges.length);
+  const centerRxcuiSet = useMemo(
+    () => (centerRxcui ? new Set([centerRxcui]) : new Set<string>()),
+    [centerRxcui]
+  );
   const { visualEdges, visualNodes } = useMemo(
-    () => buildVisualGraph(centerRxcui, nodes, edges, edgeLimit),
-    [centerRxcui, edgeLimit, edges, nodes]
+    () => buildVisualGraph(centerRxcuiSet, nodes, edges, edgeLimit),
+    [centerRxcuiSet, edgeLimit, edges, nodes]
   );
   const layoutNodes = useMemo(
     () => computeLayout(centerRxcui, visualNodes, visualEdges),
@@ -1258,6 +1339,648 @@ export function RxNormKnowledgeGraph({
                 {selectedTypes.size > 0 ? " after type filtering" : ""}. Hover
                 over a line to see the relationship. Double-click a node to
                 focus it.
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+export function QuestionRxNormNetworkGraph({
+  network,
+  onOpenTab,
+  onOpenDossier,
+  variant = "card",
+}: {
+  network: QuestionRxNormNetwork;
+  onOpenTab?: (rxcui: string) => void;
+  onOpenDossier?: (name: string) => void;
+  variant?: "card" | "embedded";
+}) {
+  const [selectedRxcui, setSelectedRxcui] = useState<string | null>(null);
+  const [tooltip, setTooltip] = useState<{
+    title: string;
+    body?: string;
+    x: number;
+    y: number;
+  } | null>(null);
+  const [displayedEdges, setDisplayedEdges] = useState(DEFAULT_DISPLAYED_EDGES);
+  const [selectedTypes, setSelectedTypes] = useState<Set<string>>(new Set());
+  const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [panDrag, setPanDrag] = useState<{
+    x: number;
+    y: number;
+    startPanX: number;
+    startPanY: number;
+    moved: boolean;
+  } | null>(null);
+  const [nodeDrag, setNodeDrag] = useState<string | null>(null);
+  const [simulationNodeMap, setSimulationNodeMap] = useState<
+    Map<string, LayoutPoint>
+  >(new Map());
+  const simulationRef = useRef<Simulation<ForceNode, ForceLink> | null>(null);
+  const latestNodesRef = useRef<ForceNode[]>([]);
+  const graphFrameRef = useRef<HTMLDivElement>(null);
+  const svgRef = useRef<SVGSVGElement>(null);
+
+  const edges = network.edges;
+  const nodes = network.nodes;
+  const centerRxcuis = useMemo(
+    () => new Set(network.centers.map((c) => c.rxcui)),
+    [network.centers]
+  );
+  const sharedRxcuiSet = useMemo(
+    () => new Set(network.shared_rxcuis),
+    [network.shared_rxcuis]
+  );
+  const edgeLimit = Math.min(displayedEdges, MAX_DISPLAYED_EDGES, edges.length);
+  // Scale node budget with number of centers so each drug gets enough room.
+  const maxVisualNodes = Math.min(160, MAX_VISUAL_NODES + Math.max(0, centerRxcuis.size - 1) * 30);
+
+  // Default the slider to the fewest relationships that visually link the drugs.
+  const defaultEdgeBudget = useMemo(
+    () => computeDefaultEdgeBudget(network, maxVisualNodes),
+    [network, maxVisualNodes]
+  );
+  useEffect(() => {
+    setDisplayedEdges(defaultEdgeBudget);
+  }, [defaultEdgeBudget]);
+
+  const { visualEdges, visualNodes } = useMemo(
+    () => buildVisualGraph(centerRxcuis, nodes, edges, edgeLimit, maxVisualNodes),
+    [centerRxcuis, edgeLimit, edges, maxVisualNodes, nodes]
+  );
+  const layoutNodes = useMemo(
+    () => computeLayout(null, visualNodes, visualEdges),
+    [visualEdges, visualNodes]
+  );
+  const positionedNodes = simulationNodeMap.size ? simulationNodeMap : layoutNodes;
+
+  useEffect(() => {
+    const simulationNodes: ForceNode[] = Array.from(layoutNodes.values()).map(
+      (node) => ({ ...node })
+    );
+    latestNodesRef.current = simulationNodes;
+    setSimulationNodeMap(
+      new Map(simulationNodes.map((node) => [node.rxcui, node as LayoutPoint]))
+    );
+
+    const links: ForceLink[] = visualEdges.map((edge) => ({
+      source: edge.target_rxcui,
+      target: edge.source_rxcui,
+    }));
+
+    let animationFrame: number | null = null;
+    const simulation = createRxNormSimulation(simulationNodes, links).on(
+      "tick",
+      () => {
+        latestNodesRef.current = simulationNodes;
+        if (animationFrame !== null) {
+          return;
+        }
+        animationFrame = window.requestAnimationFrame(() => {
+          setSimulationNodeMap(
+            new Map(
+              simulationNodes.map((node) => [node.rxcui, node as LayoutPoint])
+            )
+          );
+          animationFrame = null;
+        });
+      }
+    );
+    simulationRef.current = simulation;
+
+    return () => {
+      simulation.stop();
+      simulationRef.current = null;
+      if (animationFrame !== null) {
+        window.cancelAnimationFrame(animationFrame);
+      }
+    };
+  }, [layoutNodes, visualEdges]);
+
+  const visualRxcuis = useMemo(
+    () => visualNodes.map((node) => node.rxcui),
+    [visualNodes]
+  );
+  const filteredRxcuis = useMemo(() => {
+    if (selectedTypes.size === 0) {
+      return visualRxcuis;
+    }
+    return visualRxcuis.filter((rxcui) => {
+      if (centerRxcuis.has(rxcui) || rxcui === selectedRxcui) {
+        return true;
+      }
+      const tty = positionedNodes.get(rxcui)?.tty;
+      return tty ? selectedTypes.has(tty.toUpperCase()) : false;
+    });
+  }, [centerRxcuis, positionedNodes, selectedRxcui, selectedTypes, visualRxcuis]);
+  const filteredRxcuiSet = useMemo(
+    () => new Set(filteredRxcuis),
+    [filteredRxcuis]
+  );
+  const filteredEdges = useMemo(
+    () =>
+      visualEdges.filter(
+        (edge) =>
+          filteredRxcuiSet.has(edge.source_rxcui) &&
+          filteredRxcuiSet.has(edge.target_rxcui)
+      ),
+    [filteredRxcuiSet, visualEdges]
+  );
+  const selectedNode = selectedRxcui
+    ? positionedNodes.get(selectedRxcui) ?? null
+    : null;
+  const selectedNeighborIds = useMemo(() => {
+    if (!selectedRxcui) {
+      return new Set<string>();
+    }
+    const ids = new Set<string>([selectedRxcui]);
+    for (const edge of filteredEdges) {
+      if (edge.source_rxcui === selectedRxcui) ids.add(edge.target_rxcui);
+      if (edge.target_rxcui === selectedRxcui) ids.add(edge.source_rxcui);
+    }
+    return ids;
+  }, [filteredEdges, selectedRxcui]);
+  const positionedNodeList = useMemo(
+    () =>
+      filteredRxcuis
+        .map((rxcui) => positionedNodes.get(rxcui))
+        .filter((node): node is LayoutPoint => Boolean(node)),
+    [filteredRxcuis, positionedNodes]
+  );
+  const layoutNodeList = useMemo(
+    () =>
+      filteredRxcuis
+        .map((rxcui) => layoutNodes.get(rxcui))
+        .filter((node): node is LayoutPoint => Boolean(node)),
+    [filteredRxcuis, layoutNodes]
+  );
+  const visibleNodeTypes = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          visualRxcuis
+            .map((rxcui) => positionedNodes.get(rxcui)?.tty)
+            .filter((tty): tty is string => Boolean(tty))
+        )
+      ).sort((a, b) => getTtyStyle(a).label.localeCompare(getTtyStyle(b).label)),
+    [positionedNodes, visualRxcuis]
+  );
+
+  function toggleNodeType(tty: string) {
+    setSelectedTypes((current) => {
+      const next = new Set(current);
+      if (next.has(tty)) next.delete(tty);
+      else next.add(tty);
+      return next;
+    });
+  }
+
+  function screenToGraph(clientX: number, clientY: number) {
+    const svg = svgRef.current;
+    if (!svg) return { x: GRAPH_WIDTH / 2, y: GRAPH_HEIGHT / 2 };
+    const bounds = svg.getBoundingClientRect();
+    return {
+      x: (((clientX - bounds.left) / bounds.width) * GRAPH_WIDTH - pan.x) / zoom,
+      y: (((clientY - bounds.top) / bounds.height) * GRAPH_HEIGHT - pan.y) / zoom,
+    };
+  }
+
+  function handleWheel(event: WheelEvent<SVGSVGElement>) {
+    event.preventDefault();
+    const svg = svgRef.current;
+    if (!svg) return;
+    const bounds = svg.getBoundingClientRect();
+    const viewX = ((event.clientX - bounds.left) / bounds.width) * GRAPH_WIDTH;
+    const viewY = ((event.clientY - bounds.top) / bounds.height) * GRAPH_HEIGHT;
+    const nextZoom = Math.max(
+      MIN_ZOOM,
+      Math.min(MAX_ZOOM, zoom * (event.deltaY > 0 ? 0.9 : 1.1))
+    );
+    setZoom(nextZoom);
+    setPan({
+      x: viewX - ((viewX - pan.x) / zoom) * nextZoom,
+      y: viewY - ((viewY - pan.y) / zoom) * nextZoom,
+    });
+  }
+
+  function setBoundedZoom(value: number) {
+    setZoom(Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, value)));
+  }
+
+  function resetView() {
+    const { zoom: z, pan: p } = fitGraphToView(positionedNodeList);
+    setZoom(z);
+    setPan(p);
+  }
+
+  useEffect(() => {
+    const { zoom: z, pan: p } = fitGraphToView(layoutNodeList);
+    setZoom(z);
+    setPan(p);
+  }, [layoutNodeList]);
+
+  function selectGraphNode(rxcui: string | null) {
+    setSelectedRxcui(rxcui);
+  }
+
+  function handleCanvasPointerDown(event: PointerEvent<SVGSVGElement>) {
+    setPanDrag({ x: event.clientX, y: event.clientY, startPanX: pan.x, startPanY: pan.y, moved: false });
+  }
+
+  function handleNodePointerDown(event: PointerEvent<SVGGElement>, rxcui: string) {
+    event.stopPropagation();
+    const simulationNode = latestNodesRef.current.find((n) => n.rxcui === rxcui);
+    if (simulationNode) {
+      simulationNode.fx = simulationNode.x;
+      simulationNode.fy = simulationNode.y;
+    }
+    simulationRef.current?.alphaTarget(0.25).restart();
+    setNodeDrag(rxcui);
+  }
+
+  function focusNode(rxcui: string) {
+    const node = positionedNodes.get(rxcui);
+    if (!node) return;
+    selectGraphNode(rxcui);
+    setBoundedZoom(FOCUS_ZOOM);
+    setPan({ x: GRAPH_WIDTH / 2 - node.x * FOCUS_ZOOM, y: GRAPH_HEIGHT / 2 - node.y * FOCUS_ZOOM });
+  }
+
+  function handlePointerMove(event: PointerEvent<SVGSVGElement>) {
+    if (nodeDrag) {
+      const point = screenToGraph(event.clientX, event.clientY);
+      const simulationNode = latestNodesRef.current.find((n) => n.rxcui === nodeDrag);
+      if (simulationNode) {
+        simulationNode.fx = point.x;
+        simulationNode.fy = point.y;
+        simulationRef.current?.alphaTarget(0.25).restart();
+      }
+      return;
+    }
+    if (panDrag) {
+      const svg = svgRef.current;
+      if (!svg) return;
+      const bounds = svg.getBoundingClientRect();
+      const deltaX = event.clientX - panDrag.x;
+      const deltaY = event.clientY - panDrag.y;
+      setPan({
+        x: panDrag.startPanX + deltaX * (GRAPH_WIDTH / bounds.width),
+        y: panDrag.startPanY + deltaY * (GRAPH_HEIGHT / bounds.height),
+      });
+      if (!panDrag.moved && Math.hypot(deltaX, deltaY) > 4) {
+        setPanDrag({ ...panDrag, moved: true });
+      }
+    }
+  }
+
+  function handlePointerUp() {
+    if (panDrag && !panDrag.moved && !nodeDrag) selectGraphNode(null);
+    if (nodeDrag) {
+      const simulationNode = latestNodesRef.current.find((n) => n.rxcui === nodeDrag);
+      if (simulationNode) {
+        simulationNode.fx = undefined;
+        simulationNode.fy = undefined;
+      }
+      simulationRef.current?.alphaTarget(0);
+    }
+    setPanDrag(null);
+    setNodeDrag(null);
+  }
+
+  function edgeIsIncident(edge: RxNormEdge) {
+    return selectedRxcui
+      ? edge.source_rxcui === selectedRxcui || edge.target_rxcui === selectedRxcui
+      : false;
+  }
+
+  function updateTooltip(event: MouseEvent<SVGElement>, content: { title: string; body?: string }) {
+    const frame = graphFrameRef.current;
+    if (!frame) return;
+    const bounds = frame.getBoundingClientRect();
+    const rawX = event.clientX - bounds.left + 14;
+    const rawY = event.clientY - bounds.top + 14;
+    setTooltip({
+      ...content,
+      x: Math.min(rawX, Math.max(12, bounds.width - 300)),
+      y: Math.min(rawY, Math.max(12, bounds.height - 120)),
+    });
+  }
+
+  return (
+    <section
+      className={
+        variant === "card"
+          ? "rounded-lg border border-slate-200 bg-white shadow-sm"
+          : undefined
+      }
+    >
+      <div
+        className={
+          variant === "embedded"
+            ? "pb-4"
+            : "border-b border-slate-100 p-4"
+        }
+      >
+        <div className="flex items-center gap-2">
+          <CardTitle>Drug Network</CardTitle>
+          <InfoTooltip text="Combined RxNorm terminology network for all mentioned medications. Nodes with a purple ring are reachable from multiple drug neighborhoods — this is vocabulary overlap in RxNorm, not evidence of a clinical interaction." />
+        </div>
+        <p className="mt-1 text-sm leading-6 text-slate-500">
+          Explore how the mentioned medications relate through RxNorm terminology.
+        </p>
+      </div>
+      <div className={variant === "embedded" ? "space-y-4 p-0 pt-4" : "space-y-4 p-4"}>
+        {edges.length === 0 ? (
+          <p className="text-sm text-slate-600">No relationship data returned.</p>
+        ) : (
+          <div className="grid items-stretch gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
+            <div
+              ref={graphFrameRef}
+              className="relative h-[700px] overflow-hidden rounded-md border border-slate-200 bg-white"
+            >
+              <svg
+                ref={svgRef}
+                viewBox={`0 0 ${GRAPH_WIDTH} ${GRAPH_HEIGHT}`}
+                className="h-full w-full cursor-grab touch-none"
+                role="img"
+                aria-label="Combined drug terminology network"
+                onPointerDown={handleCanvasPointerDown}
+                onPointerMove={handlePointerMove}
+                onPointerUp={handlePointerUp}
+                onPointerLeave={handlePointerUp}
+                onWheel={handleWheel}
+              >
+                <defs>
+                  <marker id="arrow-q" markerHeight="5" markerWidth="5" orient="auto" refX="5" refY="2.5">
+                    <path d="M0,0 L5,2.5 L0,5 Z" fill="context-stroke" />
+                  </marker>
+                </defs>
+                <g transform={`translate(${pan.x} ${pan.y}) scale(${zoom})`}>
+                  {filteredEdges.map((edge) => {
+                    const source = positionedNodes.get(edge.target_rxcui);
+                    const target = positionedNodes.get(edge.source_rxcui);
+                    if (!source || !target) return null;
+                    const trimmed = trimEdge(source, target, nodeRadius(source), nodeRadius(target));
+                    const tooltipText = edgeTooltip(edge);
+                    const touchesCenter =
+                      centerRxcuis.has(edge.source_rxcui) ||
+                      centerRxcuis.has(edge.target_rxcui);
+                    const incident = edgeIsIncident(edge);
+                    return (
+                      <g key={`${edge.source_rxcui}-${edge.relation}-${edge.target_rxcui}`}>
+                        <line
+                          x1={trimmed.x1} x2={trimmed.x2} y1={trimmed.y1} y2={trimmed.y2}
+                          stroke="transparent" strokeWidth="14" className="cursor-default"
+                          onMouseEnter={(e) => updateTooltip(e, tooltipText)}
+                          onMouseMove={(e) => updateTooltip(e, tooltipText)}
+                          onMouseLeave={() => setTooltip(null)}
+                        />
+                        <line
+                          x1={trimmed.x1} x2={trimmed.x2} y1={trimmed.y1} y2={trimmed.y2}
+                          stroke={incident ? "#0f172a" : touchesCenter ? "#64748b" : "#d1d5db"}
+                          strokeOpacity={
+                            selectedRxcui && !incident ? 0.28 : touchesCenter ? 0.78 : 0.5
+                          }
+                          strokeWidth={incident ? 1.8 : touchesCenter ? 1.5 : 1.15}
+                          markerEnd={incident ? "url(#arrow-q)" : undefined}
+                          pointerEvents="none"
+                        />
+                      </g>
+                    );
+                  })}
+                  {filteredRxcuis.map((rxcui) => {
+                    const point = positionedNodes.get(rxcui);
+                    if (!point) return null;
+                    const isCenter = centerRxcuis.has(rxcui);
+                    const isShared = !isCenter && sharedRxcuiSet.has(rxcui);
+                    const isSelected = rxcui === selectedRxcui;
+                    const isHighlighted = selectedNeighborIds.has(rxcui);
+                    const style = getTtyStyle(point.tty);
+                    const radius = nodeRadius(point);
+                    const showLabel = isCenter || isSelected || (selectedRxcui ? isHighlighted : false);
+                    const label = shortLabel(displayNodeName(point.name), isCenter ? 28 : 20);
+                    const labelWidth = Math.min(isCenter ? 190 : 150, Math.max(48, label.length * 6.4 + 14));
+                    const labelY = point.y + radius + 15;
+                    return (
+                      <g
+                        key={rxcui}
+                        className="cursor-grab"
+                        onClick={() => selectGraphNode(selectedRxcui === rxcui ? null : rxcui)}
+                        onDoubleClick={() => focusNode(rxcui)}
+                        onPointerDown={(e) => handleNodePointerDown(e, rxcui)}
+                        onMouseEnter={(e) => updateTooltip(e, nodeTooltip(point))}
+                        onMouseMove={(e) => updateTooltip(e, nodeTooltip(point))}
+                        onMouseLeave={() => setTooltip(null)}
+                      >
+                        {isSelected ? (
+                          <circle cx={point.x} cy={point.y} r={radius + 5}
+                            fill="none" stroke={style.stroke} strokeOpacity="0.32" strokeWidth="3" />
+                        ) : null}
+                        {isShared ? (
+                          <circle cx={point.x} cy={point.y} r={radius + 6}
+                            fill="none" stroke="#7C3AED" strokeWidth="2.5" strokeOpacity="0.85" />
+                        ) : null}
+                        <circle
+                          cx={point.x} cy={point.y} r={radius}
+                          fill={isSelected ? style.stroke : style.fill}
+                          fillOpacity={isSelected ? 0.18 : 1}
+                          stroke={style.stroke}
+                          strokeWidth={isSelected || (isCenter && !selectedRxcui) ? 2.5 : 2}
+                          opacity={selectedRxcui && !isHighlighted && !isCenter ? 0.26 : 1}
+                        />
+                        {showLabel ? (
+                          <g
+                            className="pointer-events-none"
+                            opacity={selectedRxcui && !isHighlighted && !isCenter ? 0.32 : 1}
+                          >
+                            <rect
+                              x={point.x - labelWidth / 2} y={labelY - 12}
+                              width={labelWidth} height="17" rx="4"
+                              fill="white" fillOpacity="0.88"
+                              stroke="#e2e8f0" strokeOpacity="0.8"
+                            />
+                            <text
+                              x={point.x} y={labelY}
+                              className="fill-slate-800 text-[11px] font-semibold"
+                              textAnchor="middle"
+                            >
+                              {label}
+                            </text>
+                          </g>
+                        ) : null}
+                      </g>
+                    );
+                  })}
+                </g>
+              </svg>
+              {tooltip ? (
+                <div
+                  className="pointer-events-none absolute z-10 max-w-72 whitespace-pre-line rounded-md border border-slate-200 bg-white px-3 py-2 text-xs leading-5 text-slate-700 shadow-lg"
+                  style={{ left: tooltip.x, top: tooltip.y }}
+                >
+                  <div className="font-semibold text-slate-900">{tooltip.title}</div>
+                  {tooltip.body ? <div>{tooltip.body}</div> : null}
+                </div>
+              ) : null}
+            </div>
+
+            <div className="space-y-3">
+              <div className="rounded-md border border-slate-200 bg-white p-3">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <div className="text-xs font-medium uppercase text-slate-500">Graph controls</div>
+                  <div className="flex gap-1">
+                    <button type="button" aria-label="Zoom out"
+                      className="grid size-8 place-items-center rounded-md border border-slate-200 text-slate-700 hover:bg-slate-50"
+                      onClick={() => setBoundedZoom(zoom - 0.18)}>
+                      <Minus className="size-4" />
+                    </button>
+                    <button type="button" aria-label="Reset graph view"
+                      className="grid size-8 place-items-center rounded-md border border-slate-200 text-slate-700 hover:bg-slate-50"
+                      onClick={resetView}>
+                      <Maximize2 className="size-4" />
+                    </button>
+                    <button type="button" aria-label="Zoom in"
+                      className="grid size-8 place-items-center rounded-md border border-slate-200 text-slate-700 hover:bg-slate-50"
+                      onClick={() => setBoundedZoom(zoom + 0.18)}>
+                      <Plus className="size-4" />
+                    </button>
+                  </div>
+                </div>
+                <label className="flex flex-col gap-2 text-xs text-slate-600">
+                  <span>Displayed relationships</span>
+                  <input
+                    min={MIN_DISPLAYED_EDGES} max={MAX_DISPLAYED_EDGES} step={10} type="range"
+                    value={displayedEdges}
+                    onChange={(e) => setDisplayedEdges(Number(e.target.value))}
+                    className="w-full accent-slate-900"
+                  />
+                  <span className="flex items-center justify-between text-[11px] text-slate-400">
+                    <span>Fewer</span>
+                    <span>More</span>
+                  </span>
+                </label>
+              </div>
+
+              <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+                <div className="text-xs font-medium uppercase text-slate-500">Selected node</div>
+                {selectedNode ? (
+                  <div className="mt-2 space-y-2">
+                    <div className="line-clamp-2 font-semibold leading-6 text-slate-950">
+                      {displayNodeName(selectedNode.name)}
+                    </div>
+                    <div className="flex min-w-0 flex-wrap gap-1.5">
+                      <Badge className="shrink-0 truncate overflow-hidden" style={{ maxWidth: "56%" }}>
+                        RXCUI {selectedNode.rxcui}
+                      </Badge>
+                      <span className="group relative inline-flex shrink-0">
+                        <Badge
+                          className="border"
+                          style={{
+                            backgroundColor: getTtyStyle(selectedNode.tty).fill,
+                            borderColor: getTtyStyle(selectedNode.tty).stroke,
+                            color: getTtyStyle(selectedNode.tty).stroke,
+                          }}
+                        >
+                          {displayTtyCode(selectedNode.tty)}
+                        </Badge>
+                        <span className="pointer-events-none absolute bottom-full left-0 z-20 mb-2 hidden w-max max-w-60 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs leading-5 text-slate-700 shadow-lg group-hover:block">
+                          {ttyBadgeTitle(selectedNode.tty)}
+                        </span>
+                      </span>
+                    </div>
+                    {centerRxcuis.has(selectedNode.rxcui) ? (
+                      <button
+                        type="button"
+                        className="inline-flex w-fit items-center gap-1 rounded-md bg-[#371E8F] px-2 py-0.5 text-white transition hover:bg-[#2d1a7a]"
+                        onClick={() => onOpenTab?.(selectedNode.rxcui)}
+                      >
+                        <ExternalLink className="size-3.5" />
+                        <span className="text-xs font-medium leading-6">
+                          Open {displayNodeName(selectedNode.name)} tab
+                        </span>
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        className="inline-flex w-fit items-center gap-1 rounded-md bg-[#371E8F] px-2 py-0.5 text-white transition hover:bg-[#2d1a7a]"
+                        onClick={() => onOpenDossier?.(selectedNode.name)}
+                      >
+                        <ExternalLink className="size-3.5" />
+                        <span className="text-xs font-medium leading-6">
+                          Search in Drug Dossier
+                        </span>
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="mt-2 space-y-2">
+                    <p className="text-sm leading-5 text-slate-600">
+                      {network.centers.length} medication
+                      {network.centers.length !== 1 ? "s" : ""} in this network.
+                    </p>
+                    <div className="flex flex-wrap gap-1">
+                      {network.centers.map((center) => (
+                        <Badge key={center.rxcui} className="text-xs">
+                          {displayNodeName(center.name)}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="rounded-md border border-slate-200 bg-white p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-xs font-medium uppercase text-slate-500">Node types</div>
+                  <button
+                    type="button"
+                    className={[
+                      "w-10 text-right font-medium transition",
+                      selectedTypes.size > 0
+                        ? "text-slate-600 hover:text-slate-950"
+                        : "pointer-events-none text-transparent",
+                    ].join(" ")}
+                    style={{ fontSize: "12px", lineHeight: "14px" }}
+                    onClick={() => setSelectedTypes(new Set())}
+                  >
+                    Clear
+                  </button>
+                </div>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
+                  {visibleNodeTypes.map((tty) => {
+                    const style = getTtyStyle(tty);
+                    const isActive = selectedTypes.has(tty.toUpperCase());
+                    return (
+                      <button
+                        key={tty} type="button"
+                        className={[
+                          "flex min-w-0 items-center gap-2 rounded-md border px-2 py-1 text-left transition",
+                          isActive
+                            ? "border-slate-400 bg-slate-100 text-slate-950"
+                            : "border-transparent text-slate-700 hover:border-slate-200 hover:bg-slate-50",
+                        ].join(" ")}
+                        style={{ fontSize: "12px", lineHeight: "13px" }}
+                        onClick={() => toggleNodeType(tty.toUpperCase())}
+                      >
+                        <span className="size-3 shrink-0 rounded-full border"
+                          style={{ backgroundColor: style.fill, borderColor: style.stroke }} />
+                        <span className="truncate">{style.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <p className="text-xs leading-5 text-slate-500">
+                Hover over a line to see the relationship. Double-click a node to
+                focus it.
+                {network.shared_rxcuis.length > 0
+                  ? " Purple-ringed nodes appear in multiple drug networks (terminology overlap only, not interaction evidence)."
+                  : ""}
               </p>
             </div>
           </div>

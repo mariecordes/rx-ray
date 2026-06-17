@@ -489,6 +489,18 @@ export const demoQueryAnswer: QueryAnswerResponse = {
       interaction_label_evidence: null,
     },
   ],
+  question_rxnorm_network: {
+    centers: [
+      { rxcui: "5640", name: "ibuprofen", tty: "IN", role: "primary_drug" },
+      { rxcui: "1191", name: "aspirin", tty: "IN", role: "mentioned_drug" },
+      { rxcui: "2100", name: "cetirizine", tty: "IN", role: "current_medication" },
+    ],
+    nodes: [],
+    edges: [],
+    node_membership: {},
+    shared_rxcuis: [],
+    truncated: false,
+  },
   question_evidence_map: {
     nodes: [
       {

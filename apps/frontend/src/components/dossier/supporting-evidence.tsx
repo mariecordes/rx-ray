@@ -17,7 +17,10 @@ import {
   Loader2,
 } from "lucide-react";
 
-import { RxNormKnowledgeGraph } from "@/components/rxnorm-knowledge-graph";
+import {
+  QuestionRxNormNetworkGraph,
+  RxNormKnowledgeGraph,
+} from "@/components/rxnorm-knowledge-graph";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -51,6 +54,7 @@ import {
   DrugDossier,
   EvidenceCitation,
   OpenFDALabelEvidence,
+  QuestionRxNormNetwork,
   RxNormConcept,
   SecondaryDrugEvidence,
 } from "@/lib/types";
@@ -61,7 +65,6 @@ import {
   displayMentionRole,
   displayRxNormType,
   primaryValue,
-  sentenceCase,
 } from "@/lib/format";
 import { requestJsonWithRetry } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
@@ -73,6 +76,7 @@ export function SupportingEvidence({
   evidenceNavRef,
   highlightCitation,
   highlightRxcui,
+  questionRxNormNetwork,
   secondaryEvidence,
   onCitationHandled,
   onRxcuiHandled,
@@ -83,6 +87,7 @@ export function SupportingEvidence({
   evidenceNavRef?: RefObject<HTMLDivElement | null>;
   highlightCitation: EvidenceCitation | null;
   highlightRxcui: string | null;
+  questionRxNormNetwork: QuestionRxNormNetwork;
   secondaryEvidence: SecondaryDrugEvidence[];
   onCitationHandled: () => void;
   onRxcuiHandled: () => void;
@@ -91,10 +96,10 @@ export function SupportingEvidence({
     () => buildSupportingEvidenceTabs(dossier, secondaryEvidence),
     [dossier, secondaryEvidence]
   );
-  const [activeTabKey, setActiveTabKey] = useState("primary");
+  const [activeTabKey, setActiveTabKey] = useState("network");
 
   useEffect(() => {
-    setActiveTabKey("primary");
+    setActiveTabKey("network");
   }, [dossier, secondaryEvidence]);
 
   useEffect(() => {
@@ -151,9 +156,13 @@ export function SupportingEvidence({
                 onClick={() => setActiveTabKey(tab.key)}
                 className={cn(
                   "rounded-t-md px-4 py-2 text-sm font-semibold shadow-sm",
-                  activeTab.key === tab.key
-                    ? "bg-[#371E8F] text-white"
-                    : "border border-slate-200 bg-slate-50 text-slate-700"
+                  tab.kind === "network"
+                    ? activeTab.key === tab.key
+                      ? "bg-[#21408F] text-white"
+                      : "border border-[#B5E3F2] bg-[#DEE9FC] text-[#155E75]"
+                    : activeTab.key === tab.key
+                      ? "bg-[#371E8F] text-white"
+                      : "border border-[#E9DDF8] bg-[#F7F3FD] text-[#371E8F]"
                 )}
               >
                 {tab.label}
@@ -161,12 +170,35 @@ export function SupportingEvidence({
             ))}
           </div>
           <div className="-mt-5 rounded-b-md rounded-tr-md border border-slate-200 bg-white p-4 shadow-sm">
-            {activeTab.kind === "primary" ? (
+            {activeTab.kind === "network" ? (
+              <div
+                ref={(el) => {
+                  if (drugNetworkNavRef) drugNetworkNavRef.current = el;
+                }}
+              >
+                <QuestionRxNormNetworkGraph
+                  network={questionRxNormNetwork}
+                  variant="embedded"
+                  onOpenTab={(rxcui) => {
+                    const tab = evidenceTabs.find((t) => t.rxcui === rxcui);
+                    if (tab) setActiveTabKey(tab.key);
+                  }}
+                  onOpenDossier={(name) => {
+                    const params = new URLSearchParams({ drug: name, auto: "1" });
+                    window.open(
+                      `/dossier?${params.toString()}`,
+                      "_blank",
+                      "noopener,noreferrer"
+                    );
+                  }}
+                />
+              </div>
+            ) : activeTab.kind === "primary" ? (
               <DossierResults
                 dossier={dossier}
                 drugLabelsNavRef={drugLabelsNavRef}
-                drugNetworkNavRef={drugNetworkNavRef}
                 highlightCitation={activeTabHighlightCitation}
+                showGraph={false}
                 variant="embedded"
                 onCitationHandled={onCitationHandled}
               />
@@ -195,6 +227,13 @@ function supportingEvidenceTabForCitation(
 
 type SupportingEvidenceTab =
   | {
+      key: "network";
+      kind: "network";
+      label: string;
+      rxcui?: undefined;
+      sourceIds: Set<string>;
+    }
+  | {
       key: "primary";
       kind: "primary";
       label: string;
@@ -218,6 +257,12 @@ function buildSupportingEvidenceTabs(
     ? displayGraphNodeName(dossier.resolved_drug.name)
     : "Matched drug";
   return [
+    {
+      key: "network",
+      kind: "network",
+      label: "Drug Network",
+      sourceIds: new Set(),
+    },
     {
       key: "primary",
       kind: "primary",
@@ -314,7 +359,6 @@ function SecondaryEvidenceResults({
   return (
     <div className="flex flex-col gap-6">
       <SecondaryEvidenceOverview evidence={evidence} />
-      <RxNormPairContextPanel evidence={evidence} />
       <LabelEvidencePanel
         ref={labelEvidencePanelRef}
         activeSection={activeSection}
@@ -359,7 +403,7 @@ function SecondaryEvidenceOverview({
           </div>
         </div>
       </div>
-      <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-left">
+      <div className="self-start rounded-md border border-slate-200 bg-slate-50 p-3 text-left">
         <div className="flex items-center justify-between gap-3">
           <div className="text-sm font-semibold text-slate-950">Drug Labels</div>
           <Badge
@@ -382,50 +426,12 @@ function SecondaryEvidenceOverview({
   );
 }
 
-function RxNormPairContextPanel({
-  evidence,
-}: {
-  evidence: SecondaryDrugEvidence;
-}) {
-  const context = evidence.rxnorm_context;
-  if (!context) {
-    return null;
-  }
-  return (
-    <section className="rounded-md border border-slate-200 bg-slate-50 p-3">
-      <div className="mb-2 text-xs font-medium uppercase text-slate-500">
-        RxNorm terminology context
-      </div>
-      <p className="text-sm leading-6 text-slate-700">{context.summary}</p>
-      {context.direct_edges.length ? (
-        <div className="mt-2 space-y-1 text-sm text-slate-600">
-          {context.direct_edges.slice(0, 3).map((edge) => (
-            <div key={`${edge.source_rxcui}-${edge.target_rxcui}-${edge.relation}`}>
-              {displayGraphNodeName(edge.source_name)} ·{" "}
-              {sentenceCase(edge.relation.replaceAll("_", " "))} ·{" "}
-              {displayGraphNodeName(edge.target_name)}
-            </div>
-          ))}
-        </div>
-      ) : null}
-      {context.shared_neighbors.length ? (
-        <div className="mt-2 flex flex-wrap gap-1.5">
-          {context.shared_neighbors.slice(0, 5).map((neighbor) => (
-            <Badge key={neighbor.rxcui} className="bg-white text-slate-700">
-              {displayGraphNodeName(neighbor.name)}
-            </Badge>
-          ))}
-        </div>
-      ) : null}
-    </section>
-  );
-}
-
 export function DossierResults({
   dossier,
   drugLabelsNavRef,
   drugNetworkNavRef,
   highlightCitation = null,
+  showGraph = true,
   onCitationHandled,
   variant = "cards",
 }: {
@@ -433,6 +439,7 @@ export function DossierResults({
   drugLabelsNavRef?: RefObject<HTMLDivElement | null>;
   drugNetworkNavRef?: RefObject<HTMLDivElement | null>;
   highlightCitation?: EvidenceCitation | null;
+  showGraph?: boolean;
   onCitationHandled?: () => void;
   variant?: "cards" | "embedded";
 }) {
@@ -583,25 +590,28 @@ export function DossierResults({
     >
       <Overview
         dossier={dossier}
+        showNetwork={showGraph}
         variant={variant}
         onJumpToLabels={() => scrollToSection(labelEvidencePanelRef)}
         onJumpToNetwork={() => scrollToSection(drugNetworkPanelRef)}
       />
-      <div
-        ref={(element) => {
-          drugNetworkPanelRef.current = element;
-          if (drugNetworkNavRef) {
-            drugNetworkNavRef.current = element;
-          }
-        }}
-      >
-        <RxNormKnowledgeGraph
-          key={dossier.resolved_drug?.rxcui ?? dossier.query}
-          dossier={dossier}
-          variant={variant === "embedded" ? "embedded" : "card"}
-          onSelectedNodeChange={handleSelectedGraphNodeChange}
-        />
-      </div>
+      {showGraph ? (
+        <div
+          ref={(element) => {
+            drugNetworkPanelRef.current = element;
+            if (drugNetworkNavRef) {
+              drugNetworkNavRef.current = element;
+            }
+          }}
+        >
+          <RxNormKnowledgeGraph
+            key={dossier.resolved_drug?.rxcui ?? dossier.query}
+            dossier={dossier}
+            variant={variant === "embedded" ? "embedded" : "card"}
+            onSelectedNodeChange={handleSelectedGraphNodeChange}
+          />
+        </div>
+      ) : null}
       <LabelEvidencePanel
         ref={labelEvidencePanelRef}
         navRef={drugLabelsNavRef}
@@ -615,6 +625,7 @@ export function DossierResults({
         sectionEntries={sectionEntries}
         selectedGraphNode={selectedGraphNode}
         selectedSourceKey={selectedSourceKey}
+        showGraphContext={showGraph}
         variant={variant}
         onSelectSection={setSelectedSection}
         onSelectSource={toggleSourceSelection}
@@ -639,11 +650,13 @@ function Overview({
   dossier,
   onJumpToLabels,
   onJumpToNetwork,
+  showNetwork = true,
   variant = "cards",
 }: {
   dossier: DrugDossier;
   onJumpToLabels: () => void;
   onJumpToNetwork: () => void;
+  showNetwork?: boolean;
   variant?: "cards" | "embedded";
 }) {
   const networkCount = dossier.rxnorm_neighborhood.edges.length;
@@ -689,19 +702,32 @@ function Overview({
             </div>
           )}
         </div>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <OverviewJumpCard
-            description={
-              hasNetwork
-                ? `${networkCount} relationship${
-                    networkCount === 1 ? "" : "s"
-                  } available`
-                : "No relationship data returned"
-            }
-            isAvailable={hasNetwork}
-            label="Drug Network"
-            onClick={onJumpToNetwork}
-          />
+        {showNetwork ? (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <OverviewJumpCard
+              description={
+                hasNetwork
+                  ? `${networkCount} relationship${
+                      networkCount === 1 ? "" : "s"
+                    } available`
+                  : "No relationship data returned"
+              }
+              isAvailable={hasNetwork}
+              label="Drug Network"
+              onClick={onJumpToNetwork}
+            />
+            <OverviewJumpCard
+              description={
+                hasLabels
+                  ? `${labelCount} label source${labelCount === 1 ? "" : "s"} available`
+                  : "No public label sources returned"
+              }
+              isAvailable={hasLabels}
+              label="Drug Labels"
+              onClick={onJumpToLabels}
+            />
+          </div>
+        ) : (
           <OverviewJumpCard
             description={
               hasLabels
@@ -712,7 +738,7 @@ function Overview({
             label="Drug Labels"
             onClick={onJumpToLabels}
           />
-        </div>
+        )}
       </div>
     </section>
   );
@@ -733,7 +759,7 @@ function OverviewJumpCard({
     <button
       type="button"
       onClick={onClick}
-      className="rounded-md border border-slate-200 bg-slate-50 p-3 text-left transition hover:border-slate-300 hover:bg-white"
+      className="block self-start rounded-md border border-slate-200 bg-slate-50 p-3 text-left transition hover:border-slate-300 hover:bg-white"
     >
       <div className="flex items-center justify-between gap-3">
         <div className="text-sm font-semibold text-slate-950">{label}</div>

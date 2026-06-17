@@ -48,7 +48,7 @@ Optionally [A4](#a4--live-demo-deployment) live demo if hosting is straightforwa
 | [B2](#b2--specific-concept-resolution-priority) | Specific-concept priority | Retrieval | M | Med | todo | — |
 | [B3](#b3--autocomplete--typeahead-for-drug-dossier) | Autocomplete/typeahead | Retrieval | M | Med | todo | B1 |
 | [B4](#b4--openfda-text-fallback-when-rxnorm-resolution-fails) | OpenFDA text fallback | Retrieval | M | Med | todo | — |
-| [C1](#c1--pair-level-interaction-evidence-view) | Pair-level interactions | Evidence | M | Med | todo | — |
+| [C1](#c1--pair-level-interaction-evidence-view) | Pair-level interactions | Evidence | M | Med | ✅ done | — |
 | [C2](#c2--external-interaction-data-source) | External interaction data | Evidence | XL | High | todo | — |
 | [C3](#c3--question-level-provenance-graph-maturation) | Provenance graph maturation | Evidence | L | High | todo | — |
 | [C4](#c4--context-targeted-retrieval-tuning) | Context-targeted tuning | Evidence | M | Low–Med | todo | — |
@@ -228,9 +228,9 @@ The symbolic half of the system. Improving resolution quality and speed directly
 
 Maturing how evidence is modeled, especially for multi-drug / interaction questions — currently the weakest part of the value prop and the most honestly-caveated.
 
-### C1 — Pair-level interaction evidence view
+### ✅ C1 — Pair-level interaction evidence view
 
-**Effort:** M · **Impact:** Med · **Status:** todo
+**Effort:** M · **Impact:** Med · **Status:** done
 
 **Goal:** Show "drug A + drug B" interaction evidence as a first-class pair, not buried inside one medication's tab.
 
@@ -241,6 +241,8 @@ Maturing how evidence is modeled, especially for multi-drug / interaction questi
 - Keep the careful framing: label text *mentions* the other drug ≠ a confirmed clinical interaction.
 
 **Done when:** An interaction question renders a clear pair-level evidence view.
+
+> **Done.** Replaced per-drug RxNorm graphs and per-drug "RxNorm terminology context" panels with a single unified Drug Network as the first Supporting Evidence tab. The network merges every resolved drug's neighborhood (all drugs at depth 2) with a fair per-center edge budget; shared RxNorm nodes (reachable from more than one drug) get a purple ring. The slider defaults to the fewest relationships that visually connect the drugs. Node-click offers "Open [drug] tab" for center drugs and "Search in Drug Dossier" for other nodes. The UI copy is explicit: shared nodes are RxNorm vocabulary overlap only, never clinical interaction evidence.
 
 ---
 
@@ -520,7 +522,6 @@ A record of completed work.
 - Secondary evidence, interaction-targeted hits, and RxNorm terminology context included in the answer evidence packet.
 - Deterministic coverage updated so secondary evidence can address non-primary medications.
 - Supporting-evidence tabs for primary and secondary medications in the Ask flow.
-- Combined question-level Medication Network for resolved primary and secondary medications, replacing per-tab RxNorm context.
 
 **Question Evidence Map V1**
 - Question-level Evidence Map connecting extracted concepts, resolved medications, label sources, and label sections.
@@ -536,6 +537,26 @@ A record of completed work.
 **Drug Network / graph polish**
 - Improved graph limits and default rendering behavior.
 - Layout/navigation details adjusted during Evidence Map V1 polish.
+
+**C1 — Unified Drug Network (pair-level interaction evidence view)**
+- Replaced per-drug RxNorm graphs and "RxNorm terminology context" panels with a
+  single Drug Network tab as the first Supporting Evidence tab.
+- Merges every resolved drug's neighborhood (all drugs at depth 2) with a fair
+  per-center edge budget (total ÷ centers), interleaved round-robin so each drug
+  is represented evenly instead of the primary dominating.
+- Shared RxNorm nodes (reachable from more than one drug) tracked via
+  `node_membership` and highlighted with a purple ring in the graph.
+- Displayed-relationships slider defaults to the fewest edges that visually
+  connect the drugs (falls back to 200 when they share no path); Fewer/More scale.
+- Visual node cap scales with the number of drug centers.
+- Node-click panel: center drugs get "Open [drug] tab"; other nodes get
+  "Search in Drug Dossier".
+- UI copy is explicit: shared nodes are RxNorm vocabulary overlap only, never
+  clinical interaction evidence.
+- Backend: `QuestionRxNormNetwork` model + `build_question_rxnorm_network()` in
+  `src/query_answer/network.py`; parameters in `parameters.yml` / `config.py`.
+- Frontend: `QuestionRxNormNetworkGraph` component in `rxnorm-knowledge-graph.tsx`;
+  `buildVisualGraph` / `buildDepthLevels` generalized to multi-center sets.
 
 **OpenFDA source profiles V1**
 - Compact inline source profiles on Drug Labels source cards.

@@ -7,7 +7,9 @@ from src.query_answer.models import (
     QuestionEvidenceMap,
     QuestionEvidenceMapEdge,
     QuestionEvidenceMapNode,
+    QuestionRxNormNetwork,
     QueryAnswerResponse,
+    RxNormNetworkCenter,
     RxNormPairContext,
     SecondaryDrugEvidence,
 )
@@ -20,8 +22,10 @@ __all__ = [
     "QuestionEvidenceMap",
     "QuestionEvidenceMapEdge",
     "QuestionEvidenceMapNode",
+    "QuestionRxNormNetwork",
     "QueryAnswerResponse",
     "QueryAnswerService",
+    "RxNormNetworkCenter",
     "RxNormPairContext",
     "SecondaryDrugEvidence",
 ]

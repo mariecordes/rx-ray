@@ -73,6 +73,32 @@ class RxNormPairContext(BaseModel):
     shared_neighbors: list[RxNormConcept] = Field(default_factory=list)
 
 
+class RxNormNetworkCenter(BaseModel):
+    """A resolved drug that anchors one cluster of the question network."""
+
+    rxcui: str
+    name: str
+    tty: str | None = None
+    role: str
+
+
+class QuestionRxNormNetwork(BaseModel):
+    """Combined RxNorm terminology network across all resolved drugs.
+
+    Terminology only: a shared node or edge is RxNorm vocabulary overlap, never a
+    clinical interaction claim. ``node_membership`` maps each node RXCUI to the
+    center RXCUIs whose neighborhood contains it; ``shared_rxcuis`` are the nodes
+    reachable from more than one center.
+    """
+
+    centers: list[RxNormNetworkCenter] = Field(default_factory=list)
+    nodes: list[RxNormConcept] = Field(default_factory=list)
+    edges: list[RxNormEdge] = Field(default_factory=list)
+    node_membership: dict[str, list[str]] = Field(default_factory=dict)
+    shared_rxcuis: list[str] = Field(default_factory=list)
+    truncated: bool = False
+
+
 class QuestionEvidenceMapNode(BaseModel):
     """A node in the question-level evidence map."""
 
@@ -144,6 +170,9 @@ class QueryAnswerResponse(BaseModel):
     answer: EvidenceAnswer | None = None
     secondary_evidence: list[SecondaryDrugEvidence] = Field(default_factory=list)
     context_evidence: list[ContextTargetedEvidence] = Field(default_factory=list)
+    question_rxnorm_network: QuestionRxNormNetwork = Field(
+        default_factory=QuestionRxNormNetwork
+    )
     question_evidence_map: QuestionEvidenceMap = Field(
         default_factory=QuestionEvidenceMap
     )

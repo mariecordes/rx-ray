@@ -19,6 +19,8 @@ from src.dossier.models import (
     OpenFDALabelEvidence,
     OpenFDALabelRecord,
     RxNormConcept,
+    RxNormEdge,
+    RxNormNeighborhood,
 )
 from src.dossier.openfda_store import OpenFDALabelStore
 from src.dossier.rxnorm_store import RxNormParquetStore
@@ -35,6 +37,7 @@ from src.query_answer.context import (
     build_context_targeted_evidence,
     select_context_targets,
 )
+from src.query_answer.network import build_question_rxnorm_network
 from src.query_answer.secondary import build_secondary_evidence
 from src.query_answer.service import QueryAnswerService
 from src.query_answer.synthesizer import (
@@ -1965,6 +1968,127 @@ def secondary_evidence_fixture() -> SecondaryDrugEvidence:
         ),
         retrieval_modes=["standard_secondary_label_lookup"],
     )
+
+
+def test_question_rxnorm_network_two_drugs_flags_shared_nodes() -> None:
+    aspirin = RxNormConcept(rxcui="1191", name="aspirin", tty="IN")
+    ibuprofen = RxNormConcept(rxcui="5640", name="ibuprofen", tty="IN")
+    shared = RxNormConcept(rxcui="rx-nsaid", name="NSAID", tty="EPC")
+
+    primary_neighborhood = RxNormNeighborhood(
+        nodes=[shared],
+        edges=[
+            RxNormEdge(
+                source_rxcui="1191",
+                source_name="aspirin",
+                target_rxcui="rx-nsaid",
+                target_name="NSAID",
+                relation="isa",
+            )
+        ],
+    )
+    understanding = QueryUnderstandingResponse(
+        query="Can I take aspirin with ibuprofen?",
+        state=QueryState(
+            primary_drug="aspirin",
+            all_drugs_mentioned=["aspirin", "ibuprofen"],
+        ),
+        primary_dossier=DrugDossier(
+            query="aspirin",
+            resolved_drug=aspirin,
+            rxnorm_neighborhood=primary_neighborhood,
+        ),
+    )
+
+    ibuprofen_neighborhood = RxNormNeighborhood(
+        nodes=[shared],
+        edges=[
+            RxNormEdge(
+                source_rxcui="5640",
+                source_name="ibuprofen",
+                target_rxcui="rx-nsaid",
+                target_name="NSAID",
+                relation="isa",
+            )
+        ],
+    )
+
+    class FakeRxNormStore:
+        def get_neighborhood(
+            self, rxcui: str, *, depth: int, max_edges: int
+        ) -> RxNormNeighborhood:
+            return ibuprofen_neighborhood if rxcui == "5640" else RxNormNeighborhood()
+
+    secondary = SecondaryDrugEvidence(
+        mention_text="ibuprofen",
+        role="mentioned_drug",
+        resolved_concept=ibuprofen,
+    )
+
+    network = build_question_rxnorm_network(
+        understanding,
+        [secondary],
+        DossierBuilder(
+            rxnorm_store=FakeRxNormStore(),  # type: ignore[arg-type]
+            openfda_store=OpenFDALabelStore(allow_live=False, use_cache=False),
+        ),
+        QueryAnswerParameters(),
+    )
+
+    center_rxcuis = {c.rxcui for c in network.centers}
+    assert center_rxcuis == {"1191", "5640"}
+    assert "rx-nsaid" in network.shared_rxcuis
+    assert "1191" in network.node_membership["rx-nsaid"]
+    assert "5640" in network.node_membership["rx-nsaid"]
+
+
+def test_question_rxnorm_network_single_drug_has_no_shared_nodes() -> None:
+    aspirin = RxNormConcept(rxcui="1191", name="aspirin", tty="IN")
+    salicylate = RxNormConcept(rxcui="rx-sal", name="salicylate", tty="IN")
+
+    understanding = QueryUnderstandingResponse(
+        query="Can I take aspirin?",
+        state=QueryState(primary_drug="aspirin", all_drugs_mentioned=["aspirin"]),
+        primary_dossier=DrugDossier(
+            query="aspirin",
+            resolved_drug=aspirin,
+            rxnorm_neighborhood=RxNormNeighborhood(
+                nodes=[salicylate],
+                edges=[
+                    RxNormEdge(
+                        source_rxcui="1191",
+                        source_name="aspirin",
+                        target_rxcui="rx-sal",
+                        target_name="salicylate",
+                        relation="isa",
+                    )
+                ],
+            ),
+        ),
+    )
+
+    class FakeRxNormStore:
+        def get_neighborhood(
+            self, rxcui: str, *, depth: int, max_edges: int
+        ) -> RxNormNeighborhood:
+            return RxNormNeighborhood()
+
+    network = build_question_rxnorm_network(
+        understanding,
+        [],
+        DossierBuilder(
+            rxnorm_store=FakeRxNormStore(),  # type: ignore[arg-type]
+            openfda_store=OpenFDALabelStore(allow_live=False, use_cache=False),
+        ),
+        QueryAnswerParameters(),
+    )
+
+    assert len(network.centers) == 1
+    assert network.centers[0].rxcui == "1191"
+    assert network.centers[0].role == "primary_drug"
+    assert network.shared_rxcuis == []
+    node_rxcuis = {n.rxcui for n in network.nodes}
+    assert {"1191", "rx-sal"} <= node_rxcuis
 
 
 def test_rxnorm_resolver_handles_punctuation_variation() -> None:
