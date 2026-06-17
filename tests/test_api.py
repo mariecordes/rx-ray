@@ -252,6 +252,33 @@ async def test_query_understanding_does_not_extract_allergy_as_condition(
 
 
 @pytest.mark.asyncio
+async def test_query_understanding_allergy_not_swallowed_by_earlier_determiner(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("QUERY_EXTRACTION_OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("QUERY_EXTRACTION_OPENAI_MODEL", raising=False)
+
+    response = await understand_query(
+        QueryUnderstandingRequest(
+            query="Can I use a tretinoin cream if I have a CLINDAMYCIN allergy?",
+            openfda_limit=1,
+        ),
+        builder=offline_builder(),
+    )
+
+    # The determiner in "a tretinoin cream" must not swallow the allergen span;
+    # the real allergen is clindamycin, and tretinoin cream stays the primary.
+    assert response.state.allergies == ["CLINDAMYCIN"]
+    assert response.state.primary_drug == "tretinoin cream"
+    assert any(
+        mention.role == "allergy"
+        and mention.selected_concept is not None
+        and mention.selected_concept.rxcui == "2582"
+        for mention in response.resolved_drugs
+    )
+
+
+@pytest.mark.asyncio
 async def test_query_understanding_drops_dosage_form_false_positive(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
