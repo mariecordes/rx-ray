@@ -8,3 +8,6 @@ query_answer:
   context_lookup_enabled: true
   max_synthesis_retries: 1
   require_citations_when_evidence_exists: true
+  network_secondary_depth: 1
+  network_max_edges_per_center: 200
+  network_max_total_edges: 600

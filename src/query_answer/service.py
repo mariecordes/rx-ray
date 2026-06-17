@@ -12,6 +12,7 @@ from src.query_answer.context import (
 from src.query_answer.coverage import add_coverage_limitations, build_evidence_coverage
 from src.query_answer.evidence_map import build_question_evidence_map
 from src.query_answer.models import QueryAnswerResponse
+from src.query_answer.network import build_question_rxnorm_network
 from src.query_answer.secondary import build_secondary_evidence
 from src.query_answer.synthesizer import EvidenceAnswerSynthesizer
 from src.query_understanding.service import QueryUnderstandingService
@@ -79,6 +80,12 @@ class QueryAnswerService:
             secondary_evidence=secondary_evidence,
             context_evidence=context_evidence,
         )
+        question_rxnorm_network = build_question_rxnorm_network(
+            understanding,
+            secondary_evidence,
+            self.builder,
+            parameters,
+        )
         question_evidence_map = build_question_evidence_map(
             understanding,
             secondary_evidence=secondary_evidence,
@@ -104,6 +111,7 @@ class QueryAnswerService:
             answer=answer,
             secondary_evidence=secondary_evidence,
             context_evidence=context_evidence,
+            question_rxnorm_network=question_rxnorm_network,
             question_evidence_map=question_evidence_map,
             coverage=coverage,
             warnings=warnings,
