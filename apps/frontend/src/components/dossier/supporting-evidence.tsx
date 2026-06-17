@@ -157,9 +157,13 @@ export function SupportingEvidence({
                 onClick={() => setActiveTabKey(tab.key)}
                 className={cn(
                   "rounded-t-md px-4 py-2 text-sm font-semibold shadow-sm",
-                  activeTab.key === tab.key
-                    ? "bg-[#371E8F] text-white"
-                    : "border border-slate-200 bg-slate-50 text-slate-700"
+                  tab.kind === "network"
+                    ? activeTab.key === tab.key
+                      ? "bg-blue-700 text-white"
+                      : "border border-blue-200 bg-blue-50 text-blue-700"
+                    : activeTab.key === tab.key
+                      ? "bg-[#371E8F] text-white"
+                      : "border border-[#E9DDF8] bg-[#F7F3FD] text-[#371E8F]"
                 )}
               >
                 {tab.label}
@@ -737,8 +741,8 @@ function Overview({
             </div>
           )}
         </div>
-        <div className={cn("grid gap-3", showNetwork && "sm:grid-cols-2")}>
-          {showNetwork ? (
+        {showNetwork ? (
+          <div className="grid gap-3 sm:grid-cols-2">
             <OverviewJumpCard
               description={
                 hasNetwork
@@ -751,7 +755,18 @@ function Overview({
               label="Drug Network"
               onClick={onJumpToNetwork}
             />
-          ) : null}
+            <OverviewJumpCard
+              description={
+                hasLabels
+                  ? `${labelCount} label source${labelCount === 1 ? "" : "s"} available`
+                  : "No public label sources returned"
+              }
+              isAvailable={hasLabels}
+              label="Drug Labels"
+              onClick={onJumpToLabels}
+            />
+          </div>
+        ) : (
           <OverviewJumpCard
             description={
               hasLabels
@@ -762,7 +777,7 @@ function Overview({
             label="Drug Labels"
             onClick={onJumpToLabels}
           />
-        </div>
+        )}
       </div>
     </section>
   );

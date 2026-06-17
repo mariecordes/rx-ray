@@ -194,7 +194,8 @@ function buildVisualGraph(
   centerRxcuis: ReadonlySet<string>,
   nodes: RxNormConcept[],
   edges: RxNormEdge[],
-  edgeLimit: number
+  edgeLimit: number,
+  maxVisualNodes: number = MAX_VISUAL_NODES
 ) {
   const nodeMap = buildNodeMap(nodes);
   const centerEdges = edges.filter(
@@ -212,7 +213,7 @@ function buildVisualGraph(
     const newNodeCount =
       Number(!selectedIds.has(edge.source_rxcui)) +
       Number(!selectedIds.has(edge.target_rxcui));
-    if (selectedIds.size + newNodeCount > MAX_VISUAL_NODES) {
+    if (selectedIds.size + newNodeCount > maxVisualNodes) {
       continue;
     }
     visualEdges.push(edge);
@@ -231,7 +232,7 @@ function buildVisualGraph(
       Number(!selectedIds.has(edge.source_rxcui)) +
       Number(!selectedIds.has(edge.target_rxcui));
 
-    if (!knownEndpoints || selectedIds.size + newNodeCount > MAX_VISUAL_NODES) {
+    if (!knownEndpoints || selectedIds.size + newNodeCount > maxVisualNodes) {
       continue;
     }
 
@@ -1318,10 +1319,12 @@ export function QuestionRxNormNetworkGraph({
     [network.shared_rxcuis]
   );
   const edgeLimit = Math.min(displayedEdges, MAX_DISPLAYED_EDGES, edges.length);
+  // Scale node budget with number of centers so each drug gets enough room.
+  const maxVisualNodes = Math.min(160, MAX_VISUAL_NODES + Math.max(0, centerRxcuis.size - 1) * 30);
 
   const { visualEdges, visualNodes } = useMemo(
-    () => buildVisualGraph(centerRxcuis, nodes, edges, edgeLimit),
-    [centerRxcuis, edgeLimit, edges, nodes]
+    () => buildVisualGraph(centerRxcuis, nodes, edges, edgeLimit, maxVisualNodes),
+    [centerRxcuis, edgeLimit, edges, maxVisualNodes, nodes]
   );
   const layoutNodes = useMemo(
     () => computeLayout(null, visualNodes, visualEdges),
@@ -1592,7 +1595,7 @@ export function QuestionRxNormNetworkGraph({
       <div
         className={
           variant === "embedded"
-            ? "border-t border-slate-200 p-0 pt-6"
+            ? "pb-4"
             : "border-b border-slate-100 p-4"
         }
       >
@@ -1789,8 +1792,8 @@ export function QuestionRxNormNetworkGraph({
                     <div className="line-clamp-2 font-semibold leading-6 text-slate-950">
                       {displayNodeName(selectedNode.name)}
                     </div>
-                    <div className="flex min-w-0 gap-2">
-                      <Badge className="max-w-[56%] shrink-0 truncate overflow-hidden">
+                    <div className="flex min-w-0 flex-wrap gap-1.5">
+                      <Badge className="shrink-0 truncate overflow-hidden" style={{ maxWidth: "56%" }}>
                         RXCUI {selectedNode.rxcui}
                       </Badge>
                       <span className="group relative inline-flex shrink-0">
@@ -1808,24 +1811,24 @@ export function QuestionRxNormNetworkGraph({
                           {ttyBadgeTitle(selectedNode.tty)}
                         </span>
                       </span>
+                      {centerRxcuis.has(selectedNode.rxcui) ? (
+                        <button
+                          type="button"
+                          className="inline-flex shrink-0 items-center rounded-md bg-[#371E8F] px-2 py-0.5 text-xs font-medium text-white transition hover:bg-[#2d1a7a]"
+                          onClick={() => onOpenTab?.(selectedNode.rxcui)}
+                        >
+                          Open {displayNodeName(selectedNode.name)} tab →
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="inline-flex shrink-0 items-center rounded-md bg-[#371E8F] px-2 py-0.5 text-xs font-medium text-white transition hover:bg-[#2d1a7a]"
+                          onClick={() => onOpenDossier?.(selectedNode.name)}
+                        >
+                          Open in Drug Dossier →
+                        </button>
+                      )}
                     </div>
-                    {centerRxcuis.has(selectedNode.rxcui) ? (
-                      <button
-                        type="button"
-                        className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-left text-xs font-medium text-slate-700 hover:bg-slate-50"
-                        onClick={() => onOpenTab?.(selectedNode.rxcui)}
-                      >
-                        Open {displayNodeName(selectedNode.name)} tab →
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-left text-xs font-medium text-slate-700 hover:bg-slate-50"
-                        onClick={() => onOpenDossier?.(selectedNode.name)}
-                      >
-                        Open in Drug Dossier →
-                      </button>
-                    )}
                   </div>
                 ) : (
                   <div className="mt-2 space-y-2">
