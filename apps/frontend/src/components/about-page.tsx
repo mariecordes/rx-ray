@@ -1,35 +1,299 @@
+"use client";
+
+import { ChevronDown, ChevronRight } from "lucide-react";
+import { useState, type ReactNode } from "react";
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
+interface CollapsibleSectionProps {
+  title: string;
+  children: ReactNode;
+  isOpen: boolean;
+  onToggle: () => void;
+}
+
+function CollapsibleSection({
+  title,
+  children,
+  isOpen,
+  onToggle,
+}: CollapsibleSectionProps) {
+  return (
+    <div className="border-b border-slate-200 last:border-b-0">
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={isOpen}
+        className="flex w-full items-center justify-between rounded-sm px-2 py-3 text-left transition hover:bg-slate-50"
+      >
+        <span className="font-semibold text-slate-900">{title}</span>
+        {isOpen ? (
+          <ChevronDown className="size-4 shrink-0 text-slate-500" />
+        ) : (
+          <ChevronRight className="size-4 shrink-0 text-slate-500" />
+        )}
+      </button>
+      <div
+        className={`overflow-hidden transition-all duration-300 ease-in-out ${
+          isOpen ? "max-h-[80rem] opacity-100" : "max-h-0 opacity-0"
+        }`}
+      >
+        <div className="px-2 pb-5 text-sm leading-relaxed text-slate-700">
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RxRay() {
+  return (
+    <span className="inline-block rounded border border-[#D7C8F4] bg-[#EEE7FA] px-1.5 py-0.5 align-baseline text-xs font-semibold leading-none text-[#3B2478]">
+      rx-ray
+    </span>
+  );
+}
+
+const link =
+  "font-medium text-violet-700 underline underline-offset-2 hover:text-violet-900";
+
 export function AboutPage() {
+  const [openSection, setOpenSection] = useState<string>("What you can do here");
+
+  const handleToggle = (section: string) => {
+    setOpenSection(openSection === section ? "" : section);
+  };
+
+  const isOpen = (section: string) => openSection === section;
+
   return (
     <div className="w-full">
       <Card>
         <CardHeader>
           <CardTitle>About rx-ray</CardTitle>
           <p className="mt-1 text-sm leading-6 text-slate-500">
-            A small portfolio prototype for exploring how symbolic medication
-            data and LLM-generated summaries can sit side by side.
+            A neuro-symbolic medication-evidence explorer — where a symbolic
+            layer grounds, constrains, and audits an LLM so it can summarize
+            public drug information without overclaiming.
           </p>
         </CardHeader>
-        <CardContent className="space-y-3 text-sm leading-6 text-slate-700">
-          <p>
-            rx-ray uses public RxNorm terminology and public FDA drug-label text
-            to build an inspectable evidence layer for medication questions.
-          </p>
-          <p>
-            The Drug Dossier is the symbolic layer: it resolves medication
-            concepts, retrieves local RxNorm relationships, and organizes public
-            label records without generating an answer. The Ask a Question flow
-            uses that evidence in a neuro-symbolic pipeline: deterministic query
-            parsing is revised by an LLM into a structured state, an LLM
-            generates a grounded response from the retrieved evidence, and a
-            deterministic coverage check shows which extracted details were or
-            were not supported by the evidence.
-          </p>
-          <p>
-            The project is educational only. It does not provide medical advice,
-            diagnosis, treatment recommendations, or clinical decision support.
-          </p>
+        <CardContent>
+          <div className="space-y-0">
+            <CollapsibleSection
+              title="Welcome"
+              isOpen={isOpen("Welcome")}
+              onToggle={() => handleToggle("Welcome")}
+            >
+              <p className="mb-4">
+                Hi! I&apos;m Marie, a data scientist based in Berlin with a deep
+                interest in AI safety and in systems that stay honest about what
+                they actually know.
+              </p>
+              <p className="mb-4">
+                Medication questions are a perfect stress test for that idea. The
+                stakes are real, the data is messy and incomplete, and a
+                confident-sounding wrong answer is worse than no answer at all.
+                It&apos;s exactly the kind of place where a language model on its
+                own is risky — and where pairing it with structured, inspectable
+                evidence becomes genuinely useful.
+              </p>
+              <p className="font-medium">
+                That&apos;s the question <RxRay /> explores: <strong>can the symbolic
+                layer keep the neural layer honest?</strong>
+              </p>
+            </CollapsibleSection>
+
+            <CollapsibleSection
+              title="What you can do here"
+              isOpen={isOpen("What you can do here")}
+              onToggle={() => handleToggle("What you can do here")}
+            >
+              <p className="mb-3">
+                <RxRay /> has two entry points into the same underlying evidence
+                layer:
+              </p>
+              <p className="mb-3">
+                💬 <strong>Ask a Question</strong>: the main experience. Ask a
+                natural-language medication question and get a grounded answer,
+                plus a compact view of what the system understood, what evidence
+                it used, and where it falls short.
+              </p>
+              <p className="mb-3">
+                Behind every answer you can open the full evidence packet:
+              </p>
+              <ul className="mb-3 ml-6 list-disc space-y-2">
+                <li>
+                  <strong>Evidence Map</strong>: an interactive graph linking the
+                  concepts extracted from your question to the resolved
+                  medications, label sources, and label sections that were used.
+                  This represents a map of the symbolic layer the LLM receives to 
+                  inform its response generation.
+                </li>
+                <li>
+                  <strong>Supporting Evidence</strong>: the underlying RxNorm
+                  drug network and the specific FDA label text, with source
+                  provenance for every claim.
+                </li>
+              </ul>
+              <p className="mb-3">
+                🔎 <strong>Drug Dossier</strong>: search a single medication and
+                inspect its raw evidence directly: the RxNorm concept network and
+                its public FDA label sections, with no generated answer in
+                between.
+              </p>
+              
+            </CollapsibleSection>
+
+            <CollapsibleSection
+              title="How it works"
+              isOpen={isOpen("How it works")}
+              onToggle={() => handleToggle("How it works")}
+            >
+              <p className="mb-3">
+                <RxRay /> runs a neuro-symbolic pipeline where each step is
+                inspectable and the symbolic layer sets the boundaries for the
+                neural one:
+              </p>
+              <p className="mb-3">
+                💭 <strong>Query understanding:</strong> deterministic rules
+                extract a structured state from your question: primary drug,
+                other mentioned and current medications, allergies, conditions,
+                patient context, and intent. An LLM can optionally refine that
+                state, but the structure stays explicit and reviewable.
+              </p>
+              <p className="mb-3">
+                🔍 <strong>Symbolic retrieval:</strong> resolved medications are
+                looked up in RxNorm to build a local concept network, and public
+                FDA label text is retrieved from OpenFDA — targeted at the
+                sections that match the question&apos;s intent.
+              </p>
+              <p className="mb-3">
+                💬 <strong>Grounded synthesis:</strong> the LLM writes the
+                summary, but it can only cite evidence from a whitelist built out
+                of the retrieved label sections. Citations outside that whitelist
+                are dropped, and an empty-citation answer triggers a bounded
+                retry.
+              </p>
+              <p className="mb-3">
+                ✅ <strong>Coverage audit:</strong> a deterministic check compares
+                every extracted detail against the evidence and labels it{" "}
+                <em>addressed</em>, <em>not found in evidence</em>,{" "}
+                <em>not retrieved</em>, or <em>out of scope</em> — so the system
+                says out loud what it could and couldn&apos;t support.
+              </p>
+            </CollapsibleSection>
+
+            <CollapsibleSection
+              title="Goal & impact"
+              isOpen={isOpen("Goal & impact")}
+              onToggle={() => handleToggle("Goal & impact")}
+            >
+              <p className="mb-3">
+                The goal of <RxRay /> isn&apos;t to be a medication chatbot —
+                ask a question, get an answer, done. It&apos;s to demonstrate a
+                pattern I care about: a{" "}
+                <strong>
+                  symbolic layer that grounds, constrains, and audits a language
+                  model
+                </strong>{" "}
+                instead of letting it answer freely. The interesting part
+                isn&apos;t the answer but the provenance and the
+                guardrails around it.
+              </p>
+              <p className="mb-3">
+                That&apos;s also why everything is open to explore. Rather than
+                trusting a generated answer on faith, you can dig into the
+                actual evidence: browse the real FDA labels the summary
+                was drawn from, navigate the RxNorm drug network, and see
+                exactly which sources were retrieved and which details the system
+                couldn&apos;t find coverage for. Having all of that in one place
+                lets you develop a more grounded sense of what the data actually
+                says — and how much the LLM is doing for you compared to
+                hunting through raw label text yourself.
+              </p>
+              <p className="mb-3">
+                That matters most exactly where LLMs are riskiest: high-stakes,
+                trust-sensitive domains where overclaiming does harm.{" "}
+                <RxRay /> treats &quot;I don&apos;t have evidence for
+                that&quot; as a first-class, deterministic output rather than
+                something the model is left to remember to say.
+              </p>
+              <p className="mb-3">
+                To be clear about the limits: RxNorm is terminology data and FDA
+                label text is incomplete for things like true drug-interaction
+                discovery. <RxRay /> is an{" "}
+                <strong>educational prototype</strong>, not a clinical tool — it
+                summarizes and visualizes public information, and it does not
+                give medical advice, diagnoses, or treatment recommendations.
+                For medical questions, please talk to a qualified clinician or
+                pharmacist.
+              </p>
+              <p>
+                Within those limits, it&apos;s a small, honest study in
+                computational trust: what does it take for an AI system to be
+                useful <em>and</em> stay within what the evidence actually
+                supports?
+              </p>
+            </CollapsibleSection>
+
+            <CollapsibleSection
+              title="Tech stack"
+              isOpen={isOpen("Tech stack")}
+              onToggle={() => handleToggle("Tech stack")}
+            >
+              <p className="mb-3">
+                <strong>Frontend:</strong> Next.js, React, TypeScript, Tailwind
+                CSS, with D3 force layouts for the network and evidence-map
+                visualizations.
+              </p>
+              <p className="mb-3">
+                <strong>Backend:</strong> Python FastAPI, with OpenAI
+                API integration for query refinement and grounded synthesis.
+              </p>
+              <p className="mb-3">
+                <strong>Data:</strong> RxNorm{" "}
+                <a
+                  href="https://www.nlm.nih.gov/research/umls/rxnorm/docs/prescribe.html"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={link}
+                >
+                  Current Prescribable Content
+                </a>{" "}
+                (June 2026 release, exported to parquet for fast local
+                retrieval) and public drug labels from the{" "}
+                <a
+                  href="https://open.fda.gov/apis/drug/label/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={link}
+                >
+                  OpenFDA
+                </a>{" "}
+                API. I chose the prescribable subset deliberately: it&apos;s
+                license-free and drawn from the same FDA label data as OpenFDA,
+                so the terminology and the evidence line up.
+              </p>
+              <p className="mb-3">
+                <strong>Safety design:</strong> deterministic state extraction,
+                a citation whitelist, bounded retries, and a coverage audit —
+                every LLM call falls back to deterministic behavior
+                when no API key is configured.
+              </p>
+              <p>
+                <strong>Code:</strong> for a more in-depth look you can check out the full repo here:{" "}
+                <a
+                  href="https://github.com/mariecordes/rx-ray"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={link}
+                >
+                  rx-ray
+                </a>
+                .
+              </p>
+            </CollapsibleSection>
+          </div>
         </CardContent>
       </Card>
     </div>
