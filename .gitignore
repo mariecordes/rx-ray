@@ -225,9 +225,22 @@ __marimo__/
 data/**/*
 *.html
 *.graphml
+
+# Exception: commit the minimal RxNorm runtime data (Current Prescribable
+# Content) so a fresh clone can run the app. Re-include the parent dirs first,
+# then everything under the prescribable releases folder.
+!data/01_raw/
+!data/01_raw/rxnorm_prescribable/
+!data/01_raw/rxnorm_prescribable/**
 uv.lock
 node_modules/
 .next/
 *.tsbuildinfo
 apps/frontend/.next/
 apps/frontend/node_modules/
+
+# Claude Code local config (kept local, not committed)
+CLAUDE.md
+.claude/settings.json
+.claude/commands/
+.claude/hooks/
