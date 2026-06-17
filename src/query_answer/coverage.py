@@ -108,7 +108,7 @@ def build_evidence_coverage(
                 EvidenceCoverageItem(
                     category="mentioned_drug",
                     label=drug,
-                    status="addressed", 
+                    status="addressed",
                     reason=(
                         "Secondary label evidence was retrieved for "
                         f"{secondary.resolved_concept.name}."
@@ -326,32 +326,6 @@ def has_secondary_label_text(item: SecondaryDrugEvidence) -> bool:
     return any(entries for entries in evidence.sections.values())
 
 
-def first_secondary_label_match(
-    item: SecondaryDrugEvidence,
-) -> CoverageEvidenceMatch | None:
-    evidence = item.label_evidence
-    if evidence is None:
-        return None
-    section_names = [
-        *SECONDARY_MATCH_SECTION_PRIORITY,
-        *[
-            name
-            for name in evidence.sections
-            if name not in SECONDARY_MATCH_SECTION_PRIORITY
-        ],
-    ]
-    for section_name in section_names:
-        entry = next(iter(evidence.sections.get(section_name, [])), None)
-        if entry is None:
-            continue
-        return CoverageEvidenceMatch(
-            snippet=section_preview(entry.text),
-            source_id=entry.source_id,
-            section=section_name,
-        )
-    return None
-
-
 def has_interaction_evidence(
     primary_sections: dict[str, list[LabelSection]],
     secondary_evidence: list[SecondaryDrugEvidence],
@@ -542,20 +516,6 @@ def first_section_source(
         source_id=first_entry.source_id,
         section=section_name,
     )
-
-
-def find_match(label: str, evidence_text: str) -> str | None:
-    normalized_label = normalize(label)
-    if not normalized_label:
-        return None
-    normalized_text = normalize(evidence_text)
-    if normalized_label not in normalized_text:
-        return None
-    pattern = re.compile(re.escape(label), flags=re.IGNORECASE)
-    match = pattern.search(evidence_text)
-    if match:
-        return evidence_snippet(evidence_text, match.start(), match.end())
-    return label
 
 
 def same_concept(left: str | None, right: str | None) -> bool:

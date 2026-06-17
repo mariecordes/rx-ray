@@ -9,9 +9,16 @@ from src.dossier.openfda_store import OpenFDALabelStore
 from src.dossier.rxnorm_store import RxNormParquetStore
 
 
+def _rxnorm_data_available() -> bool:
+    try:
+        store = RxNormParquetStore()
+    except FileNotFoundError:
+        return False
+    return store.rxnconso_path.exists() and store.rxnrel_path.exists()
+
+
 pytestmark = pytest.mark.skipif(
-    not Path("data/01_raw/rxnconso_raw.parquet").exists()
-    or not Path("data/01_raw/rxnrel_raw.parquet").exists(),
+    not _rxnorm_data_available(),
     reason="RxNorm parquet files are required for dossier integration tests.",
 )
 

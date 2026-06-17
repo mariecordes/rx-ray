@@ -48,6 +48,44 @@ TTY_PRIORITY = {
 }
 
 
+RXNORM_PRESCRIBABLE_DIR = Path("data/01_raw/rxnorm_prescribable")
+
+
+def latest_prescribable_release(base: str | Path = RXNORM_PRESCRIBABLE_DIR) -> Path:
+    """Return the newest dated RxNorm release folder under ``base``.
+
+    Release folders are named ``YYYYMMDD``, so the lexicographically largest
+    name is the most recent release. Dropping in a new dated folder makes it the
+    active one with no code change.
+    """
+
+    base = Path(base)
+    if not base.is_dir():
+        raise FileNotFoundError(
+            f"RxNorm data folder not found: {base}. See {base}/SOURCE.md for the "
+            "expected layout (a YYYYMMDD release folder with rxnconso.parquet and "
+            "rxnrel.parquet)."
+        )
+    releases = sorted(
+        (p for p in base.iterdir() if p.is_dir() and p.name.isdigit()),
+        key=lambda p: p.name,
+    )
+    if not releases:
+        raise FileNotFoundError(
+            f"No dated RxNorm release folders (YYYYMMDD) found in {base}."
+        )
+    return releases[-1]
+
+
+def default_rxnorm_paths(
+    base: str | Path = RXNORM_PRESCRIBABLE_DIR,
+) -> tuple[Path, Path]:
+    """Return (rxnconso, rxnrel) parquet paths from the latest release folder."""
+
+    release = latest_prescribable_release(base)
+    return release / "rxnconso.parquet", release / "rxnrel.parquet"
+
+
 def normalize_drug_search_text(value: str) -> str:
     """Normalize punctuation and spacing for forgiving drug-name lookup."""
 
@@ -66,9 +104,13 @@ class RxNormParquetStore:
 
     def __init__(
         self,
-        rxnconso_path: str | Path = "data/01_raw/rxnconso_raw.parquet",
-        rxnrel_path: str | Path = "data/01_raw/rxnrel_raw.parquet",
+        rxnconso_path: str | Path | None = None,
+        rxnrel_path: str | Path | None = None,
     ) -> None:
+        if rxnconso_path is None or rxnrel_path is None:
+            default_conso, default_rel = default_rxnorm_paths()
+            rxnconso_path = rxnconso_path or default_conso
+            rxnrel_path = rxnrel_path or default_rel
         self.rxnconso_path = Path(rxnconso_path)
         self.rxnrel_path = Path(rxnrel_path)
         self._rxnconso: pd.DataFrame | None = None

@@ -1,224 +1,182 @@
 # rx-ray
 
-rx-ray is a neuro-symbolic medication information prototype. It combines
-structured public medication data, local symbolic graph retrieval, FDA label
-evidence, and LLM-assisted query understanding into an interactive educational
-drug explorer.
+**A neuro-symbolic medication-evidence explorer — where a symbolic layer
+grounds, constrains, and audits an LLM so it can summarize public drug
+information without overclaiming.**
 
-This is a personal data-science portfolio project. It summarizes and visualizes
-public data, but it does not provide medical advice.
+`rx-ray` is a personal AI research / portfolio project. It explores a pattern I
+care about: instead of letting a language model answer medication questions
+freely, a structured symbolic layer decides what evidence exists, the LLM may
+only summarize and cite *that* evidence, and a deterministic audit reports what
+the system could and couldn't support. The interesting part isn't the answer but the **provenance and the guardrails around it**.
 
-## What It Does
+It summarizes and visualizes public data only. It is an educational prototype
+and does **not** provide medical advice.
 
-The current demo has two entry points on one page:
+---
 
-- **Ask a Question**: enter a natural-language medication question. The app
-  extracts an inspectable state, such as primary drug, mentioned drugs, current
-  medications, allergies, conditions, patient details, and intent.
-- **Drug Explorer**: search directly for one medication and inspect its
-  RxNorm network and public FDA label evidence.
+## The idea
 
-For a resolved primary medication, rx-ray builds a request-time dossier:
+Medication questions are a good stress test for trustworthy AI: the stakes are
+real, the public data is messy and incomplete, and a confident-sounding wrong
+answer is worse than no answer. That makes it a natural place to ask whether the
+**symbolic layer can keep the neural layer honest**.
 
-```text
-user query
-  -> deterministic query extraction
-  -> optional LLM revision of extracted state
-  -> RxNorm drug mention resolution
-  -> primary drug dossier
-  -> RxNorm local relationship network
-  -> OpenFDA label evidence, live with local cache
-```
-
-## Current Features
-
-- Natural-language query understanding with deterministic rules and optional
-  OpenAI revision.
-- Inspectable symbolic state for the user question.
-- RxNorm-backed drug resolution and local relationship retrieval from parquet
-  files.
-- Interactive force-directed **Drug Network** for the resolved medication.
-- Public FDA **Drug Labels** section with warnings, indications, interactions,
-  pregnancy/lactation, population-specific text, and source provenance.
-- Graph-linked label highlighting: selecting a graph node can look up related
-  label evidence and highlight or add matching sources.
-- FastAPI backend with Next.js/React/TypeScript/Tailwind frontend.
-
-## Data Sources
-
-- **RxNorm**: medication terminology, RXCUIs, concept types, and relationships.
-  The app currently reads local parquet exports from `data/01_raw/`.
-- **OpenFDA drug labels**: public FDA label text retrieved through the OpenFDA
-  drug label API.
-- **OpenAI API, optional**: used only for query-extraction revision in the
-  current milestone, not for answer synthesis.
-
-OpenFDA label lookup uses live-with-cache behavior by default. If a label is not
-already cached, the backend queries OpenFDA and stores the raw response under:
+`rx-ray`'s answer is a pipeline where every step is inspectable and the symbolic
+side sets the boundaries for the neural side:
 
 ```text
-data/cache/openfda_labels/
+user question
+  -> deterministic query understanding   (structured, reviewable state)
+  -> optional LLM refinement of that state
+  -> RxNorm drug resolution + local concept network   (symbolic retrieval)
+  -> OpenFDA label evidence, targeted by question intent
+  -> grounded LLM synthesis, citations restricted to a whitelist
+  -> deterministic coverage audit        (what was / wasn't supported)
 ```
 
-## Repository Layout
+## What it does
+
+The app has two entry points into the same evidence layer:
+
+1. **Ask a Question** (primary experience): ask a natural-language medication
+  question and get a grounded summary, plus a compact view of what the system
+  understood, what evidence it used, and where it falls short. The full evidence
+  packet is one click away.
+
+Behind every answer, the evidence packet exposes:
+
+- **Evidence Map**: an interactive D3 graph linking extracted question concepts
+  to resolved medications, label sources, and label sections.
+- **Supporting Evidence**: the underlying RxNorm drug network and the specific
+  FDA label text, with source provenance for every claim.
+
+
+2. **Drug Dossier**: search a single medication and inspect its raw evidence
+  directly — the RxNorm concept network and public FDA label sections — with no
+  generated answer in between.
+
+
+## How it works (technical)
+
+**1. Query understanding (symbolic, with optional neural refinement).**
+Deterministic rules extract a structured state from the question — primary drug,
+other mentioned and current medications, allergies, conditions, patient context,
+and intent. An LLM can optionally revise that state, but the structure stays
+explicit and reviewable. If no API key is configured, the pipeline falls back to
+deterministic extraction with an explicit warning.
+
+**2. Symbolic retrieval.** Resolved medications are looked up in RxNorm
+(RXCUIs, concept types, relationships) to build a local concept network. Public
+FDA label text is retrieved from OpenFDA, targeted at the label sections that
+match the question's intent (e.g. interactions, pregnancy/lactation,
+contraindications, indications).
+
+**3. Grounded synthesis with a citation whitelist.** The LLM writes the summary,
+but it may only cite evidence drawn from a whitelist built out of the retrieved
+label sections. Citations outside the whitelist are dropped, and an answer that
+produces no valid citations (when evidence does exist) triggers a bounded retry.
+
+**4. Deterministic coverage audit.** A non-LLM check compares every extracted
+detail against the evidence and labels it `addressed`, `not_found_in_evidence`,
+`not_retrieved`, or `out_of_scope`. Deterministic limitations are appended when
+important state is not covered — so the system states out loud what it could not
+support, rather than leaving that to the model's discretion.
+
+## The guardrail layer
+
+This is the core of the project. Rather than trusting prompt instructions alone,
+the safety properties are enforced in code:
+
+- **Citation whitelist**: the model cannot cite evidence it wasn't given.
+- **Bounded retry**: re-prompts once when evidence exists but the answer cited
+  nothing valid.
+- **Coverage audit**: a deterministic, "don't overclaim" check that treats
+  *"I don't have evidence for that"* as a first-class output.
+- **Careful prompting**: labels are described as *retrieved text mentioning*
+  another drug, never as a confirmed clinical interaction; the system never
+  declares a drug safe or unsafe.
+- **Graceful degradation**: every LLM call is behind env config and falls back
+  to deterministic behavior, so the app runs (and demos) without an API key.
+
+## Tech stack
+
+- **Frontend:** Next.js, React, TypeScript, Tailwind CSS, D3 force layouts for
+  the network and evidence-map visualizations.
+- **Backend:** Python FastAPI, with optional OpenAI API integration for query
+  refinement and grounded synthesis.
+- **Data:** RxNorm Current Prescribable Content (April 2026 release, exported to
+  parquet for fast local retrieval) and public drug labels via the OpenFDA
+  drug-label API. OpenFDA lookups use live-with-cache behavior, storing raw
+  responses under `data/cache/openfda_labels/`.
+
+## Data sources
+
+- **RxNorm Current Prescribable Content** (April 2026 release) — medication
+  terminology, RXCUIs, concept types, and relationships. The two runtime tables
+  (`rxnconso`, `rxnrel`) are committed under
+  `data/01_raw/rxnorm_prescribable/<YYYYMMDD>/` so a fresh clone runs with no
+  bulk data download; the app always loads the latest dated release folder. This
+  is NLM's
+  [license-free subset](https://www.nlm.nih.gov/research/umls/rxnorm/docs/prescribe.html)
+  of currently-prescribable US drugs (plus many OTC), built from the `RXNORM`
+  and FDA Structured Product Label (`MTHSPL`) sources. It's a deliberate fit
+  here: it needs no UMLS license, so it can ship in a public repo, and it's
+  drawn from the same FDA SPL data as the OpenFDA labels `rx-ray` already uses — so
+  the terminology and the label evidence line up. (The full RxNorm release would
+  add licensing friction and historical/non-US noise without closing the real
+  gaps; richer symbolic data would come from RxClass/ATC classes or a dedicated
+  interaction source instead.)
+- **OpenFDA drug labels** — public FDA label text via the [OpenFDA API](https://open.fda.gov/apis/drug/label/).
+- **OpenAI API** — query-state refinement and grounded answer
+  synthesis. Never the sole source of factual claims; it summarizes retrieved
+  evidence under the citation whitelist.
+
+## Repository layout
 
 ```text
 apps/api/                  FastAPI app and request models
 apps/frontend/             Next.js frontend
-conf/base/prompts.yml      Prompt library for LLM-assisted extraction
-src/dossier/               Drug dossier builder, RxNorm store, OpenFDA store
+conf/base/prompts.yml      Prompt library for LLM-assisted steps
+conf/base/parameters.yml   Tunable pipeline parameters
+src/dossier/               Dossier builder, RxNorm store, OpenFDA store
 src/query_understanding/   State extraction, LLM revision, RxNorm resolution
-notebooks/                 Early exploration and RxNorm KG prototyping
+src/query_answer/          Grounded synthesis, citation whitelist, coverage audit
 scripts/                   Utility scripts, including dossier JSON export
 tests/                     Backend tests
 ```
 
-## Setup
+## API endpoints
 
-Create and activate a Python environment, then install the project:
-
-```bash
-python -m venv .venv
-.venv/bin/pip install -e ".[dev,llm]"
-```
-
-Install frontend dependencies:
-
-```bash
-cd apps/frontend
-npm install
-```
-
-Create a local `.env` from the example:
-
-```bash
-cp .env.example .env
-```
-
-Important environment variables:
-
-```bash
-# OpenFDA
-OPENFDA_BASE_URL="https://api.fda.gov/drug/label.json"
-
-# Optional query-extraction LLM revision
-QUERY_EXTRACTION_OPENAI_API_KEY=...
-QUERY_EXTRACTION_OPENAI_MODEL=...
-
-# Optional grounded answer synthesis
-ANSWER_SYNTHESIS_OPENAI_API_KEY=...
-ANSWER_SYNTHESIS_OPENAI_MODEL=...
-```
-
-The old generic `OPENAI_API_KEY` / `OPENAI_MODEL` names are intentionally not
-used, so query extraction and answer synthesis can have separate models,
-credentials, and usage tracking.
-
-## Run Locally
-
-Start the backend:
-
-```bash
-.venv/bin/uvicorn apps.api.main:app --reload --port 8000
-```
-
-Start the frontend in a second terminal:
-
-```bash
-cd apps/frontend
-npm run dev
-```
-
-The frontend proxies API requests to `BACKEND_URL`, defaulting to:
-
-```text
-http://localhost:8000
-```
-
-Open the frontend at the URL printed by Next.js, usually:
-
-```text
-http://localhost:3000
-```
-
-If you change `.env`, restart the backend.
-
-## API Endpoints
-
-- `GET /health`: backend status.
-- `POST /query-understanding`: extracts state from a natural-language query,
-  resolves drug mentions, and returns a primary dossier when possible.
-- `POST /query-answer`: runs query understanding, retrieves the primary dossier,
-  and optionally generates a grounded educational evidence summary.
-- `POST /dossier`: builds a dossier for one direct drug search.
-- `POST /label-evidence`: fetches OpenFDA label evidence for a selected RxNorm
+- `GET /health` — backend status.
+- `POST /query-understanding` — extracts state, resolves drug mentions, returns a
+  primary dossier when possible.
+- `POST /query-answer` — runs understanding, retrieves evidence, and generates a
+  grounded summary with a coverage report.
+- `POST /dossier` — builds a dossier for one direct drug search.
+- `POST /label-evidence` — fetches OpenFDA label evidence for a selected RxNorm
   concept.
 
-## Build A Dossier From The CLI
+## Running locally
 
-Build an offline dossier:
-
-```bash
-.venv/bin/python scripts/build_dossier.py aspirin --offline
-```
-
-Build and write JSON:
+A fresh clone runs end-to-end with no extra data wrangling — the minimal RxNorm
+runtime data is committed, and OpenFDA labels are fetched live (no API key
+needed). Requires Python 3.11+ and Node 18+.
 
 ```bash
-.venv/bin/python scripts/build_dossier.py aspirin \
-  --output data/04_dossiers/aspirin.json
+make setup          # install backend + frontend deps, create .env, verify data
+make api            # backend on http://localhost:8000
+make web            # frontend on http://localhost:3000 (second terminal)
 ```
 
-Useful options:
+`make setup` is a convenience wrapper; you can also run the steps by hand (create
+a venv, `pip install -e ".[dev,llm]"`, `cd apps/frontend && npm install`, copy
+`.env.example` to `.env`). The LLM features are optional — without an OpenAI key
+the pipeline falls back to deterministic behavior. Run `make test` / `make check`
+for tests and linting.
 
-```bash
---depth 1
---max-edges 75
---openfda-limit 5
---no-openfda
-```
+## Safety note
 
-Omit `--offline` to allow live OpenFDA lookup and caching.
-
-## Tests And Checks
-
-Backend tests:
-
-```bash
-.venv/bin/python -m pytest
-```
-
-Python lint for the active backend modules:
-
-```bash
-.venv/bin/ruff check apps/api/main.py src/dossier src/query_understanding tests
-```
-
-Frontend checks:
-
-```bash
-cd apps/frontend
-npm run typecheck
-./node_modules/.bin/eslint src
-```
-
-Note: on this local macOS setup, `next build` may fail because the installed
-Next/SWC binary has a code-signature issue. TypeScript and ESLint checks are
-currently the reliable frontend validation path.
-
-## Project Direction
-
-The current milestone combines the evidence explorer, query-understanding layer,
-and grounded LLM answer synthesis for natural-language questions. Planned next
-steps include:
-
-- clearer reasoning/execution traces for query processing and synthesis,
-- richer multi-drug workflows, especially for interaction-style questions,
-- evaluation views for comparing neural-only, symbolic-only, and combined
-  responses.
-
-## Safety Note
-
-rx-ray is an educational prototype. It can help inspect public medication
-terminology and label text, but it should not be used to make medical decisions.
+`rx-ray` is an educational prototype. It can help inspect public medication
+terminology and label text, but it must not be used to make medical decisions.
 For medical questions, consult a qualified clinician or pharmacist.
