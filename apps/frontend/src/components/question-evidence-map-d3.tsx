@@ -24,6 +24,15 @@ import {
   QuestionEvidenceMapNode,
 } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import {
+  displayGraphNodeName,
+  displayMentionRole,
+  displayProductType,
+  displayRxNormType,
+  sectionLabels,
+  sentenceCase,
+  titleCase,
+} from "@/lib/format";
 
 export type EvidenceMapNavigationTarget = {
   rxcui: string;
@@ -62,21 +71,6 @@ const LABEL_OUTWARD_STRENGTH = 0.1;
 const LABEL_SECTION_OUTWARD_STRENGTH = 0.1;
 const INITIAL_LAYOUT_TICKS = 360;
 
-const sectionLabels: Record<string, string> = {
-  boxed_warning: "Boxed Warning",
-  contraindications: "Contraindications",
-  warnings: "Warnings",
-  drug_interactions: "Drug Interactions",
-  pregnancy: "Pregnancy",
-  lactation: "Lactation",
-  adverse_reactions: "Adverse Reactions",
-  indications_and_usage: "Indications & Usage",
-  use_in_specific_populations: "Specific Populations",
-  pediatric_use: "Pediatric Use",
-  geriatric_use: "Geriatric Use",
-  active_ingredient: "Active Ingredient",
-  inactive_ingredient: "Inactive Ingredient",
-};
 
 const edgeRelationshipLabels: Record<string, string> = {
   has_role: "Question extraction",
@@ -151,30 +145,6 @@ const evidenceMapRoleTags = new Set([
   "patient_context",
 ]);
 
-const rxNormTypeLabels: Record<string, string> = {
-  IN: "Ingredient",
-  PIN: "Precise Ingredient",
-  MIN: "Multiple Ingredients",
-  BN: "Brand Name",
-  SCDC: "Semantic Clinical Drug Component",
-  SCDF: "Semantic Clinical Drug Form",
-  SCDFP: "Semantic Clinical Drug Form Precise",
-  SCDG: "Semantic Clinical Drug Group",
-  SCDGP: "Semantic Clinical Drug Form Group Precise",
-  SCD: "Semantic Clinical Drug",
-  GPCK: "Generic Pack",
-  SBDC: "Semantic Branded Drug Component",
-  SBDF: "Semantic Branded Drug Form",
-  SBDFP: "Semantic Branded Drug Form Precise",
-  SBDG: "Semantic Branded Drug Group",
-  SBD: "Semantic Branded Drug",
-  BPCK: "Brand Name Pack",
-  DF: "Dose Form",
-  DFG: "Dose Form Group",
-  PSN: "Prescribable Name",
-  SY: "Synonym",
-  TMSY: "Tall Man Lettering Synonym",
-};
 
 type EvidenceMapD3Props = {
   map: QuestionEvidenceMap;
@@ -2194,16 +2164,6 @@ function displayEvidenceMapEdgeNode(node: QuestionEvidenceMapNode) {
   return node.label;
 }
 
-function displayMentionRole(value: string) {
-  const labels: Record<string, string> = {
-    primary_drug: "Primary medication",
-    current_medication: "Current medication",
-    mentioned_drug: "Mentioned medication",
-    allergy: "Allergy",
-  };
-  return labels[value] ?? sentenceCase(value.replaceAll("_", " "));
-}
-
 function conceptRoleLabels(node: QuestionEvidenceMapNode) {
   return roleTags(node).map(displayMentionRole);
 }
@@ -2224,10 +2184,6 @@ function roleTags(node: QuestionEvidenceMapNode) {
     ].filter((tag): tag is string => Boolean(tag))
   );
   return Array.from(tags);
-}
-
-function displayRxNormType(value: string) {
-  return rxNormTypeLabels[value.toUpperCase()] ?? sentenceCase(value);
 }
 
 function graphNodeLabel(node: QuestionEvidenceMapNode) {
@@ -2364,33 +2320,9 @@ function nodeTypeSortIndex(kind: string) {
   return index === -1 ? Number.MAX_SAFE_INTEGER : index;
 }
 
-function displayGraphNodeName(name: string) {
-  return name.toUpperCase();
-}
-
 function displaySectionName(section: string) {
   const label = sectionLabels[section] ?? section.replaceAll("_", " ");
   return titleCase(label.replace(/\band\b/gi, "&"));
-}
-
-function sentenceCase(value: string) {
-  return value
-    .toLowerCase()
-    .replace(/\b\w/g, (character) => character.toUpperCase());
-}
-
-function displayProductType(value: string) {
-  if (value.toLowerCase() === "human otc drug") {
-    return "Human OTC Drug";
-  }
-  return sentenceCase(value);
-}
-
-function titleCase(value: string) {
-  return value
-    .toLowerCase()
-    .replace(/\b\w/g, (character) => character.toUpperCase())
-    .replace(/\b&\b/g, "&");
 }
 
 function shortLabel(value: string, maxLength = 24) {

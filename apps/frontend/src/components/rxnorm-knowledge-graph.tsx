@@ -17,6 +17,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { CardTitle } from "@/components/ui/card";
 import { DrugDossier, RxNormConcept, RxNormEdge } from "@/lib/types";
+import { displayGraphNodeName as displayNodeName } from "@/lib/format";
 
 const GRAPH_WIDTH = 1180;
 const GRAPH_HEIGHT = 1180;
@@ -144,10 +145,6 @@ function shortLabel(value: string, maxLength = 24) {
 
 function buildNodeMap(nodes: RxNormConcept[]) {
   return new Map(nodes.map((node) => [node.rxcui, node]));
-}
-
-function displayNodeName(value: string) {
-  return value.toUpperCase();
 }
 
 function nodeTooltip(node: RxNormConcept) {
