@@ -1,0 +1,533 @@
+# rx-ray Roadmap
+
+A grouped, scoped roadmap organized by theme. Each package has a goal, concrete scope, and a "done when" check.
+
+## Guiding principle
+
+rx-ray's most compelling and honest story is **not** "an app that answers drug questions." It is: **a system where a symbolic layer (RxNorm terminology + retrieved FDA label evidence + deterministic coverage checks) constrains and audits an LLM so it cannot overclaim.** Every theme below is ordered to strengthen that story. When in doubt, prioritize work that makes the neuro-symbolic boundary and the guardrails more visible, more measurable, and more trustworthy.
+
+## How to read this
+
+- **Effort**: `S` ≤ 1 day · `M` 2–4 days · `L` 1–2 weeks · `XL` multi-week / research.
+- **Impact**: `High` / `Med` / `Low`.
+- **Status**: `todo` · `in progress` · `done`.
+
+---
+
+## Recommended sequencing
+
+**Phase 0 — Foundation must-haves (days):**
+[A1](#a1--clone-and-run-bootstrap) clone-and-run · [A2](#a2--neuro-symbolic--safety-narrative-about-page) About narrative · [A3](#a3--readme-refresh) README · [A5](#a5--architecture-doc) architecture doc.
+Optionally [A4](#a4--live-demo-deployment) live demo if hosting is straightforward. These determine first impressions.
+
+**Phase 1 — Quality + speed foundation (1–2 weeks):**
+[B1](#b1--rxnorm-resolver-indexing--performance)/[E1](#e1--resolver--neighborhood-performance) resolver perf · [B2](#b2--specific-concept-resolution-priority) specific-concept priority · [D1](#d1--guardrails-v2) Guardrails V2 ·
+[E2](#e2--test-fixtures-fast-suite--ci) fixtures + CI · [E3](#e3--lint-scope--legacy-module-triage) lint cleanup. Makes the system faster, more correct, and protected.
+
+**Phase 2 — Research showcase (1–2 weeks):**
+[D3](#d3--evaluation-harness--curated-question-set) evaluation harness · [D4](#d4--neural-vs-symbolic-vs-combined) neural-vs-symbolic-vs-combined. The most distinctive material; depends on Phase 1 being stable.
+
+**Phase 3 — Deeper evidence + guardrails (multi-week):**
+[C1](#c1--pair-level-interaction-evidence-view) pair-level interactions · [D2](#d2--guardrails-v3) Guardrails V3 · [D5](#d5--reasoning--execution-traces) traces · [C3](#c3--question-level-provenance-graph-maturation) provenance graph.
+
+**Backlog / opportunistic:**
+[B3](#b3--autocomplete--typeahead-for-drug-dossier) typeahead · [B4](#b4--openfda-text-fallback-when-rxnorm-resolution-fails) OpenFDA fallback · [C2](#c2--external-interaction-data-source) external interaction data (gated on licensing) · [C4](#c4--context-targeted-retrieval-tuning) context tuning · [E4](#e4--generate-ts-types-from-openapi-schema) OpenAPI types · [E5](#e5--frontend-performance-for-the-evidence-map) map perf · all of [Theme F](#theme-f--ux-polish--smaller-improvements).
+
+---
+
+## Quick reference
+
+| ID | Package | Theme | Effort | Impact | Status | Depends on |
+|----|---------|-------|--------|--------|--------|------------|
+| [A1](#a1--clone-and-run-bootstrap) | Clone-and-run bootstrap | Foundation | M | High | todo | — |
+| [A2](#a2--neuro-symbolic--safety-narrative-about-page) | About narrative | Foundation | S–M | High | todo | — |
+| [A3](#a3--readme-refresh) | README refresh | Foundation | S | Med | todo | A2 |
+| [A4](#a4--live-demo-deployment) | Live demo | Foundation | M | High | todo | A1 |
+| [A5](#a5--architecture-doc) | Architecture doc | Foundation | S | Med | todo | — |
+| [B1](#b1--rxnorm-resolver-indexing--performance) | Resolver indexing/perf | Retrieval | M | Med | todo | — |
+| [B2](#b2--specific-concept-resolution-priority) | Specific-concept priority | Retrieval | M | Med | todo | — |
+| [B3](#b3--autocomplete--typeahead-for-drug-dossier) | Autocomplete/typeahead | Retrieval | M | Med | todo | B1 |
+| [B4](#b4--openfda-text-fallback-when-rxnorm-resolution-fails) | OpenFDA text fallback | Retrieval | M | Med | todo | — |
+| [C1](#c1--pair-level-interaction-evidence-view) | Pair-level interactions | Evidence | M | Med | todo | — |
+| [C2](#c2--external-interaction-data-source) | External interaction data | Evidence | XL | High | todo | — |
+| [C3](#c3--question-level-provenance-graph-maturation) | Provenance graph maturation | Evidence | L | High | todo | — |
+| [C4](#c4--context-targeted-retrieval-tuning) | Context-targeted tuning | Evidence | M | Low–Med | todo | — |
+| [D1](#d1--guardrails-v2) | Guardrails V2 | Safety | M | High | todo | — |
+| [D2](#d2--guardrails-v3) | Guardrails V3 | Safety | L | High | todo | D1 |
+| [D3](#d3--evaluation-harness--curated-question-set) | Evaluation harness | Safety | L | High | todo | — |
+| [D4](#d4--neural-vs-symbolic-vs-combined) | Neural vs symbolic vs combined | Safety | L | High | todo | D3 |
+| [D5](#d5--reasoning--execution-traces) | Reasoning/execution traces | Safety | M | Med | todo | — |
+| [E1](#e1--resolver--neighborhood-performance) | Resolver/neighborhood perf | Engineering | M | Med | todo | (=B1) |
+| [E2](#e2--test-fixtures-fast-suite--ci) | Fixtures + fast suite + CI | Engineering | M | Med | todo | — |
+| [E3](#e3--lint-scope--legacy-module-triage) | Lint scope / legacy triage | Engineering | S | Med | todo | — |
+| [E4](#e4--generate-ts-types-from-openapi-schema) | OpenAPI→TS types | Engineering | M | Med | todo | — |
+| [E5](#e5--frontend-performance-for-the-evidence-map) | Evidence map perf | Engineering | M | Low–Med | todo | — |
+| [F1–F6](#theme-f--ux-polish--smaller-improvements) | UX polish & small items | Polish | S–M | Low | todo | — |
+
+---
+
+## Theme A — Foundation & Launch Readiness
+
+The highest-leverage work per hour. Most items here are small but decisive: they determine whether someone who clones the repo or opens the app has a good first impression of what the system is and what it can do.
+
+### A1 — Clone-and-run bootstrap
+
+**Effort:** M · **Impact:** High · **Status:** todo
+
+**Goal:** A fresh clone can run the app end-to-end without the local 8 GB data tree.
+
+**Why it matters:** The runtime needs `data/01_raw/rxnconso_raw.parquet` (~9 MB) and `rxnrel_raw.parquet` (~26 MB), both gitignored, with no bootstrap script. A fresh clone currently results in a non-working app. This is the single biggest usability gap.
+
+**Scope:**
+- Decide between (a) committing the two runtime parquets (~35 MB total) or (b) a committed *sampled* subset (top-N RXCUIs) plus a `make data` / script to rebuild.
+- Provide a one-command bootstrap (`make setup` or `scripts/bootstrap.py`) that prepares `.env`, installs deps, and verifies the data is present.
+- Document the minimal runtime data (2 parquets) vs the bulk raw sources in the README.
+- Ensure the OpenFDA cache has a small seeded set so demo mode and a couple of common drugs work fully offline.
+
+**Done when:** `git clone` → documented bootstrap → working Ask + Dossier pages with no manual data wrangling.
+
+---
+
+### A2 — Neuro-symbolic + safety narrative (About page)
+
+**Effort:** S–M · **Impact:** High · **Status:** todo
+
+**Goal:** The neuro-symbolic design and safety stance are clearly explained in the UI, without needing to read source.
+
+**Why it matters:** The safety thinking is entirely in the code but invisible in the product. The current About page is ~37 lines.
+
+**Scope:**
+- A compact "How rx-ray works" panel: neural vs symbolic responsibilities (who does what), with the pipeline diagram from the README.
+- A "How rx-ray avoids overclaiming" section: citation whitelist, deterministic coverage audit, careful label-text framing, no yes/no medical advice.
+- Explicit scope + limitations (terminology-only RxNorm, incomplete label coverage for interactions) stated as deliberate design honesty, not as a disclaimer footnote.
+
+**Done when:** About page clearly tells the neuro-symbolic and safety story.
+
+---
+
+### A3 — README refresh
+
+**Effort:** S · **Impact:** Med · **Status:** todo · **Depends on:** A2
+
+**Goal:** README reflects the current architecture and reframes the headline around provenance + guardrails rather than "drug Q&A."
+
+**Scope:**
+- Update the feature list and repo layout for the current `components/dossier/*` structure.
+- Lead with the neuro-symbolic + guardrail framing (mirror A2).
+- Replace the "`next build` fails locally" caveat with a working build/run path (or a link to the live demo once A4 lands).
+
+**Done when:** README headline and setup instructions match the real, runnable state of the project.
+
+---
+
+### A4 — Live demo deployment
+
+**Effort:** M · **Impact:** High · **Status:** todo · **Depends on:** A1
+
+**Goal:** A public URL (or a polished recorded walkthrough) so no local setup is required to see the project working.
+
+**Scope:**
+- Frontend on Vercel; backend on a small host (Fly/Render/Railway) or a serverless wrapper; wire `BACKEND_URL`.
+- Decide how to ship the parquet data to the backend host (depends on A1).
+- Demo mode already runs without a live LLM API — make that the safe default for the public demo, with optional live mode behind a key.
+- Fallback: if hosting the data backend is heavy, ship a recorded 60–90s walkthrough.
+
+**Done when:** A link in the README opens a working demo.
+
+---
+
+### A5 — Architecture doc
+
+**Effort:** S · **Impact:** Med · **Status:** todo
+
+**Goal:** A one-page design doc covering the neuro-symbolic boundary, data flow, and the guardrail/coverage layer, with the request pipeline diagram.
+
+**Why it matters:** Makes the system legible without reading code; signals design clarity.
+
+**Done when:** Any technical reader can read it and accurately describe the system.
+
+---
+
+## Theme B — Symbolic Retrieval Quality
+
+The symbolic half of the system. Improving resolution quality and speed directly improves answer quality and responsiveness.
+
+### B1 — RxNorm resolver indexing & performance
+
+**Effort:** M · **Impact:** Med · **Status:** todo
+
+**Goal:** Cut per-query resolution latency by replacing repeated full-DataFrame scans with prebuilt indexes.
+
+**Why it matters:** `RxNormParquetStore.resolve()` runs up to ~8 full-column pandas scans per call; the n-gram scanner calls `resolve` for every 1–4-gram in the query, producing dozens of full scans per question. `get_neighborhood` re-masks the whole `rxnrel` table per hop at `depth=2, max_edges=400`. This is the main latency source.
+
+**Scope:**
+- Build exact / normalized / compact lookup dicts once at load; reserve scan-based matching for fallback only.
+- Pre-index `rxnrel` edges by RXCUI (group once at load) so neighborhood expansion is a dict lookup, not a full-table boolean mask.
+- Add a small benchmark (a handful of representative queries) to track latency.
+
+**Done when:** Median query-understanding latency drops materially; benchmark recorded.
+
+**Note:** Overlaps with E1 — treat as one effort.
+
+---
+
+### B2 — Specific-concept resolution priority
+
+**Effort:** M · **Impact:** Med · **Status:** todo
+
+**Goal:** Prefer the exact/specific RxNorm concept over broad ingredient fallback.
+
+**Why it matters:** Searching "tretinoin 0.5 MG/ML" or "hydrochlorothiazide oral tablet" can currently broaden to the ingredient, after which the answer cites broader evidence than the user asked about — a guardrail gap. The answer synthesizer sees the original query and extracted medication state, but if resolution broadens a specific query to an ingredient, the answer may know the user asked for a specific product/concentration while still citing broader evidence.
+
+**Scope:**
+- When a specific concept is resolvable, prefer it; keep ingredient fallback only when the specific concept is not resolvable.
+- Carry the specificity signal through to the evidence packet so the synthesizer/coverage can flag when retrieval broadened the query.
+- Test set: tretinoin 0.5 MG/ML, hydrochlorothiazide oral tablet, fluoxetine oral solution, benzoyl peroxide topical gel.
+
+**Done when:** Specific searches keep the primary node + OpenFDA lookup tied to the intended specificity, or the broadening is explicitly surfaced as a limitation.
+
+---
+
+### B3 — Autocomplete / typeahead for Drug Dossier
+
+**Effort:** M · **Impact:** Med · **Status:** todo · **Depends on:** B1
+
+**Goal:** RxNorm typeahead on the direct drug search, optionally showing matched concept type.
+
+**Why it matters:** Makes the symbolic resolver visible and interactive; a meaningful trust and usability improvement.
+
+**Scope:**
+- Lightweight suggest endpoint backed by the resolver (depends on B1 for speed).
+- Frontend typeahead with debounce; show concept type (e.g. IN / SCD) in suggestions.
+
+**Done when:** Typing in the Dossier search surfaces ranked RxNorm suggestions.
+
+---
+
+### B4 — OpenFDA text fallback when RxNorm resolution fails
+
+**Effort:** M · **Impact:** Med · **Status:** todo
+
+**Goal:** When RxNorm can't resolve a mention, still show public label evidence via an OpenFDA lookup by extracted medication text.
+
+**Why it matters:** A query can currently dead-end with no Drug Network *and* no labels.
+
+**Scope:**
+- Fallback OpenFDA search keyed on the extracted text when no RXCUI resolves.
+- Clearly tag this evidence as text-matched (no terminology grounding) so it isn't mistaken for resolved-concept evidence.
+
+**Done when:** Unresolved-but-real drug names can still surface labels, clearly labeled.
+
+---
+
+## Theme C — Neuro-Symbolic Evidence & Interactions
+
+Maturing how evidence is modeled, especially for multi-drug / interaction questions — currently the weakest part of the value prop and the most honestly-caveated.
+
+### C1 — Pair-level interaction evidence view
+
+**Effort:** M · **Impact:** Med · **Status:** todo
+
+**Goal:** Show "drug A + drug B" interaction evidence as a first-class pair, not buried inside one medication's tab.
+
+**Why it matters:** Interaction-specific sources currently live inside a single medication tab, which is conceptually awkward for the exact questions users ask most.
+
+**Scope:**
+- A pair-level panel in Supporting Evidence and a corresponding Evidence Map treatment.
+- Keep the careful framing: label text *mentions* the other drug ≠ a confirmed clinical interaction.
+
+**Done when:** An interaction question renders a clear pair-level evidence view.
+
+---
+
+### C2 — External interaction data source
+
+**Effort:** XL · **Impact:** High · **Status:** todo
+
+**Goal:** Add a real interaction-focused data source; stop implying RxNorm graph distance is interaction evidence.
+
+**Why it matters:** RxNorm is terminology-only and OpenFDA label text is incomplete for interaction discovery. This is the package that would make the "interaction" framing genuinely true.
+
+**Scope:**
+- Survey public interaction datasets; document licensing and coverage before integrating (this evaluation is itself a deliverable).
+- Normalize into weak, clearly-labeled evidence edges in the question-level graph.
+- Update coverage + synthesizer framing accordingly.
+
+**Done when:** Interaction answers can cite a dedicated interaction source, with provenance and confidence clearly distinguished from label-text mentions.
+
+**Risk:** Licensing. Keep an offline/abstention path if no suitable source is usable.
+
+---
+
+### C3 — Question-level provenance graph maturation
+
+**Effort:** L · **Impact:** High · **Status:** todo
+
+**Goal:** Evolve the Evidence Map into a single navigable provenance layer combining mentions, resolved concepts, retrieved labels, interaction-targeted text, terminology context, and (later) external interaction evidence.
+
+**Why it matters:** Provenance/traceability is a core safety value and a natural home for every other evidence type. Pairs well with D5.
+
+**Scope:**
+- Unify node/edge kinds and their provenance tags.
+- Make every answer claim traceable to a node/edge in the map.
+
+**Done when:** The map is the canonical "where did this come from" view for an answer.
+
+---
+
+### C4 — Context-targeted retrieval tuning
+
+**Effort:** M · **Impact:** Low–Med · **Status:** todo
+
+**Goal:** Improve targeted OpenFDA lookups for conditions, allergies, and patient context.
+
+**Scope:**
+- Expand/tune target-field mappings against more real queries.
+- Symptom synonyms (e.g. "swollen eyes" → eye irritation / swelling) before search.
+- Configurable invalid-extraction/normalization dictionary; richer non-medication allergen list (kept conservative so medication allergies like aspirin or ibuprofen can still resolve as secondary evidence).
+- Careful UI wording: label text mentions a context ≠ the app validating suitability.
+
+**Done when:** Context-targeted hits are more accurate and clearly framed.
+
+---
+
+## Theme D — Safety, Guardrails & Evaluation
+
+The differentiator. This turns "careful prompting" into a measurable, layered safety architecture.
+
+### D1 — Guardrails V2
+
+**Effort:** M · **Impact:** High · **Status:** todo
+
+**Goal:** Deterministic, intent-aware checks that the retrieved evidence actually addresses the question, plus a must-mention/must-caveat checklist fed into synthesis.
+
+**Scope:**
+- Intent-specific coverage checks:
+  - Pregnancy/lactation Q → pregnancy, lactation, or specific-populations evidence retrieved?
+  - Interaction Q → evidence retrieved for all mentioned drugs, and interaction sections present?
+  - Allergy Q → contraindications, hypersensitivity, ingredient, or warning evidence present?
+  - Side-effect Q → adverse reactions or warnings present?
+  - Indication Q → indications_and_usage present?
+- Build a deterministic must-mention / must-caveat checklist *before* synthesis and pass it into the prompt.
+- Expand post-generation validation beyond citation presence: cited supplied evidence only; important extracted entities mentioned or caveated; deterministic limitations preserved; no yes/no medical-advice framing.
+
+**Done when:** Each intent has a deterministic coverage check and a pre-synthesis caveat contract that post-generation validation enforces.
+
+---
+
+### D2 — Guardrails V3
+
+**Effort:** L · **Impact:** High · **Status:** todo · **Depends on:** D1
+
+**Goal:** Extract each generated claim, map it to supporting citations, and run an optional LLM critic that flags unsupported claims, missing caveats, or overconfident wording — regenerating once on important issues.
+
+**Scope:**
+- Claim extraction + claim-to-citation alignment.
+- Optional LLM critic after deterministic checks.
+- One feedback-driven regeneration when important issues are found.
+- Confidence language: strong / partial / limited / no retrieved coverage.
+
+**Done when:** Answers carry per-claim support status and a critic pass with bounded regeneration.
+
+---
+
+### D3 — Evaluation harness & curated question set
+
+**Effort:** L · **Impact:** High · **Status:** todo
+
+**Goal:** A reproducible eval over a curated question set, tracking citation coverage and state coverage as quality metrics.
+
+**Why it matters:** Makes the guardrails *measurable* and the system auditable. Coverage already exists deterministically; this formalizes it into a trackable metric.
+
+**Scope:**
+- Curate ~20–40 questions spanning pregnancy, breastfeeding, allergy context, current medication, interaction, side-effect, indication, and edge cases.
+- Harness that runs the pipeline and reports state-coverage and citation-coverage per question and in aggregate.
+- Store expected behaviors / regression snapshots so changes are visible.
+
+**Done when:** `make eval` (or similar) produces a metrics report over the question set.
+
+---
+
+### D4 — Neural vs symbolic vs combined
+
+**Effort:** L · **Impact:** High · **Status:** todo · **Depends on:** D3
+
+**Goal:** For a given question, compare neural-only, symbolic-only, and combined outputs side by side.
+
+**Why it matters:** Directly demonstrates the neuro-symbolic thesis in concrete, observable terms. Neural-only shows what the LLM does without grounding; symbolic-only shows what deterministic extraction + retrieval + coverage alone produces; combined shows how the two layers work together. Pairs naturally with D3.
+
+**Scope:**
+- Neural-only: LLM answer with no retrieved evidence/guardrails.
+- Symbolic-only: deterministic extraction + retrieval + coverage, no LLM synthesis.
+- Combined: the current grounded, guarded pipeline.
+- An evaluation view (and/or eval-harness mode from D3) that contrasts them on the same questions, with coverage/citation metrics.
+
+**Done when:** The three modes can be contrasted on real questions with coverage metrics.
+
+---
+
+### D5 — Reasoning / execution traces
+
+**Effort:** M · **Impact:** Med · **Status:** todo
+
+**Goal:** A clear, inspectable trace of how a query was processed: extraction → revision → resolution → retrieval → synthesis → validation.
+
+**Why it matters:** Transparency is a core safety value and a debugging aid.
+
+**Scope:**
+- Structured per-stage trace surfaced in the UI (and/or returned in the API response).
+- Tie trace steps to the provenance graph (C3) where possible.
+
+**Done when:** Each answer can be expanded into a step-by-step processing trace.
+
+---
+
+## Theme E — Engineering & Codebase Health
+
+Lower visible impact but important signal for engineering-literate readers, and they make every other package faster and safer.
+
+### E1 — Resolver & neighborhood performance
+
+**Effort:** M · **Impact:** Med · **Status:** todo
+
+Same scope as [B1](#b1--rxnorm-resolver-indexing--performance) — treat as one effort. Tracked here so the engineering angle is explicit.
+
+---
+
+### E2 — Test fixtures, fast suite & CI
+
+**Effort:** M · **Impact:** Med · **Status:** todo
+
+**Goal:** A small committed RxNorm sample fixture so the core suite is fast and runs on a fresh clone, plus CI.
+
+**Why it matters:** Tests currently take ~55 s (load real parquet) and the dossier integration tests skip without the gitignored data. A committed sample + CI protects refactors and keeps the suite useful on a fresh clone.
+
+**Scope:**
+- Tiny committed RxNorm sample (top-N RXCUIs) for fast, portable tests.
+- GitHub Actions: ruff + pytest (backend), tsc + eslint (frontend).
+- Keep heavier integration tests behind the existing skip-if-missing-data guard.
+
+**Done when:** CI runs green on a fresh clone without the 8 GB data tree.
+
+---
+
+### E3 — Lint scope / legacy module triage
+
+**Effort:** S · **Impact:** Med · **Status:** todo
+
+**Goal:** Resolve the "active vs inactive module" lint split.
+
+**Why it matters:** ruff passes only on a curated path; on full `src tests` it reports ~307 issues (mostly `W293` whitespace, some `E501`, star-imports `F403/F405`, an unused var). The split is a smell.
+
+**Scope:**
+- `ruff check --fix` for the auto-fixable majority.
+- Fix the real ones (star imports, unused var) in `utils.py` / `pipelines` / `knowledge_graph`.
+- Decide: are those modules part of the project (then lint them in CI) or legacy (then move to an `archive/` or notebooks area)?
+
+**Done when:** A single lint command covers the whole intended surface and passes.
+
+---
+
+### E4 — Generate TS types from OpenAPI schema
+
+**Effort:** M · **Impact:** Med · **Status:** todo
+
+**Goal:** Stop hand-mirroring backend Pydantic models in `lib/types.ts` (~250 lines).
+
+**Why it matters:** Frontend types drift from backend models silently; generating them from FastAPI's OpenAPI schema removes a whole class of bugs.
+
+**Scope:**
+- Emit the OpenAPI schema from FastAPI; generate TS types (e.g. openapi-typescript) into a generated file; replace the hand-written mirror.
+- Add a check/script so regeneration is part of the workflow.
+
+**Done when:** Frontend types are generated from the backend schema, not maintained by hand.
+
+---
+
+### E5 — Frontend performance for the evidence map
+
+**Effort:** M · **Impact:** Low–Med · **Status:** todo
+
+**Goal:** Keep the D3 force Evidence Map (~2.3k lines) smooth on larger graphs.
+
+**Scope:**
+- Profile render/simulation cost; memoize/throttle where needed; cap nodes/edges sensibly.
+- Consider further splitting the component now that the dossier refactor set the pattern.
+
+**Done when:** The map stays responsive on the densest realistic queries.
+
+---
+
+## Theme F — UX Polish & Smaller Improvements
+
+Do these opportunistically, when a concrete query exposes a problem — not preemptively.
+
+- **F1 — Evidence Map / Supporting Evidence polish** (`S`): clearer explanation for interaction-specific evidence; small visual tuning only when a real query exposes clutter.
+- **F2 — Keep label limit as a deep-dive control** (`S`): not a question-flow control.
+- **F3 — LLM usage / cost panel** (`S–M`): the backend already separates extraction vs synthesis API keys/models for usage tracking; surface token/cost/latency per request.
+- **F4 — Prompt versioning** (`S`): keep all prompt text in `conf/base/prompts.yml`; add version labels so prompt changes are traceable.
+- **F5 — Parameter extraction** (`S`): move remaining magic numbers (`MAX_LABEL_TEXT_CHARS`, `MAX_LABEL_SECTIONS`, `MAX_RXNORM_RELATIONSHIPS`, section priority/order, graph caps) into `parameters.yml`.
+- **F6 — Additional OpenFDA field normalization** (`M`): description, active/inactive ingredient, purpose, dosage; use `indications_and_usage` as short "what is this for?" text.
+
+---
+
+## Shipped
+
+A record of completed work.
+
+**Answer reliability**
+- Retry once when label evidence exists but generated bullets have no valid citations.
+- Question-answer default label limit moved to `parameters.yml` (set to 10).
+- Retry prompt moved to `prompts.yml`.
+
+**Page / flow**
+- Split main experience into Ask a Question, Drug Dossier, and About routes.
+- Compact rx-ray header/nav and browser tab icon.
+- Redesigned Ask flow: generated response, extracted state, staged loading, collapsed supporting evidence.
+- File-style embedded supporting evidence; Drug Dossier as card-based deep dive.
+
+**Guardrails / coverage V1**
+- Deterministic coverage report: addressed, not_found_in_evidence, not_retrieved, out_of_scope.
+- Tracks coverage for primary drug, mentioned drugs, current medications, allergies, conditions, patient context, and intent.
+- Deterministic limitations appended when retrieved evidence doesn't cover important extracted state.
+- Collapsible Evidence coverage UI under Generated response; polished labels; human-readable limitation wording.
+
+**Multi-drug evidence V1**
+- Compact secondary label evidence for non-primary resolved mentioned/current medications.
+- Interaction-targeted OpenFDA label lookups for interaction-style questions.
+- Merged/deduplicated secondary and targeted label sources by stable provenance identifiers.
+- Secondary evidence, interaction-targeted hits, and RxNorm terminology context included in the answer evidence packet.
+- Deterministic coverage updated so secondary evidence can address non-primary medications.
+- Supporting-evidence tabs for primary and secondary medications in the Ask flow.
+- Combined question-level Medication Network for resolved primary and secondary medications, replacing per-tab RxNorm context.
+
+**Question Evidence Map V1**
+- Question-level Evidence Map connecting extracted concepts, resolved medications, label sources, and label sections.
+- OpenFDA interaction-targeted hits represented as weak label-text mention edges, not clinical interaction claims.
+- Clicking map nodes navigates into Supporting Evidence tabs.
+- Single "Explore evidence" reveal opening both Evidence Map and Supporting Evidence.
+- D3 force Evidence Map only; React Flow removed from Ask flow.
+- Selected-node details, graph controls, node-type legend, hover tooltips, supporting-evidence navigation.
+- OpenFDA label RXCUIs preserved separately from RxNorm concept RXCUIs in Evidence Map nodes.
+- One-token scanner false positives filtered (e.g. "eyes" resolving to unrelated RxNorm products).
+- Default Evidence Map layout: parent-centered radial clusters, less tree-like label-section placement.
+
+**Drug Network / graph polish**
+- Improved graph limits and default rendering behavior.
+- Layout/navigation details adjusted during Evidence Map V1 polish.
+
+**OpenFDA source profiles V1**
+- Compact inline source profiles on Drug Labels source cards.
+- Brand, generic, manufacturer, route, product type, substances, RXCUIs, effective date, and version surfaced from existing OpenFDA metadata.
+- Source cards compact by default; profile details expand inline.
+- Label details links from section cards select and toggle the matching label profile.
+- Compact source profile metadata passed into Evidence Map selected label-source details.
+
+**Context-targeted OpenFDA retrieval V1**
+- Targeted OpenFDA label lookups for extracted conditions, allergies, and patient context.
+- Searches relevant label fields: indications, warnings, contraindications, pregnancy/lactation, specific populations, active/inactive ingredient.
+- Context-specific labels tagged and merged into primary/secondary Drug Labels evidence bundles.
+- Context-specific Evidence Map edges from extracted concepts to returned label sources/sections.
+- Coverage updated so context items can be addressed by context-targeted label text (without implying medical suitability).
+- Generic allergy terms prevented from leaking into condition or patient-context state.
+- Noun-phrase allergies (e.g. "pollen allergy") extracted into allergy state; common non-medication allergens excluded from RxNorm medication tabs.
