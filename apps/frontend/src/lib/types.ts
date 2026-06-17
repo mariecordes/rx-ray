@@ -175,6 +175,22 @@ export type EvidenceCoverageReport = {
   summary_counts: Record<string, number>;
 };
 
+export type RxNormNetworkCenter = {
+  rxcui: string;
+  name: string;
+  tty?: string | null;
+  role: string;
+};
+
+export type QuestionRxNormNetwork = {
+  centers: RxNormNetworkCenter[];
+  nodes: RxNormConcept[];
+  edges: RxNormEdge[];
+  node_membership: Record<string, string[]>;
+  shared_rxcuis: string[];
+  truncated: boolean;
+};
+
 export type RxNormPairContext = {
   primary_rxcui: string;
   secondary_rxcui: string;
@@ -243,6 +259,7 @@ export type QueryAnswerResponse = {
   answer?: EvidenceAnswer | null;
   secondary_evidence: SecondaryDrugEvidence[];
   context_evidence?: ContextTargetedEvidence[];
+  question_rxnorm_network: QuestionRxNormNetwork;
   question_evidence_map: QuestionEvidenceMap;
   coverage: EvidenceCoverageReport;
   warnings: string[];
