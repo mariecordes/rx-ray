@@ -39,9 +39,9 @@ Optionally [A4](#a4--live-demo-deployment) live demo if hosting is straightforwa
 
 | ID | Package | Theme | Effort | Impact | Status | Depends on |
 |----|---------|-------|--------|--------|--------|------------|
-| [A1](#a1--clone-and-run-bootstrap) | Clone-and-run bootstrap | Foundation | M | High | todo | — |
-| [A2](#a2--neuro-symbolic--safety-narrative-about-page) | About narrative | Foundation | S–M | High | todo | — |
-| [A3](#a3--readme-refresh) | README refresh | Foundation | S | Med | todo | A2 |
+| [A1](#a1--clone-and-run-bootstrap) | Clone-and-run bootstrap | Foundation | M | High | ✅ done | — |
+| [A2](#a2--neuro-symbolic--safety-narrative-about-page) | About narrative | Foundation | S–M | High | ✅ done | — |
+| [A3](#a3--readme-refresh) | README refresh | Foundation | S | Med | ✅ done | A2 |
 | [A4](#a4--live-demo-deployment) | Live demo | Foundation | M | High | todo | A1 |
 | [A5](#a5--architecture-doc) | Architecture doc | Foundation | S | Med | todo | — |
 | [B1](#b1--rxnorm-resolver-indexing--performance) | Resolver indexing/perf | Retrieval | M | Med | todo | — |
@@ -70,9 +70,9 @@ Optionally [A4](#a4--live-demo-deployment) live demo if hosting is straightforwa
 
 The highest-leverage work per hour. Most items here are small but decisive: they determine whether someone who clones the repo or opens the app has a good first impression of what the system is and what it can do.
 
-### A1 — Clone-and-run bootstrap
+### ✅ A1 — Clone-and-run bootstrap
 
-**Effort:** M · **Impact:** High · **Status:** todo
+**Effort:** M · **Impact:** High · **Status:** done
 
 **Goal:** A fresh clone can run the app end-to-end without the local 8 GB data tree.
 
@@ -88,9 +88,9 @@ The highest-leverage work per hour. Most items here are small but decisive: they
 
 ---
 
-### A2 — Neuro-symbolic + safety narrative (About page)
+### ✅ A2 — Neuro-symbolic + safety narrative (About page)
 
-**Effort:** S–M · **Impact:** High · **Status:** todo
+**Effort:** S–M · **Impact:** High · **Status:** done
 
 **Goal:** The neuro-symbolic design and safety stance are clearly explained in the UI, without needing to read source.
 
@@ -103,11 +103,13 @@ The highest-leverage work per hour. Most items here are small but decisive: they
 
 **Done when:** About page clearly tells the neuro-symbolic and safety story.
 
+> **Done.** The About page was rebuilt as collapsible sections (Welcome · What you can do here · How it works · Goal & impact · Tech stack)
+
 ---
 
-### A3 — README refresh
+### ✅ A3 — README refresh
 
-**Effort:** S · **Impact:** Med · **Status:** todo · **Depends on:** A2
+**Effort:** S · **Impact:** Med · **Status:** done · **Depends on:** A2
 
 **Goal:** README reflects the current architecture and reframes the headline around provenance + guardrails rather than "drug Q&A."
 
@@ -117,6 +119,8 @@ The highest-leverage work per hour. Most items here are small but decisive: they
 - Replace the "`next build` fails locally" caveat with a working build/run path (or a link to the live demo once A4 lands).
 
 **Done when:** README headline and setup instructions match the real, runnable state of the project.
+
+> **Done.** README now leads with the neuro-symbolic + guardrail framing, documents the pipeline, guardrail layer, data sources, and tech stack, and has a real `make setup` run path.
 
 ---
 
@@ -423,6 +427,7 @@ Same scope as [B1](#b1--rxnorm-resolver-indexing--performance) — treat as one 
 - `ruff check --fix` for the auto-fixable majority.
 - Fix the real ones (star imports, unused var) in `utils.py` / `pipelines` / `knowledge_graph`.
 - Decide: are those modules part of the project (then lint them in CI) or legacy (then move to an `archive/` or notebooks area)?
+- Small follow-up from A1: the legacy `knowledge_graph` extraction pipeline still reads/writes the old `data/01_raw/rxnconso_raw.parquet` / `rxnrel_raw.parquet` paths (the runtime now uses `data/01_raw/rxnorm_prescribable/<YYYYMMDD>/`). Reconcile or archive it as part of this triage.
 
 **Done when:** A single lint command covers the whole intended surface and passes.
 
@@ -474,6 +479,22 @@ Do these opportunistically, when a concrete query exposes a problem — not pree
 ## Shipped
 
 A record of completed work.
+
+**Foundation & launch readiness**
+- A2 — About narrative: rebuilt the About page as collapsible sections (Welcome ·
+  What you can do here · How it works · Goal & impact · Tech stack) in Marie's
+  voice, covering the neural-vs-symbolic pipeline, the guardrails, the
+  explore-the-evidence trust angle, and limitations as design honesty.
+- A3 — README refresh: reframed the headline around provenance + guardrails;
+  documented the pipeline, guardrail layer, data sources, and tech stack; added a
+  real `make setup` run path and removed the `next build` caveat.
+- A1 — Clone-and-run bootstrap: committed the minimal RxNorm runtime data
+  (`rxnconso`/`rxnrel`) under `data/01_raw/rxnorm_prescribable/<YYYYMMDD>/`, with
+  the resolver auto-loading the latest dated release; whitelisted the folder in
+  `.gitignore` while keeping the bulk raw sources ignored; added a `Makefile`
+  (`make setup` / `api` / `web` / `test` / `check`) and a `SOURCE.md` provenance
+  note. OpenFDA labels fetch live (no API key needed) so a fresh clone runs
+  end-to-end. Fixed `test_dossier.py` to detect data via the resolver.
 
 **Answer reliability**
 - Retry once when label evidence exists but generated bullets have no valid citations.
