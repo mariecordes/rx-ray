@@ -471,6 +471,7 @@ export function AskQuestionExperience() {
               evidenceNavRef={supportingEvidencePanelRef}
               highlightCitation={highlightCitation}
               highlightRxcui={highlightEvidenceRxcui}
+              questionRxNormNetwork={queryAnswer.question_rxnorm_network}
               secondaryEvidence={queryAnswer.secondary_evidence ?? []}
               onCitationHandled={() => setHighlightCitation(null)}
               onRxcuiHandled={() => setHighlightEvidenceRxcui(null)}
