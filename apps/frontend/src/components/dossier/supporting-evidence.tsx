@@ -65,7 +65,6 @@ import {
   displayMentionRole,
   displayRxNormType,
   primaryValue,
-  sentenceCase,
 } from "@/lib/format";
 import { requestJsonWithRetry } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
@@ -404,7 +403,7 @@ function SecondaryEvidenceOverview({
           </div>
         </div>
       </div>
-      <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-left">
+      <div className="self-start rounded-md border border-slate-200 bg-slate-50 p-3 text-left">
         <div className="flex items-center justify-between gap-3">
           <div className="text-sm font-semibold text-slate-950">Drug Labels</div>
           <Badge
@@ -423,45 +422,6 @@ function SecondaryEvidenceOverview({
             : "No compact label sources were retrieved for this mentioned medication."}
         </div>
       </div>
-    </section>
-  );
-}
-
-function RxNormPairContextPanel({
-  evidence,
-}: {
-  evidence: SecondaryDrugEvidence;
-}) {
-  const context = evidence.rxnorm_context;
-  if (!context) {
-    return null;
-  }
-  return (
-    <section className="rounded-md border border-slate-200 bg-slate-50 p-3">
-      <div className="mb-2 text-xs font-medium uppercase text-slate-500">
-        RxNorm terminology context
-      </div>
-      <p className="text-sm leading-6 text-slate-700">{context.summary}</p>
-      {context.direct_edges.length ? (
-        <div className="mt-2 space-y-1 text-sm text-slate-600">
-          {context.direct_edges.slice(0, 3).map((edge) => (
-            <div key={`${edge.source_rxcui}-${edge.target_rxcui}-${edge.relation}`}>
-              {displayGraphNodeName(edge.source_name)} ·{" "}
-              {sentenceCase(edge.relation.replaceAll("_", " "))} ·{" "}
-              {displayGraphNodeName(edge.target_name)}
-            </div>
-          ))}
-        </div>
-      ) : null}
-      {context.shared_neighbors.length ? (
-        <div className="mt-2 flex flex-wrap gap-1.5">
-          {context.shared_neighbors.slice(0, 5).map((neighbor) => (
-            <Badge key={neighbor.rxcui} className="bg-white text-slate-700">
-              {displayGraphNodeName(neighbor.name)}
-            </Badge>
-          ))}
-        </div>
-      ) : null}
     </section>
   );
 }
@@ -665,6 +625,7 @@ export function DossierResults({
         sectionEntries={sectionEntries}
         selectedGraphNode={selectedGraphNode}
         selectedSourceKey={selectedSourceKey}
+        showGraphContext={showGraph}
         variant={variant}
         onSelectSection={setSelectedSection}
         onSelectSource={toggleSourceSelection}
@@ -798,7 +759,7 @@ function OverviewJumpCard({
     <button
       type="button"
       onClick={onClick}
-      className="rounded-md border border-slate-200 bg-slate-50 p-3 text-left transition hover:border-slate-300 hover:bg-white"
+      className="block self-start rounded-md border border-slate-200 bg-slate-50 p-3 text-left transition hover:border-slate-300 hover:bg-white"
     >
       <div className="flex items-center justify-between gap-3">
         <div className="text-sm font-semibold text-slate-950">{label}</div>
