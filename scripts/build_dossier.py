@@ -39,13 +39,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output", type=Path, help="Optional JSON output path")
     parser.add_argument(
         "--rxnconso",
-        default="data/01_raw/rxnconso_raw.parquet",
-        help="Path to RXNCONSO parquet",
+        default=None,
+        help="Path to RXNCONSO parquet (default: latest prescribable release)",
     )
     parser.add_argument(
         "--rxnrel",
-        default="data/01_raw/rxnrel_raw.parquet",
-        help="Path to RXNREL parquet",
+        default=None,
+        help="Path to RXNREL parquet (default: latest prescribable release)",
     )
     return parser.parse_args()
 
