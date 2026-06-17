@@ -36,6 +36,70 @@ COMMON_NON_MEDICATION_ALLERGENS = {
     "tree nuts",
 }
 
+# Generic dosage-form / route words that should never be treated as a drug
+# mention on their own. A bare "cream" exact-matches an SPL synonym concept
+# ("milk fat, cow"); these stop words keep the query n-gram scanner from
+# turning dosage forms into stray graph nodes. The specific phrase (e.g.
+# "tretinoin cream") is still captured by the rule/LLM extractor.
+DOSAGE_FORM_STOP_WORDS = {
+    "cream",
+    "creams",
+    "gel",
+    "gels",
+    "ointment",
+    "ointments",
+    "lotion",
+    "lotions",
+    "solution",
+    "solutions",
+    "suspension",
+    "suspensions",
+    "tablet",
+    "tablets",
+    "capsule",
+    "capsules",
+    "spray",
+    "sprays",
+    "patch",
+    "patches",
+    "drop",
+    "drops",
+    "syrup",
+    "syrups",
+    "powder",
+    "powders",
+    "foam",
+    "foams",
+    "paste",
+    "pastes",
+    "liquid",
+    "liquids",
+    "injection",
+    "injections",
+    "suppository",
+    "suppositories",
+    "shampoo",
+    "shampoos",
+    "pill",
+    "pills",
+    "kit",
+    "kits",
+    "inhaler",
+    "inhalers",
+    "topical",
+    "oral",
+    "nasal",
+    "ophthalmic",
+    "otic",
+    "rectal",
+    "vaginal",
+}
+
+# RxNorm/SPL term types that denote a dose form, raw substance, or non-drug
+# concept rather than a prescribable medication. Scanner-discovered mentions
+# resolving (preferred) to one of these are rejected.
+NON_MEDICATION_SCANNER_TTYS = {"DF", "DFG", "SU", "PT", "MTH_RXN_DP"}
+
 
 class QueryUnderstandingService:
     """Resolve natural-language medication questions into symbolic state."""
@@ -261,7 +325,10 @@ class QueryUnderstandingService:
             "allergic",
         }
         phrase_tokens = normalized.split()
-        if any(token in stop_phrases for token in phrase_tokens):
+        if any(
+            token in stop_phrases or token in DOSAGE_FORM_STOP_WORDS
+            for token in phrase_tokens
+        ):
             return False
         return normalized not in stop_phrases and len(normalized) >= 3
 
@@ -285,6 +352,9 @@ class QueryUnderstandingService:
         filters extra mentions discovered by scanning every query n-gram.
         """
 
+        tty = (candidate.concept.tty or "").upper()
+        if tty in NON_MEDICATION_SCANNER_TTYS:
+            return False
         if len(phrase.split()) > 1:
             return True
         return candidate.match_type in {
