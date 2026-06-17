@@ -21,7 +21,7 @@ rx-ray's most compelling and honest story is **not** "an app that answers drug q
 Optionally [A4](#a4--live-demo-deployment) live demo if hosting is straightforward. These determine first impressions.
 
 **Phase 1 — Quality + speed foundation (1–2 weeks):**
-[B1](#b1--rxnorm-resolver-indexing--performance)/[E1](#e1--resolver--neighborhood-performance) resolver perf · [B2](#b2--specific-concept-resolution-priority) specific-concept priority · [D1](#d1--guardrails-v2) Guardrails V2 ·
+[B1](#b1--rxnorm-resolver-indexing--performance)/[E1](#e1--resolver--neighborhood-performance) resolver perf · [B5](#b5--query-to-concept-matching--display-fidelity) query to concept matching & display fidelity · [B2](#b2--specific-concept-resolution-priority--ingredient-fallback) specific-concept priority + ingredient fallback · [D1](#d1--guardrails-v2) Guardrails V2 ·
 [E2](#e2--test-fixtures-fast-suite--ci) fixtures + CI · [E3](#e3--lint-scope--legacy-module-triage) lint cleanup. Makes the system faster, more correct, and protected.
 
 **Phase 2 — Research showcase (1–2 weeks):**
@@ -45,9 +45,10 @@ Optionally [A4](#a4--live-demo-deployment) live demo if hosting is straightforwa
 | [A4](#a4--live-demo-deployment) | Live demo | Foundation | M | High | todo | A1 |
 | [A5](#a5--architecture-doc) | Architecture doc | Foundation | S | Med | todo | — |
 | [B1](#b1--rxnorm-resolver-indexing--performance) | Resolver indexing/perf | Retrieval | M | Med | todo | — |
-| [B2](#b2--specific-concept-resolution-priority) | Specific-concept priority | Retrieval | M | Med | todo | — |
+| [B2](#b2--specific-concept-resolution-priority--ingredient-fallback) | Specific-concept priority + ingredient fallback | Retrieval | L | High | todo | B5 |
 | [B3](#b3--autocomplete--typeahead-for-drug-dossier) | Autocomplete/typeahead | Retrieval | M | Med | todo | B1 |
 | [B4](#b4--openfda-text-fallback-when-rxnorm-resolution-fails) | OpenFDA text fallback | Retrieval | M | Med | todo | — |
+| [B5](#b5--query-to-concept-matching--display-fidelity) | Query→concept matching & display fidelity | Retrieval | M | High | todo | — |
 | [C1](#c1--pair-level-interaction-evidence-view) | Pair-level interactions | Evidence | M | Med | ✅ done | — |
 | [C2](#c2--external-interaction-data-source) | External interaction data | Evidence | XL | High | todo | — |
 | [C3](#c3--question-level-provenance-graph-maturation) | Provenance graph maturation | Evidence | L | High | todo | — |
@@ -175,20 +176,22 @@ The symbolic half of the system. Improving resolution quality and speed directly
 
 ---
 
-### B2 — Specific-concept resolution priority
+### B2 — Specific-concept resolution priority + ingredient fallback
 
-**Effort:** M · **Impact:** Med · **Status:** todo
+**Effort:** L · **Impact:** High · **Status:** todo · **Depends on:** B5
 
-**Goal:** Prefer the exact/specific RxNorm concept over broad ingredient fallback.
+**Goal:** Prefer the exact/specific RxNorm concept; when it has no label evidence of its own, fall back to its active ingredient(s) *explicitly*, with a deterministic caveat, rather than silently broadening.
 
-**Why it matters:** Searching "tretinoin 0.5 MG/ML" or "hydrochlorothiazide oral tablet" can currently broaden to the ingredient, after which the answer cites broader evidence than the user asked about — a guardrail gap. The answer synthesizer sees the original query and extracted medication state, but if resolution broadens a specific query to an ingredient, the answer may know the user asked for a specific product/concentration while still citing broader evidence.
+**Why it matters:** Searching "tretinoin 0.5 MG/ML" or "hydrochlorothiazide oral tablet" can currently broaden to the ingredient, after which the answer cites broader evidence than the user asked about — a guardrail gap. The answer synthesizer sees the original query and extracted medication state, but if resolution broadens a specific query to an ingredient, the answer may know the user asked for a specific product/concentration while still citing broader evidence. The honest fix is not to broaden silently but to keep the specific concept as the anchor and label any ingredient fallback as a deliberate, visible broadening.
 
 **Scope:**
-- When a specific concept is resolvable, prefer it; keep ingredient fallback only when the specific concept is not resolvable.
-- Carry the specificity signal through to the evidence packet so the synthesizer/coverage can flag when retrieval broadened the query.
-- Test set: tretinoin 0.5 MG/ML, hydrochlorothiazide oral tablet, fluoxetine oral solution, benzoyl peroxide topical gel.
+- When a specific concept is resolvable, prefer it and keep it as the matched/primary node.
+- Ingredient fallback for labels: when the specific concept returns no OpenFDA labels, walk `has_ingredient` to its ingredient(s), retrieve *their* labels tagged `ingredient_fallback`, name that evidence after the ingredient, and attach a deterministic caveat ("No product-specific labels for <concept>; showing labels for its active ingredient <ingredient>, which may describe other formulations").
+- Multi-ingredient / combination products: retrieve a labelled bundle per ingredient, tag each, and caveat the combination — never merge ingredient evidence silently.
+- Carry the specificity/broadening signal through to the evidence packet so the synthesizer and coverage audit can flag when retrieval broadened the query.
+- Test set: tretinoin 0.5 MG/ML, hydrochlorothiazide oral tablet, fluoxetine oral solution, benzoyl peroxide topical gel, plus a no-product-label concept and a combination product.
 
-**Done when:** Specific searches keep the primary node + OpenFDA lookup tied to the intended specificity, or the broadening is explicitly surfaced as a limitation.
+**Done when:** Specific searches keep the primary node + OpenFDA lookup tied to the intended specificity; any ingredient fallback is explicit, ingredient-named, caveated, and surfaced as a limitation (single- and multi-ingredient).
 
 ---
 
@@ -221,6 +224,25 @@ The symbolic half of the system. Improving resolution quality and speed directly
 - Clearly tag this evidence as text-matched (no terminology grounding) so it isn't mistaken for resolved-concept evidence.
 
 **Done when:** Unresolved-but-real drug names can still surface labels, clearly labeled.
+
+---
+
+### B5 — Query-to-concept matching & display fidelity
+
+**Effort:** M · **Impact:** High · **Status:** todo
+
+**Goal:** Resolved concepts display their preferred RxNorm term with human-readable types, dosage-form / SPL-synonym false positives stop becoming graph nodes, and the deterministic extractor stops mis-assigning allergens.
+
+**Why it matters:** A real query — "Can I use a tretinoin cream if I have a CLINDAMYCIN allergy?" — exposed several resolution/display defects at once: a stray "CREAM" node (the bare word resolved to an SPL synonym of "milk fat, cow"), raw term-type codes ("Su"/"Dp") in tooltips and badges, concept names shown as arbitrary SPL synonyms instead of the clean RxNorm preferred term, and the allergen ("clindamycin") demoted to a generic mention while "tretinoin cream" was wrongly captured as the allergy. These undercut trust in the symbolic layer even when retrieval is otherwise correct. Note: in that query the retrieved labels were in fact the cream's (matched by RXCUI 198300) — the "TRETINOIN" on the source cards is the label's own generic name — so part of the fix is making that provenance legible rather than changing retrieval.
+
+**Scope:**
+- `resolve()` returns the winning RXCUI's *preferred* name + TTY for display (keeping match_type/score from the matched row), so e.g. RXCUI 198300 shows as "tretinoin 1 MG/ML Topical Cream" (SCD), not its SPL `DP` synonym.
+- Scanner guards: a dosage-form stop set (cream, gel, ointment, lotion, solution, tablet, capsule, spray, patch, …) and rejection of scanned mentions whose preferred TTY isn't a real medication type (drop SU/DF/DFG/PT). Keeps the legitimate ingredient node, removes the junk one.
+- Complete the frontend `rxNormTypeLabels` map (DP, SU, MTH_RXN_DP, PT, …) so no raw codes ever surface.
+- Tighten deterministic allergy extraction so "a <other drug> … allergy" no longer swallows a preceding drug, and the real allergen resolves into allergy state.
+- Label-provenance legibility: when labels are matched to a concept by RXCUI, say so on the matched-drug header / source cards so a correct RXCUI match does not read as a name mismatch.
+
+**Done when:** The tretinoin-cream / clindamycin query (and similar) resolve to clean preferred names with human-readable types, with no dosage-form / SPL-synonym stray nodes, the allergen correctly classified, and label provenance legible — verified with a regression test.
 
 ---
 
