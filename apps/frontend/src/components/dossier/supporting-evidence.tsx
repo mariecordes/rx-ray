@@ -158,8 +158,8 @@ export function SupportingEvidence({
                   "rounded-t-md px-4 py-2 text-sm font-semibold shadow-sm",
                   tab.kind === "network"
                     ? activeTab.key === tab.key
-                      ? "bg-blue-700 text-white"
-                      : "border border-blue-200 bg-blue-50 text-blue-700"
+                      ? "bg-[#21408F] text-white"
+                      : "border border-[#B5E3F2] bg-[#DEE9FC] text-[#155E75]"
                     : activeTab.key === tab.key
                       ? "bg-[#371E8F] text-white"
                       : "border border-[#E9DDF8] bg-[#F7F3FD] text-[#371E8F]"

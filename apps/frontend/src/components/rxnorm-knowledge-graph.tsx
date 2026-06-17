@@ -1688,7 +1688,7 @@ export function QuestionRxNormNetworkGraph({
       >
         <div className="flex items-center gap-2">
           <CardTitle>Drug Network</CardTitle>
-          <InfoTooltip text="Combined RxNorm terminology network for all mentioned medications. Nodes with an amber ring are reachable from multiple drug neighborhoods — this is vocabulary overlap in RxNorm, not evidence of a clinical interaction." />
+          <InfoTooltip text="Combined RxNorm terminology network for all mentioned medications. Nodes with a purple ring are reachable from multiple drug neighborhoods — this is vocabulary overlap in RxNorm, not evidence of a clinical interaction." />
         </div>
         <p className="mt-1 text-sm leading-6 text-slate-500">
           Explore how the mentioned medications relate through RxNorm terminology.
@@ -1783,7 +1783,7 @@ export function QuestionRxNormNetworkGraph({
                         ) : null}
                         {isShared ? (
                           <circle cx={point.x} cy={point.y} r={radius + 6}
-                            fill="none" stroke="#f59e0b" strokeWidth="2" strokeOpacity="0.65" />
+                            fill="none" stroke="#7C3AED" strokeWidth="2.5" strokeOpacity="0.85" />
                         ) : null}
                         <circle
                           cx={point.x} cy={point.y} r={radius}
@@ -1852,12 +1852,7 @@ export function QuestionRxNormNetworkGraph({
                   </div>
                 </div>
                 <label className="flex flex-col gap-2 text-xs text-slate-600">
-                  <span className="flex items-center justify-between gap-3">
-                    <span>Displayed relationships</span>
-                    <span className="font-medium text-slate-900">
-                      {Math.round((displayedEdges / MAX_DISPLAYED_EDGES) * 100)}%
-                    </span>
-                  </span>
+                  <span>Displayed relationships</span>
                   <input
                     min={MIN_DISPLAYED_EDGES} max={MAX_DISPLAYED_EDGES} step={10} type="range"
                     value={displayedEdges}
@@ -1901,20 +1896,24 @@ export function QuestionRxNormNetworkGraph({
                     {centerRxcuis.has(selectedNode.rxcui) ? (
                       <button
                         type="button"
-                        className="inline-flex w-fit items-center gap-1.5 rounded-md bg-[#371E8F] px-2.5 py-1 text-xs font-medium text-white transition hover:bg-[#2d1a7a]"
+                        className="inline-flex w-fit items-center gap-1 rounded-md bg-[#371E8F] px-2 py-0.5 text-white transition hover:bg-[#2d1a7a]"
                         onClick={() => onOpenTab?.(selectedNode.rxcui)}
                       >
                         <ExternalLink className="size-3.5" />
-                        Open {displayNodeName(selectedNode.name)} tab
+                        <span className="text-xs font-medium leading-6">
+                          Open {displayNodeName(selectedNode.name)} tab
+                        </span>
                       </button>
                     ) : (
                       <button
                         type="button"
-                        className="inline-flex w-fit items-center gap-1.5 rounded-md bg-[#371E8F] px-2.5 py-1 text-xs font-medium text-white transition hover:bg-[#2d1a7a]"
+                        className="inline-flex w-fit items-center gap-1 rounded-md bg-[#371E8F] px-2 py-0.5 text-white transition hover:bg-[#2d1a7a]"
                         onClick={() => onOpenDossier?.(selectedNode.name)}
                       >
                         <ExternalLink className="size-3.5" />
-                        Open in Drug Dossier
+                        <span className="text-xs font-medium leading-6">
+                          Search in Drug Dossier
+                        </span>
                       </button>
                     )}
                   </div>
@@ -1980,7 +1979,7 @@ export function QuestionRxNormNetworkGraph({
                 Hover over a line to see the relationship. Double-click a node to
                 focus it.
                 {network.shared_rxcuis.length > 0
-                  ? " Amber-ringed nodes appear in multiple drug networks (terminology overlap only, not interaction evidence)."
+                  ? " Purple-ringed nodes appear in multiple drug networks (terminology overlap only, not interaction evidence)."
                   : ""}
               </p>
             </div>
