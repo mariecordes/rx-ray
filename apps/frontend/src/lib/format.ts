@@ -12,6 +12,10 @@ export const sectionLabels: Record<string, string> = {
   geriatric_use: "Geriatric Use",
   active_ingredient: "Active Ingredient",
   inactive_ingredient: "Inactive Ingredient",
+  description: "What This Medication Is",
+  product_context: "About",
+  purpose: "Purpose",
+  dosage_and_administration: "Dosage & Administration",
 };
 
 export const rxNormTypeLabels: Record<string, string> = {

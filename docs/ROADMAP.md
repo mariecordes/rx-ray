@@ -63,7 +63,8 @@ Optionally [A4](#a4--live-demo-deployment) live demo if hosting is straightforwa
 | [E3](#e3--lint-scope--legacy-module-triage) | Lint scope / legacy triage | Engineering | S | Med | todo | — |
 | [E4](#e4--generate-ts-types-from-openapi-schema) | OpenAPI→TS types | Engineering | M | Med | todo | — |
 | [E5](#e5--frontend-performance-for-the-evidence-map) | Evidence map perf | Engineering | M | Low–Med | todo | — |
-| [F1–F6](#theme-f--ux-polish--smaller-improvements) | UX polish & small items | Polish | S–M | Low | todo | — |
+| [F1–F5](#theme-f--ux-polish--smaller-improvements) | UX polish & small items | Polish | S–M | Low | todo | — |
+| [F6](#theme-f--ux-polish--smaller-improvements) | Richer drug-label cards & medication overview | Polish | M | Low | ✅ done | — |
 
 ---
 
@@ -343,6 +344,13 @@ The differentiator. This turns "careful prompting" into a measurable, layered sa
   - Side-effect Q → adverse reactions or warnings present?
   - Indication Q → indications_and_usage present?
 - Build a deterministic must-mention / must-caveat checklist *before* synthesis and pass it into the prompt.
+- Add normalized label product context to the synthesis evidence packet as a
+  separate, bounded `label_product_context` block: product/display-panel text,
+  description, active/inactive ingredients, purpose, and dosage per label source.
+  Prompt it as formulation/product context that may answer product-specific or
+  how-to/dosage questions, but must not be treated as standalone safety,
+  contraindication, or interaction evidence unless supported by the relevant
+  label sections.
 - Expand post-generation validation beyond citation presence: cited supplied evidence only; important extracted entities mentioned or caveated; deterministic limitations preserved; no yes/no medical-advice framing.
 
 **Done when:** Each intent has a deterministic coverage check and a pre-synthesis caveat contract that post-generation validation enforces.
@@ -502,13 +510,31 @@ Do these opportunistically, when a concrete query exposes a problem — not pree
 - **F3 — LLM usage / cost panel** (`S–M`): the backend already separates extraction vs synthesis API keys/models for usage tracking; surface token/cost/latency per request.
 - **F4 — Prompt versioning** (`S`): keep all prompt text in `conf/base/prompts.yml`; add version labels so prompt changes are traceable.
 - **F5 — Parameter extraction** (`S`): move remaining magic numbers (`MAX_LABEL_TEXT_CHARS`, `MAX_LABEL_SECTIONS`, `MAX_RXNORM_RELATIONSHIPS`, section priority/order, graph caps) into `parameters.yml`.
-- **F6 — Richer drug-label cards & "what is this medication" section** (`M`): normalize and surface more OpenFDA fields — `description`, `package_label_principal_display_panel` (as a product-name line on source cards, with graceful fallbacks since both are inconsistently populated), active/inactive ingredient, purpose, dosage. Add a dedicated section (alongside Indications & Usage) that explains *what the medication is*, visually separated from the warnings/how-to-use sections. Once the cards carry this product-level detail, **retire the "labels matched by RXCUI / generic name" info-note** added in B5 (it exists only because the cards currently look ingredient-generic).
+- **✅ F6 — Richer drug-label cards & "what is this medication" section** (`M`): normalize and surface more OpenFDA fields — `description`, `package_label_principal_display_panel`, active/inactive ingredient, purpose, dosage. Add a dedicated About section as the first Drug Labels section, showing product context per label source and visually separated from warnings/how-to-use sections. Once the cards carry this product-level detail, **retire the "labels matched by RXCUI / generic name" info-note** added in B5 (it exists only because the cards currently look ingredient-generic).
 
 ---
 
 ## Shipped
 
 A record of completed work.
+
+**F6 — Richer drug-label cards & medication overview**
+- Normalizes additional OpenFDA product-context fields into label records:
+  description, package label principal display panel, active/inactive
+  ingredients, purpose, and dosage.
+- Adds an About section as the first Drug Labels section, with amber section-tab
+  styling and one compact product-context card per label source.
+- Keeps the existing source list and standard label-section cards unchanged:
+  source cards still show label number, brand/generic name, manufacturer, and
+  existing details only.
+- Product-context cards show the package/display-panel title on one line with a
+  full cleaned tooltip, plus collapsible Purpose, Dosage, Active ingredient, and
+  Inactive ingredient rows.
+- Removes the temporary B5 "labels matched by RXCUI / generic name" info-note;
+  ingredient-fallback caveats remain explicit.
+- Defers feeding product-context fields into the LLM synthesis packet to D1, so
+  the prompt can frame them as bounded product/formulation evidence rather than
+  broad safety or interaction evidence.
 
 **B2 — Specific-concept priority + ingredient fallback**
 - Builds on B5's preferred-term resolution: the specific concept is kept as the

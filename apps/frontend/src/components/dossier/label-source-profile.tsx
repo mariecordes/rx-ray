@@ -27,6 +27,14 @@ export function buildLabelSourceProfile(
     route: primaryValue(record.routes),
     product_type: primaryValue(record.product_types),
     substances: uniqueProfileValues(record.substance_names),
+    descriptions: uniqueProfileValues(record.descriptions ?? []),
+    product_display_names: uniqueProfileValues(
+      record.package_label_principal_display_panels ?? []
+    ),
+    active_ingredients: uniqueProfileValues(record.active_ingredients ?? []),
+    inactive_ingredients: uniqueProfileValues(record.inactive_ingredients ?? []),
+    purposes: uniqueProfileValues(record.purposes ?? []),
+    dosages: uniqueProfileValues(record.dosages ?? []),
     rxcuis: uniqueProfileValues(record.rxcuis),
     product_ndcs: uniqueProfileValues(record.product_ndcs),
     spl_ids: uniqueProfileValues(record.spl_ids),

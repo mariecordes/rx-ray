@@ -244,3 +244,5 @@ CLAUDE.md
 .claude/settings.json
 .claude/commands/
 .claude/hooks/
+AGENT_GUIDE.md
+AGENTS.md
