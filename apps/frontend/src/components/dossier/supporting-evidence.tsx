@@ -967,12 +967,15 @@ function LabelEvidencePanel({
             labelEvidence.labels_found > 0 &&
             (labelEvidence.retrieval_mode === "live_rxcui" ||
               labelEvidence.retrieval_mode === "cache") ? (
-              <p className="mt-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-600">
-                These labels are matched to this medication&apos;s RxNorm concept
+              <p className="mx-auto flex w-full items-center gap-2 mt-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm leading-5 text-slate-600">
+              <Info className="size-4 shrink-0" />
+              <span>
+                These drug labels are matched to this medication&apos;s RxNorm concept
                 (RXCUI {labelEvidence.rxcui}). Each source card below shows the
-                label&apos;s own brand or generic name — often the active
-                ingredient — which can read more broadly than the matched
+                label&apos;s own brand or generic name (often the active
+                ingredient) which may read more broadly than the matched
                 concept.
+              </span>
               </p>
             ) : null}
           </div>
