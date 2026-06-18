@@ -179,6 +179,13 @@ export function SupportingEvidence({
                 <QuestionRxNormNetworkGraph
                   network={questionRxNormNetwork}
                   variant="embedded"
+                  tabRxcuis={
+                    new Set(
+                      evidenceTabs
+                        .map((tab) => tab.rxcui)
+                        .filter((rxcui): rxcui is string => Boolean(rxcui))
+                    )
+                  }
                   onOpenTab={(rxcui) => {
                     const tab = evidenceTabs.find((t) => t.rxcui === rxcui);
                     if (tab) setActiveTabKey(tab.key);

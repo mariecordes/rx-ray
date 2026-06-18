@@ -299,9 +299,10 @@ function centersAreConnected(
   return false;
 }
 
-// Smallest "displayed relationships" value that visually connects two or more
-// drug centers through shared RxNorm nodes. Falls back to NETWORK_FALLBACK_EDGES
-// when the drugs share no path (or there is only one drug).
+// Default "displayed relationships" value: at least ~50% of the slider range
+// (NETWORK_FALLBACK_EDGES) so the graph isn't tiny, raised further if more edges
+// are needed to visually connect two or more drug centers. Capped by what's
+// actually available.
 function computeDefaultEdgeBudget(
   network: QuestionRxNormNetwork,
   maxVisualNodes: number
@@ -309,13 +310,16 @@ function computeDefaultEdgeBudget(
   const centerRxcuis = new Set(network.centers.map((center) => center.rxcui));
   const { edges, nodes } = network;
   const maxBudget = Math.min(MAX_DISPLAYED_EDGES, edges.length);
-  const fallback = Math.min(
+  const floor = Math.min(
     NETWORK_FALLBACK_EDGES,
     Math.max(MIN_DISPLAYED_EDGES, maxBudget)
   );
   if (centerRxcuis.size < 2 || edges.length === 0) {
-    return fallback;
+    return floor;
   }
+  // Smallest limit that connects the centers (so closely-related drugs still
+  // get raised to the floor, while loosely-related ones get enough edges).
+  let connecting = maxBudget;
   for (let limit = MIN_DISPLAYED_EDGES; limit <= maxBudget; limit += 20) {
     const { visualEdges } = buildVisualGraph(
       centerRxcuis,
@@ -325,10 +329,11 @@ function computeDefaultEdgeBudget(
       maxVisualNodes
     );
     if (centersAreConnected(visualEdges, centerRxcuis)) {
-      return limit;
+      connecting = limit;
+      break;
     }
   }
-  return fallback;
+  return Math.min(maxBudget, Math.max(floor, connecting));
 }
 
 function buildDepthLevels(centerRxcuis: ReadonlySet<string>, edges: RxNormEdge[]) {
@@ -1352,11 +1357,15 @@ export function QuestionRxNormNetworkGraph({
   network,
   onOpenTab,
   onOpenDossier,
+  tabRxcuis,
   variant = "card",
 }: {
   network: QuestionRxNormNetwork;
   onOpenTab?: (rxcui: string) => void;
   onOpenDossier?: (name: string) => void;
+  // Center rxcuis that have a Supporting Evidence tab. Centers without one
+  // (e.g. an ingredient surfaced only in the network) fall back to the dossier.
+  tabRxcuis?: ReadonlySet<string>;
   variant?: "card" | "embedded";
 }) {
   const [selectedRxcui, setSelectedRxcui] = useState<string | null>(null);
@@ -1688,7 +1697,7 @@ export function QuestionRxNormNetworkGraph({
       >
         <div className="flex items-center gap-2">
           <CardTitle>Drug Network</CardTitle>
-          <InfoTooltip text="Combined RxNorm terminology network for all mentioned medications. Nodes with a purple ring are reachable from multiple drug neighborhoods — this is vocabulary overlap in RxNorm, not evidence of a clinical interaction." />
+          <InfoTooltip text="Combined RxNorm terminology network for all mentioned medications. Nodes with a double ring are reachable from multiple drug neighborhoods — this is vocabulary overlap in RxNorm, not evidence of a clinical interaction." />
         </div>
         <p className="mt-1 text-sm leading-6 text-slate-500">
           Explore how the mentioned medications relate through RxNorm terminology.
@@ -1782,8 +1791,8 @@ export function QuestionRxNormNetworkGraph({
                             fill="none" stroke={style.stroke} strokeOpacity="0.32" strokeWidth="3" />
                         ) : null}
                         {isShared ? (
-                          <circle cx={point.x} cy={point.y} r={radius + 6}
-                            fill="none" stroke="#7C3AED" strokeWidth="2.5" strokeOpacity="0.85" />
+                          <circle cx={point.x} cy={point.y} r={radius + 4}
+                            fill="none" stroke={style.stroke} strokeWidth="2" strokeOpacity="0.9" />
                         ) : null}
                         <circle
                           cx={point.x} cy={point.y} r={radius}
@@ -1893,7 +1902,7 @@ export function QuestionRxNormNetworkGraph({
                         </span>
                       </span>
                     </div>
-                    {centerRxcuis.has(selectedNode.rxcui) ? (
+                    {(tabRxcuis ?? centerRxcuis).has(selectedNode.rxcui) ? (
                       <button
                         type="button"
                         className="inline-flex w-fit items-center gap-1 rounded-md bg-[#371E8F] px-2 py-0.5 text-white transition hover:bg-[#2d1a7a]"
@@ -1979,7 +1988,7 @@ export function QuestionRxNormNetworkGraph({
                 Hover over a line to see the relationship. Double-click a node to
                 focus it.
                 {network.shared_rxcuis.length > 0
-                  ? " Purple-ringed nodes appear in multiple drug networks (terminology overlap only, not interaction evidence)."
+                  ? " Double-ringed nodes appear in multiple drug networks (terminology overlap only, not interaction evidence)."
                   : ""}
               </p>
             </div>
