@@ -32,6 +32,9 @@ SECTION_ALIASES = {
     "geriatric_use": ("geriatric_use",),
     "active_ingredient": ("active_ingredient",),
     "inactive_ingredient": ("inactive_ingredient",),
+    "description": ("description",),
+    "purpose": ("purpose",),
+    "dosage_and_administration": ("dosage_and_administration", "dosage"),
 }
 
 
@@ -366,6 +369,7 @@ class OpenFDALabelStore:
         label_set_ids: set[str] = set()
         spl_ids: set[str] = set()
         spl_set_ids: set[str] = set()
+        product_display_names: set[str] = set()
 
         for label in labels:
             source_id = label.get("id") or label.get("set_id")
@@ -378,9 +382,24 @@ class OpenFDALabelStore:
             label_generic_names = self._as_text_list(openfda.get("generic_name", []))
             label_spl_ids = self._as_text_list(openfda.get("spl_id", []))
             label_spl_set_ids = self._as_text_list(openfda.get("spl_set_id", []))
+            descriptions = self._as_text_list(label.get("description", []))
+            principal_display_panels = self._as_text_list(
+                label.get("package_label_principal_display_panel", [])
+            )
+            active_ingredients = self._as_text_list(
+                label.get("active_ingredient", [])
+            )
+            inactive_ingredients = self._as_text_list(
+                label.get("inactive_ingredient", [])
+            )
+            purposes = self._as_text_list(label.get("purpose", []))
+            dosages = self._as_text_list(
+                label.get("dosage_and_administration", label.get("dosage", []))
+            )
             manufacturers.update(manufacturer_names)
             brand_names.update(label_brand_names)
             generic_names.update(label_generic_names)
+            product_display_names.update(principal_display_panels)
             if label.get("id"):
                 label_ids.add(label["id"])
             if label.get("set_id"):
@@ -406,6 +425,12 @@ class OpenFDALabelStore:
                     substance_names=self._as_text_list(
                         openfda.get("substance_name", [])
                     ),
+                    descriptions=descriptions,
+                    package_label_principal_display_panels=principal_display_panels,
+                    active_ingredients=active_ingredients,
+                    inactive_ingredients=inactive_ingredients,
+                    purposes=purposes,
+                    dosages=dosages,
                     rxcuis=self._as_text_list(openfda.get("rxcui", [])),
                 )
             )
@@ -435,6 +460,7 @@ class OpenFDALabelStore:
                 "manufacturers": sorted(manufacturers),
                 "brand_names": sorted(brand_names),
                 "generic_names": sorted(generic_names),
+                "product_display_names": sorted(product_display_names),
                 "label_ids": sorted(label_ids),
                 "label_set_ids": sorted(label_set_ids),
                 "spl_ids": sorted(spl_ids),

@@ -177,9 +177,21 @@ def test_openfda_section_normalization() -> None:
                     "brand_name": ["Example Aspirin"],
                     "generic_name": ["aspirin"],
                     "manufacturer_name": ["Example Manufacturer"],
+                    "product_ndc": ["12345-678"],
+                    "product_type": ["HUMAN OTC DRUG"],
+                    "route": ["ORAL"],
+                    "substance_name": ["ASPIRIN"],
                     "spl_id": ["spl-1"],
                     "spl_set_id": ["spl-set-1"],
                 },
+                "description": ["Aspirin is a salicylate."],
+                "package_label_principal_display_panel": [
+                    "Example Aspirin 325 mg tablets"
+                ],
+                "active_ingredient": ["Aspirin 325 mg"],
+                "inactive_ingredient": ["Corn starch"],
+                "purpose": ["Pain reliever"],
+                "dosage_and_administration": ["Take with water."],
                 "warnings_and_precautions": ["Warning text"],
                 "drug_interactions": ["Interaction text"],
                 "pregnancy": ["Pregnancy text"],
@@ -202,10 +214,32 @@ def test_openfda_section_normalization() -> None:
     assert evidence.label_records[0].spl_ids == ["spl-1"]
     assert evidence.label_records[0].spl_set_ids == ["spl-set-1"]
     assert evidence.label_records[0].brand_names == ["Example Aspirin"]
+    assert evidence.label_records[0].product_ndcs == ["12345-678"]
+    assert evidence.label_records[0].product_types == ["HUMAN OTC DRUG"]
+    assert evidence.label_records[0].routes == ["ORAL"]
+    assert evidence.label_records[0].substance_names == ["ASPIRIN"]
+    assert evidence.label_records[0].descriptions == ["Aspirin is a salicylate."]
+    assert evidence.label_records[0].package_label_principal_display_panels == [
+        "Example Aspirin 325 mg tablets"
+    ]
+    assert evidence.label_records[0].active_ingredients == ["Aspirin 325 mg"]
+    assert evidence.label_records[0].inactive_ingredients == ["Corn starch"]
+    assert evidence.label_records[0].purposes == ["Pain reliever"]
+    assert evidence.label_records[0].dosages == ["Take with water."]
+    assert evidence.sections["description"][0].text == "Aspirin is a salicylate."
+    assert evidence.sections["active_ingredient"][0].text == "Aspirin 325 mg"
+    assert evidence.sections["inactive_ingredient"][0].text == "Corn starch"
+    assert evidence.sections["purpose"][0].text == "Pain reliever"
+    assert (
+        evidence.sections["dosage_and_administration"][0].text == "Take with water."
+    )
     assert evidence.summary_metadata["label_ids"] == ["label-1"]
     assert evidence.summary_metadata["label_set_ids"] == ["label-set-1"]
     assert evidence.summary_metadata["spl_ids"] == ["spl-1"]
     assert evidence.summary_metadata["spl_set_ids"] == ["spl-set-1"]
+    assert evidence.summary_metadata["product_display_names"] == [
+        "Example Aspirin 325 mg tablets"
+    ]
 
 
 def label_fixture(label_id: str) -> dict[str, object]:

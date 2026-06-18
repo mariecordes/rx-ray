@@ -73,6 +73,12 @@ class OpenFDALabelRecord(BaseModel):
     product_types: list[str] = Field(default_factory=list)
     routes: list[str] = Field(default_factory=list)
     substance_names: list[str] = Field(default_factory=list)
+    descriptions: list[str] = Field(default_factory=list)
+    package_label_principal_display_panels: list[str] = Field(default_factory=list)
+    active_ingredients: list[str] = Field(default_factory=list)
+    inactive_ingredients: list[str] = Field(default_factory=list)
+    purposes: list[str] = Field(default_factory=list)
+    dosages: list[str] = Field(default_factory=list)
     rxcuis: list[str] = Field(default_factory=list)
     provenance_tags: list[str] = Field(default_factory=list)
 
