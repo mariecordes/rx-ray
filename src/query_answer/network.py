@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from src.dossier.builder import DossierBuilder
 from src.dossier.models import RxNormConcept, RxNormEdge
+from src.dossier.rxnorm_store import INGREDIENT_TTYS
 from src.query_answer.config import QueryAnswerParameters
 from src.query_answer.models import (
     QuestionRxNormNetwork,
@@ -46,6 +47,19 @@ def build_question_rxnorm_network(
             continue
         seen_rxcuis.add(concept.rxcui)
         center_tuples.append((concept.rxcui, concept.name, concept.tty, item.role))
+
+    # Surface the primary's active ingredient(s) as their own centers, so a
+    # specific product (e.g. a cream) gets an ingredient-focused neighborhood
+    # instead of only its dose-form relatives. Mirrors the Evidence Map, which
+    # already shows the ingredient as its own node.
+    if (primary.tty or "") not in INGREDIENT_TTYS:
+        for ingredient in builder.rxnorm_store.get_ingredient_concepts(primary.rxcui):
+            if ingredient.rxcui in seen_rxcuis:
+                continue
+            seen_rxcuis.add(ingredient.rxcui)
+            center_tuples.append(
+                (ingredient.rxcui, ingredient.name, ingredient.tty, "ingredient")
+            )
 
     num_centers = len(center_tuples)
     per_center_budget = min(

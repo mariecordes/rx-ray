@@ -2163,6 +2163,41 @@ def secondary_evidence_fixture() -> SecondaryDrugEvidence:
     )
 
 
+def test_network_adds_primary_ingredient_as_center() -> None:
+    cream = RxNormConcept(
+        rxcui="198300", name="tretinoin 1 MG/ML Topical Cream", tty="SCD"
+    )
+    understanding = QueryUnderstandingResponse(
+        query="Can I use tretinoin cream?",
+        state=QueryState(
+            primary_drug="tretinoin cream",
+            all_drugs_mentioned=["tretinoin cream"],
+        ),
+        primary_dossier=DrugDossier(
+            query="tretinoin cream",
+            resolved_drug=cream,
+            rxnorm_neighborhood=RxNormNeighborhood(),
+        ),
+    )
+
+    network = build_question_rxnorm_network(
+        understanding,
+        [],
+        DossierBuilder(
+            rxnorm_store=RxNormParquetStore(),
+            openfda_store=OpenFDALabelStore(allow_live=False, use_cache=False),
+        ),
+        QueryAnswerParameters(),
+    )
+
+    center_by_rxcui = {center.rxcui: center for center in network.centers}
+    assert center_by_rxcui["198300"].role == "primary_drug"
+    # The active ingredient becomes its own highlighted center with its own
+    # neighborhood, not just an incidental connected node.
+    assert "10753" in center_by_rxcui
+    assert center_by_rxcui["10753"].role == "ingredient"
+
+
 def test_question_rxnorm_network_two_drugs_flags_shared_nodes() -> None:
     aspirin = RxNormConcept(rxcui="1191", name="aspirin", tty="IN")
     ibuprofen = RxNormConcept(rxcui="5640", name="ibuprofen", tty="IN")
