@@ -189,9 +189,11 @@ The symbolic half of the system. Improving resolution quality and speed directly
 - Ingredient fallback for labels: when the specific concept returns no OpenFDA labels, walk `has_ingredient` to its ingredient(s), retrieve *their* labels tagged `ingredient_fallback`, name that evidence after the ingredient, and attach a deterministic caveat ("No product-specific labels for <concept>; showing labels for its active ingredient <ingredient>, which may describe other formulations").
 - Multi-ingredient / combination products: retrieve a labelled bundle per ingredient, tag each, and caveat the combination — never merge ingredient evidence silently.
 - Carry the specificity/broadening signal through to the evidence packet so the synthesizer and coverage audit can flag when retrieval broadened the query.
+- Surface the primary's active ingredient(s) as their own Drug Network centers, so a specific product (e.g. a cream) shows an ingredient-focused neighborhood and a highlighted ingredient bubble, mirroring the Evidence Map — not just an incidental connected node.
+- Search drug interactions at the ingredient level (the resolved ingredient name) rather than the full product string, which is both the wrong granularity and a malformed OpenFDA query term.
 - Test set: tretinoin 0.5 MG/ML, hydrochlorothiazide oral tablet, fluoxetine oral solution, benzoyl peroxide topical gel, plus a no-product-label concept and a combination product.
 
-**Done when:** Specific searches keep the primary node + OpenFDA lookup tied to the intended specificity; any ingredient fallback is explicit, ingredient-named, caveated, and surfaced as a limitation (single- and multi-ingredient).
+**Done when:** Specific searches keep the primary node + OpenFDA lookup tied to the intended specificity; any ingredient fallback is explicit, ingredient-named, caveated, and surfaced as a limitation (single- and multi-ingredient); the active ingredient is a first-class network center; and interaction lookups are ingredient-level.
 
 ---
 
@@ -498,7 +500,7 @@ Do these opportunistically, when a concrete query exposes a problem — not pree
 - **F3 — LLM usage / cost panel** (`S–M`): the backend already separates extraction vs synthesis API keys/models for usage tracking; surface token/cost/latency per request.
 - **F4 — Prompt versioning** (`S`): keep all prompt text in `conf/base/prompts.yml`; add version labels so prompt changes are traceable.
 - **F5 — Parameter extraction** (`S`): move remaining magic numbers (`MAX_LABEL_TEXT_CHARS`, `MAX_LABEL_SECTIONS`, `MAX_RXNORM_RELATIONSHIPS`, section priority/order, graph caps) into `parameters.yml`.
-- **F6 — Additional OpenFDA field normalization** (`M`): description, active/inactive ingredient, purpose, dosage; use `indications_and_usage` as short "what is this for?" text.
+- **F6 — Richer drug-label cards & "what is this medication" section** (`M`): normalize and surface more OpenFDA fields — `description`, `package_label_principal_display_panel` (as a product-name line on source cards, with graceful fallbacks since both are inconsistently populated), active/inactive ingredient, purpose, dosage. Add a dedicated section (alongside Indications & Usage) that explains *what the medication is*, visually separated from the warnings/how-to-use sections. Once the cards carry this product-level detail, **retire the "labels matched by RXCUI / generic name" info-note** added in B5 (it exists only because the cards currently look ingredient-generic).
 
 ---
 
