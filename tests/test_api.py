@@ -1584,6 +1584,68 @@ def test_secondary_evidence_triggers_interaction_targeted_lookups() -> None:
     assert "terminology" in evidence[0].rxnorm_context.summary.lower()
 
 
+def test_interaction_lookup_uses_ingredient_not_product_name() -> None:
+    class TrackingStore(OpenFDALabelStore):
+        def __init__(self) -> None:
+            super().__init__(allow_live=False, use_cache=False)
+            self.interaction_calls: list[tuple[str, str, str | None]] = []
+
+        def get_label_evidence(
+            self, rxcui: str, fallback_name: str | None = None, limit: int = 5
+        ) -> OpenFDALabelEvidence:
+            return OpenFDALabelEvidence(rxcui=rxcui, label_limit=limit)
+
+        def get_interaction_label_evidence(
+            self,
+            rxcui: str,
+            interaction_name: str,
+            fallback_name: str | None = None,
+            limit: int = 3,
+        ) -> OpenFDALabelEvidence:
+            self.interaction_calls.append((rxcui, interaction_name, fallback_name))
+            return OpenFDALabelEvidence(rxcui=rxcui, label_limit=limit)
+
+    cream = RxNormConcept(
+        rxcui="198300", name="tretinoin 1 MG/ML Topical Cream", tty="SCD"
+    )
+    clindamycin = RxNormConcept(rxcui="2582", name="clindamycin", tty="IN")
+    understanding = QueryUnderstandingResponse(
+        query="Can I use tretinoin cream with clindamycin?",
+        state=QueryState(
+            primary_drug="tretinoin cream",
+            all_drugs_mentioned=["tretinoin cream", "clindamycin"],
+            intents=["interaction_check"],
+        ),
+        resolved_drugs=[
+            ResolvedDrugMention(
+                text="clindamycin",
+                role="mentioned_drug",
+                candidates=[],
+                selected_concept=clindamycin,
+            )
+        ],
+        primary_dossier=DrugDossier(query="tretinoin cream", resolved_drug=cream),
+    )
+
+    store = TrackingStore()
+    build_secondary_evidence(
+        understanding,
+        DossierBuilder(rxnorm_store=RxNormParquetStore(), openfda_store=store),
+        QueryAnswerParameters(interaction_lookup_limit=3, max_secondary_drugs=3),
+    )
+
+    # The cream product is searched as its ingredient "tretinoin", never as the
+    # full product string (which also carries the query-breaking slash).
+    terms = {term for _, term, _ in store.interaction_calls}
+    assert "tretinoin" in terms
+    assert all(
+        "Topical Cream" not in term and "/" not in term
+        for _, term, _ in store.interaction_calls
+    )
+    # The primary's own labels are searched for the secondary ingredient.
+    assert ("198300", "clindamycin", "tretinoin") in store.interaction_calls
+
+
 def test_secondary_evidence_uses_multi_intent_interaction_signal() -> None:
     understanding = response_with_secondary_mention().model_copy(
         update={
