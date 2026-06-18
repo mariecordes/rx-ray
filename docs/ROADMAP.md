@@ -48,7 +48,7 @@ Optionally [A4](#a4--live-demo-deployment) live demo if hosting is straightforwa
 | [B2](#b2--specific-concept-resolution-priority--ingredient-fallback) | Specific-concept priority + ingredient fallback | Retrieval | L | High | todo | B5 |
 | [B3](#b3--autocomplete--typeahead-for-drug-dossier) | Autocomplete/typeahead | Retrieval | M | Med | todo | B1 |
 | [B4](#b4--openfda-text-fallback-when-rxnorm-resolution-fails) | OpenFDA text fallback | Retrieval | M | Med | todo | — |
-| [B5](#b5--query-to-concept-matching--display-fidelity) | Query→concept matching & display fidelity | Retrieval | M | High | todo | — |
+| [B5](#b5--query-to-concept-matching--display-fidelity) | Query→concept matching & display fidelity | Retrieval | M | High | ✅ done | — |
 | [C1](#c1--pair-level-interaction-evidence-view) | Pair-level interactions | Evidence | M | Med | ✅ done | — |
 | [C2](#c2--external-interaction-data-source) | External interaction data | Evidence | XL | High | todo | — |
 | [C3](#c3--question-level-provenance-graph-maturation) | Provenance graph maturation | Evidence | L | High | todo | — |
@@ -227,9 +227,9 @@ The symbolic half of the system. Improving resolution quality and speed directly
 
 ---
 
-### B5 — Query-to-concept matching & display fidelity
+### ✅ B5 — Query-to-concept matching & display fidelity
 
-**Effort:** M · **Impact:** High · **Status:** todo
+**Effort:** M · **Impact:** High · **Status:** done
 
 **Goal:** Resolved concepts display their preferred RxNorm term with human-readable types, dosage-form / SPL-synonym false positives stop becoming graph nodes, and the deterministic extractor stops mis-assigning allergens.
 
@@ -243,6 +243,8 @@ The symbolic half of the system. Improving resolution quality and speed directly
 - Label-provenance legibility: when labels are matched to a concept by RXCUI, say so on the matched-drug header / source cards so a correct RXCUI match does not read as a name mismatch.
 
 **Done when:** The tretinoin-cream / clindamycin query (and similar) resolve to clean preferred names with human-readable types, with no dosage-form / SPL-synonym stray nodes, the allergen correctly classified, and label provenance legible — verified with a regression test.
+
+> **Done.** `resolve()` now returns each concept's preferred RxNorm term + TTY; the query scanner drops dosage-form words and non-medication TTYs (no more stray "CREAM" node); the frontend TTY map covers SPL types; deterministic allergy extraction no longer swallows a preceding drug; and an RXCUI-match provenance note explains why label cards may read ingredient-generic. Also folded in a small UI-honesty fix: technical warnings/errors are no longer surfaced in the UI (kept in the API/logs).
 
 ---
 
@@ -503,6 +505,21 @@ Do these opportunistically, when a concrete query exposes a problem — not pree
 ## Shipped
 
 A record of completed work.
+
+**B5 — Query-to-concept matching & display fidelity**
+- `resolve()` returns the winning RXCUI's preferred RxNorm term + TTY for display
+  (keeping match_type/score from the matched row), so SPL drug-product synonyms
+  no longer surface (e.g. RXCUI 198300 shows as "tretinoin 1 MG/ML Topical Cream"
+  (SCD), not its `DP` synonym).
+- Query n-gram scanner drops generic dosage-form words (cream, gel, tablet, …) and
+  rejects mentions whose preferred TTY isn't a real medication type (SU/DF/DFG/PT),
+  removing stray nodes like "CREAM" while keeping legitimate ingredient nodes.
+- Frontend `rxNormTypeLabels` extended to SPL term types (DP, SU, MTH_RXN_DP, PT).
+- Deterministic allergy extraction bounded so "a <other drug> … allergy" no longer
+  swallows a preceding drug; the real allergen resolves into allergy state.
+- RXCUI-match provenance note on the Drug Labels panel, explaining that source
+  cards show the label's own generic/brand name (often the ingredient).
+- Technical warnings/errors no longer surfaced in the UI (kept in API/logs).
 
 **Foundation & launch readiness**
 - A2 — About narrative: rebuilt the About page as collapsible sections (Welcome ·

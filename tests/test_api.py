@@ -252,6 +252,64 @@ async def test_query_understanding_does_not_extract_allergy_as_condition(
 
 
 @pytest.mark.asyncio
+async def test_query_understanding_allergy_not_swallowed_by_earlier_determiner(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("QUERY_EXTRACTION_OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("QUERY_EXTRACTION_OPENAI_MODEL", raising=False)
+
+    response = await understand_query(
+        QueryUnderstandingRequest(
+            query="Can I use a tretinoin cream if I have a CLINDAMYCIN allergy?",
+            openfda_limit=1,
+        ),
+        builder=offline_builder(),
+    )
+
+    # The determiner in "a tretinoin cream" must not swallow the allergen span;
+    # the real allergen is clindamycin, and tretinoin cream stays the primary.
+    assert response.state.allergies == ["CLINDAMYCIN"]
+    assert response.state.primary_drug == "tretinoin cream"
+    assert any(
+        mention.role == "allergy"
+        and mention.selected_concept is not None
+        and mention.selected_concept.rxcui == "2582"
+        for mention in response.resolved_drugs
+    )
+
+
+@pytest.mark.asyncio
+async def test_query_understanding_drops_dosage_form_false_positive(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("QUERY_EXTRACTION_OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("QUERY_EXTRACTION_OPENAI_MODEL", raising=False)
+
+    response = await understand_query(
+        QueryUnderstandingRequest(
+            query="Can I use a tretinoin cream if I have a CLINDAMYCIN allergy?",
+            openfda_limit=1,
+        ),
+        builder=offline_builder(),
+    )
+
+    resolved_texts = {mention.text.casefold() for mention in response.resolved_drugs}
+    # The bare dosage-form word "cream" must not become a resolved drug mention.
+    assert "cream" not in resolved_texts
+
+    resolved_rxcuis = {
+        mention.selected_concept.rxcui
+        for mention in response.resolved_drugs
+        if mention.selected_concept
+    }
+    # "cream" exact-matched RXCUI 1305763 ("milk fat, cow") — a false positive.
+    assert "1305763" not in resolved_rxcuis
+    # The real ingredient and the mentioned drug still resolve.
+    assert "10753" in resolved_rxcuis  # tretinoin (IN)
+    assert "2582" in resolved_rxcuis  # clindamycin (IN)
+
+
+@pytest.mark.asyncio
 async def test_query_understanding_child_question_uses_drug_not_patient_context(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -33,6 +33,26 @@ def test_rxnorm_resolves_aspirin() -> None:
     assert candidates[0].match_type == "exact"
 
 
+def test_resolve_returns_preferred_concept_not_matched_synonym() -> None:
+    store = RxNormParquetStore()
+
+    # "cream" exact-matches an SPL active-substance synonym (TTY SU) of
+    # RXCUI 1305763, but the concept's preferred RxNorm term is the
+    # ingredient "milk fat, cow" (TTY IN).
+    cream = store.resolve("cream", limit=1)
+    assert cream
+    assert cream[0].concept.rxcui == "1305763"
+    assert cream[0].concept.tty == "IN"
+    assert cream[0].match_type == "exact"
+
+    # "tretinoin cream" matches an SPL drug-product synonym (TTY DP) but should
+    # display the clean RXNORM Semantic Clinical Drug name, not the synonym.
+    cream_drug = store.resolve("tretinoin cream", limit=1)
+    assert cream_drug
+    assert cream_drug[0].concept.rxcui == "198300"
+    assert cream_drug[0].concept.tty == "SCD"
+
+
 def test_builds_offline_rxnorm_dossier() -> None:
     builder = DossierBuilder(
         rxnorm_store=RxNormParquetStore(),

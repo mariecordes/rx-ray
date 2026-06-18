@@ -42,6 +42,15 @@ PATIENT_CONTEXT_PATTERNS: dict[str, tuple[str, ...]] = {
 
 DRUG_FRAGMENT_PATTERN = r"([a-zA-Z0-9][a-zA-Z0-9 /\-]+)"
 
+# Bounded 1–3 token noun phrase for the "<allergen> allergy" construction. The
+# greedy DRUG_FRAGMENT_PATTERN spans spaces, so "a tretinoin cream if I have a
+# CLINDAMYCIN allergy" anchored on the first determiner and captured "tretinoin
+# cream" as the allergen. Bounding the span forces the engine to backtrack to
+# the determiner nearest "allergy", yielding the real allergen.
+ALLERGEN_FRAGMENT_PATTERN = (
+    r"((?:[a-zA-Z0-9][a-zA-Z0-9/\-]*\s+){0,2}[a-zA-Z0-9][a-zA-Z0-9/\-]*)"
+)
+
 MENTION_PATTERNS: tuple[tuple[str, str], ...] = (
     (
         "allergy",
@@ -50,7 +59,7 @@ MENTION_PATTERNS: tuple[tuple[str, str], ...] = (
     ),
     (
         "allergy",
-        rf"\b(?:my|a|an|the)\s+{DRUG_FRAGMENT_PATTERN}\s+allerg(?:y|ies)\b",
+        rf"\b(?:my|a|an|the)\s+{ALLERGEN_FRAGMENT_PATTERN}\s+allerg(?:y|ies)\b",
     ),
     (
         "current_medication",

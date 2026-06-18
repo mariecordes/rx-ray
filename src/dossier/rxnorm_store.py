@@ -269,19 +269,33 @@ class RxNormParquetStore:
         )
         candidates = candidates.drop_duplicates("RXCUI", keep="first").head(limit)
 
-        return [
-            ResolutionCandidate(
-                concept=RxNormConcept(
-                    rxcui=str(row.RXCUI),
-                    name=str(row.STR),
-                    tty=str(row.TTY) if pd.notna(row.TTY) else None,
-                    sab=str(row.SAB) if pd.notna(row.SAB) else None,
-                ),
-                match_type=str(row.match_type),
-                score=float(row.score),
+        # Display the concept's *preferred* RxNorm term, not the synonym row that
+        # happened to match. A query like "cream" can exact-match an SPL synonym
+        # (e.g. RXCUI 1305763's "CREAM", whose preferred name is "milk fat, cow"),
+        # and a specific drug like "tretinoin cream" can match an SPL drug-product
+        # synonym (TTY DP) when the concept also has a clean RXNORM SCD name. The
+        # match_type/score stay tied to the row that actually matched the query.
+        preferred = self.get_concepts(
+            {str(row.RXCUI) for row in candidates.itertuples(index=False)}
+        )
+
+        results: list[ResolutionCandidate] = []
+        for row in candidates.itertuples(index=False):
+            rxcui = str(row.RXCUI)
+            concept = preferred.get(rxcui) or RxNormConcept(
+                rxcui=rxcui,
+                name=str(row.STR),
+                tty=str(row.TTY) if pd.notna(row.TTY) else None,
+                sab=str(row.SAB) if pd.notna(row.SAB) else None,
             )
-            for row in candidates.itertuples(index=False)
-        ]
+            results.append(
+                ResolutionCandidate(
+                    concept=concept,
+                    match_type=str(row.match_type),
+                    score=float(row.score),
+                )
+            )
+        return results
 
     def get_concepts(self, rxcuis: set[str]) -> dict[str, RxNormConcept]:
         """Return preferred concept display data for RXCUIs."""
