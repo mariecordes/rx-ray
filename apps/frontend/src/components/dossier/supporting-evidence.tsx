@@ -56,6 +56,7 @@ import {
   EvidenceCitation,
   IngredientFallbackEvidence,
   OpenFDALabelEvidence,
+  OpenFDALabelRecord,
   QuestionRxNormNetwork,
   RxNormConcept,
   SecondaryDrugEvidence,
@@ -70,6 +71,15 @@ import {
 } from "@/lib/format";
 import { requestJsonWithRetry } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
+
+const productContextSections = new Set([
+  "active_ingredient",
+  "inactive_ingredient",
+  "description",
+  "purpose",
+  "dosage_and_administration",
+]);
+const productContextSection = "product_context";
 
 export function SupportingEvidence({
   dossier,
@@ -316,11 +326,13 @@ function SecondaryEvidenceResults({
     [labelEvidence]
   );
   const sectionEntries = useMemo(
-    () => Object.entries(displayEvidence.sections),
+    () => labelTextSectionEntries(displayEvidence),
     [displayEvidence]
   );
   const activeSection =
-    selectedSection && displayEvidence.sections[selectedSection]
+    selectedSection &&
+    (selectedSection === productContextSection ||
+      displayEvidence.sections[selectedSection])
       ? selectedSection
       : sectionEntries[0]?.[0] ?? null;
   const activeTexts = activeSection
@@ -328,7 +340,7 @@ function SecondaryEvidenceResults({
     : [];
 
   useEffect(() => {
-    const firstSection = Object.keys(labelEvidence?.sections ?? {})[0];
+    const firstSection = firstLabelTextSection(labelEvidence);
     setSelectedSection(firstSection ?? null);
     setSelectedSourceKey(null);
   }, [labelEvidence]);
@@ -469,11 +481,14 @@ export function DossierResults({
     () => buildDisplayEvidenceModel(labelEvidence, nodeLabelEvidence),
     [labelEvidence, nodeLabelEvidence]
   );
-  const sectionEntries = useMemo(() => {
-    return Object.entries(displayEvidence.sections);
-  }, [displayEvidence]);
+  const sectionEntries = useMemo(
+    () => labelTextSectionEntries(displayEvidence),
+    [displayEvidence]
+  );
   const activeSection =
-    selectedSection && displayEvidence.sections[selectedSection]
+    selectedSection &&
+    (selectedSection === productContextSection ||
+      displayEvidence.sections[selectedSection])
       ? selectedSection
       : sectionEntries[0]?.[0] ?? null;
   const activeTexts: DisplayLabelSection[] = activeSection
@@ -481,7 +496,7 @@ export function DossierResults({
     : [];
 
   useEffect(() => {
-    const firstSection = Object.keys(dossier.label_evidence?.sections ?? {})[0];
+    const firstSection = firstLabelTextSection(dossier.label_evidence ?? null);
     setSelectedSection(firstSection ?? null);
     setSelectedSourceKey(null);
     setSelectedGraphNode(null);
@@ -793,6 +808,27 @@ function ingredientFallbackNames(evidence: OpenFDALabelEvidence): string[] {
   return Array.from(new Set(names.map((name) => displayGenericName(name))));
 }
 
+function labelTextSectionEntries(
+  displayEvidence: DisplayEvidenceModel
+): [string, DisplayLabelSection[]][] {
+  const entries = Object.entries(displayEvidence.sections).filter(
+    ([section]) => !productContextSections.has(section)
+  );
+  if (displayEvidence.records.some((source) => hasProductContext(source.record))) {
+    return [[productContextSection, []], ...entries];
+  }
+  return entries;
+}
+
+function firstLabelTextSection(evidence: OpenFDALabelEvidence | null) {
+  if ((evidence?.label_records ?? []).some(hasProductContext)) {
+    return productContextSection;
+  }
+  return Object.keys(evidence?.sections ?? {}).find(
+    (section) => !productContextSections.has(section)
+  );
+}
+
 function LabelEvidencePanel({
   ref,
   navRef,
@@ -864,9 +900,12 @@ function LabelEvidencePanel({
     () =>
       sectionEntries.map(([section, texts]) => ({
         section,
-        count: groupLabelSectionsBySource(section, texts, displayEvidence).length,
+        count:
+          section === productContextSection
+            ? records.filter((source) => hasProductContext(source.record)).length
+            : groupLabelSectionsBySource(section, texts, displayEvidence).length,
       })),
-    [displayEvidence, sectionEntries]
+    [displayEvidence, records, sectionEntries]
   );
 
   function handleSourceStripClick(sourceKey: string) {
@@ -894,6 +933,18 @@ function LabelEvidencePanel({
   }
 
   const scrollToEvidenceCardForSource = useCallback((sourceKey: string) => {
+    if (activeSection === productContextSection) {
+      const element = evidenceCardRefs.current.get(
+        evidenceCardRefKey(sourceKey, productContextCardKey(sourceKey))
+      );
+      if (element) {
+        element.scrollIntoView({
+          behavior: "smooth",
+          block: "center",
+        });
+        return;
+      }
+    }
     const match = groupedActiveTexts.find((entry) => entry.sourceKey === sourceKey);
     const element = match
       ? evidenceCardRefs.current.get(evidenceCardRefKey(sourceKey, match.key))
@@ -909,7 +960,7 @@ function LabelEvidencePanel({
       behavior: "smooth",
       block: "nearest",
     });
-  }, [groupedActiveTexts]);
+  }, [activeSection, groupedActiveTexts]);
 
   function toggleEvidenceExpansion(key: string) {
     setExpandedEvidenceKeys((current) => {
@@ -1115,20 +1166,6 @@ function LabelEvidencePanel({
                   about.
                 </span>
               </p>
-            ) : labelEvidence &&
-              labelEvidence.labels_found > 0 &&
-              (labelEvidence.retrieval_mode === "live_rxcui" ||
-                labelEvidence.retrieval_mode === "cache") ? (
-              <p className="mx-auto flex w-full items-center gap-2 mt-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm leading-5 text-slate-600">
-                <Info className="size-4 shrink-0" />
-                <span>
-                  These drug labels are matched to this medication&apos;s RxNorm
-                  concept (RXCUI {labelEvidence.rxcui}). Each source card below
-                  shows the label&apos;s own brand or generic name (often the
-                  active ingredient) which may read more broadly than the matched
-                  concept.
-                </span>
-              </p>
             ) : null}
           </div>
         </div>
@@ -1233,25 +1270,53 @@ function LabelEvidencePanel({
               ) : (
                 <div className="flex flex-col gap-4">
                   <div className="flex flex-wrap gap-2">
-                    {sectionTabEntries.map(({ section, count }) => (
-                      <Button
-                        key={section}
-                        type="button"
-                        variant={
-                          activeSection === section ? "primary" : "secondary"
-                        }
-                        onClick={() => onSelectSection(section)}
-                      >
-                        {displaySectionName(section)}
-                        <span className="text-xs opacity-75">
-                          {count}
-                        </span>
-                      </Button>
-                    ))}
+                    {sectionTabEntries.map(({ section, count }) => {
+                      const isProductContext =
+                        section === productContextSection;
+                      const isActive = activeSection === section;
+                      return (
+                        <Button
+                          key={section}
+                          type="button"
+                          variant={isActive ? "primary" : "secondary"}
+                          className={cn(
+                            isProductContext &&
+                              "border hover:brightness-[0.98]"
+                          )}
+                          style={
+                            isProductContext
+                              ? {
+                                  backgroundColor: isActive
+                                    ? "#3C796E"
+                                    : "#E1F6EF",
+                                  borderColor: isActive
+                                    ? "#3C796E"
+                                    : "#3C796E",
+                                  color: isActive ? "#ffffff" : "#3C796E",
+                                }
+                              : undefined
+                          }
+                          onClick={() => onSelectSection(section)}
+                        >
+                          {displaySectionName(section)}
+                          <span className="text-xs opacity-75">
+                            {count}
+                          </span>
+                        </Button>
+                      );
+                    })}
                   </div>
 
                   <div ref={evidenceCardsRef} className="space-y-3">
-                    {groupedActiveTexts.map((entry) => {
+                    {activeSection === productContextSection ? (
+                      <ProductContextCards
+                        records={records}
+                        selectedSourceKey={selectedSourceKey}
+                        setEvidenceCardRef={setEvidenceCardRef}
+                        onSelectSource={onSelectSource}
+                      />
+                    ) : (
+                    groupedActiveTexts.map((entry) => {
                       const sourceKey = entry.sourceKey;
                       const source = entry.source;
                       const sourceProfile = source
@@ -1370,7 +1435,8 @@ function LabelEvidencePanel({
                           ) : null}
                         </article>
                       );
-                    })}
+                    })
+                    )}
                   </div>
                 </div>
               )}
@@ -1380,6 +1446,299 @@ function LabelEvidencePanel({
       </section>
     </div>
   );
+}
+
+function ProductContextCards({
+  records,
+  selectedSourceKey,
+  setEvidenceCardRef,
+  onSelectSource,
+}: {
+  records: DisplaySourceRecord[];
+  selectedSourceKey: string | null;
+  setEvidenceCardRef: (
+    sourceKey: string | null,
+    entryKey: string,
+    element: HTMLElement | null
+  ) => void;
+  onSelectSource: (sourceKey?: string | null) => void;
+}) {
+  const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
+  const [expandedFields, setExpandedFields] = useState<Set<string>>(new Set());
+  const contextRecords = records.filter((source) =>
+    hasProductContext(source.record)
+  );
+
+  if (contextRecords.length === 0) {
+    return null;
+  }
+
+  function toggleCard(key: string) {
+    setExpandedCards((current) => {
+      const next = new Set(current);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  }
+
+  function toggleField(key: string) {
+    setExpandedFields((current) => {
+      const next = new Set(current);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  }
+
+  return (
+    <>
+      {contextRecords.map((source) => {
+        const context = productContextForRecord(source.record);
+        const sourceKey = source.key;
+        const cardKey = productContextCardKey(sourceKey);
+        const isSelected = sourceKey === selectedSourceKey;
+        const isExpanded = expandedCards.has(cardKey);
+        const brandName = primaryValue(source.record.brand_names);
+        const manufacturerName = primaryValue(source.record.manufacturer_names);
+        const hasProductMetadata = hasOpenFdaProductMetadata(source.record);
+        const canExpand = (context.description?.length ?? 0) > 420;
+        const visibleDescription = context.description;
+        return (
+          <article
+            key={cardKey}
+            ref={(element) =>
+              setEvidenceCardRef(sourceKey, cardKey, element)
+            }
+            role="button"
+            tabIndex={0}
+            onClick={() => onSelectSource(sourceKey)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                onSelectSource(sourceKey);
+              }
+            }}
+            className={cn(
+              "w-full cursor-pointer rounded-md border p-3 text-left transition",
+              isSelected
+                ? sourceSelectionClasses
+                : "border-slate-200 bg-slate-50 hover:border-slate-300 hover:bg-white"
+            )}
+          >
+            <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+              <span
+                className={cn(
+                  "inline-flex items-center rounded-md border px-2 py-0.5 font-medium",
+                  sourceNumberBadgeClasses
+                )}
+              >
+                Label {source.sourceNumber}
+              </span>
+              {brandName ? (
+                <span>{displayBrandName(brandName)}</span>
+              ) : !hasProductMetadata ? (
+                <span>{unidentifiedDrugLabel}</span>
+              ) : null}
+              {manufacturerName ? (
+                <span>· {manufacturerName}</span>
+              ) : !hasProductMetadata ? (
+                <span>· {metadataUnavailableLabel}</span>
+              ) : null}
+            </div>
+            {context.productName ? (
+              <div
+                className="mb-2 truncate text-sm font-semibold leading-6 text-slate-900"
+                title={context.productNameTitle ?? context.productName}
+              >
+                {context.productName}
+              </div>
+            ) : null}
+            {visibleDescription ? (
+              <p
+                className={cn(
+                  "whitespace-pre-wrap text-sm leading-6 text-slate-800",
+                  canExpand && !isExpanded ? "max-h-24 overflow-hidden" : ""
+                )}
+              >
+                {visibleDescription}
+              </p>
+            ) : null}
+            {canExpand ? (
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  toggleCard(cardKey);
+                }}
+                className="mt-3 font-medium uppercase tracking-wide text-slate-500 underline underline-offset-2 hover:text-cyan-700"
+                style={{
+                  fontSize: "12px",
+                  lineHeight: "14px",
+                }}
+              >
+                {isExpanded ? "Show less" : "Show more"}
+              </button>
+            ) : null}
+            <div className="mt-3 space-y-2">
+              {context.fields.map((field) => {
+                const fieldKey = productContextFieldKey(cardKey, field.label);
+                const isFieldExpanded = expandedFields.has(fieldKey);
+                return (
+                  <section
+                    key={field.label}
+                    className="rounded-md border border-slate-200 bg-white/80"
+                  >
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        toggleField(fieldKey);
+                      }}
+                      className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left"
+                    >
+                      <span className="text-xs font-medium uppercase text-slate-500">
+                        {field.label}
+                      </span>
+                      <span className="flex items-center gap-2 text-xs text-slate-500">
+                        {isFieldExpanded ? (
+                          <ChevronDown className="size-3.5" />
+                        ) : (
+                          <ChevronRight className="size-3.5" />
+                        )}
+                      </span>
+                    </button>
+                    {isFieldExpanded ? (
+                      <div className="border-t border-slate-200 px-3 py-2">
+                        <ul className="space-y-2">
+                          {field.values.map((value, index) => (
+                            <li
+                              key={`${field.label}-${index}`}
+                              className="whitespace-pre-wrap text-sm leading-6 text-slate-800"
+                            >
+                              {value}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : null}
+                  </section>
+                );
+              })}
+            </div>
+          </article>
+        );
+      })}
+    </>
+  );
+}
+
+function productContextCardKey(sourceKey: string) {
+  return `product-context-${sourceKey}`;
+}
+
+function productContextFieldKey(cardKey: string, label: string) {
+  return `${cardKey}-${label}`;
+}
+
+function hasProductContext(record: OpenFDALabelRecord) {
+  return Boolean(
+    record.descriptions.length ||
+      record.package_label_principal_display_panels.length ||
+      record.active_ingredients.length ||
+      record.inactive_ingredients.length ||
+      record.purposes.length ||
+      record.dosages.length
+  );
+}
+
+function productContextForRecord(record: OpenFDALabelRecord) {
+  const packageDisplayPanel = primaryValue(
+    record.package_label_principal_display_panels
+  );
+  const cleanedPackageDisplayPanel = cleanPackageLabelDisplayPanel(
+    packageDisplayPanel
+  );
+  const productName =
+    cleanedPackageDisplayPanel ??
+    primaryValue(record.brand_names)?.toUpperCase() ??
+    (primaryValue(record.generic_names)
+      ? displayGenericName(primaryValue(record.generic_names) ?? "")
+      : null);
+  const descriptions = uniqueTextValues(
+    (record.descriptions ?? []).map(cleanProductContextText)
+  );
+  const purpose = uniqueTextValues(
+    (record.purposes ?? []).map(cleanProductContextText)
+  );
+  const dosage = uniqueTextValues(
+    (record.dosages ?? []).map(cleanProductContextText)
+  );
+  const activeIngredient = uniqueTextValues(
+    (record.active_ingredients?.length
+      ? record.active_ingredients
+      : record.substance_names) ?? []
+  ).map(sentenceForLabel);
+  const inactiveIngredient = uniqueTextValues(
+    record.inactive_ingredients ?? []
+  ).map(sentenceForLabel);
+
+  return {
+    productName,
+    productNameTitle: cleanedPackageDisplayPanel,
+    description: descriptions[0] ?? null,
+    fields: [
+      { label: "Purpose", values: purpose },
+      { label: "Dosage", values: dosage },
+      { label: "Active ingredient", values: activeIngredient },
+      { label: "Inactive ingredient", values: inactiveIngredient },
+    ].filter((field) => field.values.length > 0),
+  };
+}
+
+function cleanPackageLabelDisplayPanel(value?: string | null) {
+  if (!value) {
+    return null;
+  }
+  const cleaned = value
+    .replace(/\s+/g, " ")
+    .replace(
+      /^(package\s*\/?\s*label\s*(?:display panel|[-.\s]*principal display panel)?|principal display panel)\s*[-.:–—]?\s*/i,
+      ""
+    )
+    .replace(/\bNDC\s*[\w-]+/gi, "")
+    .replace(/^[^A-Za-z0-9]+/, "")
+    .trim();
+  if (!cleaned) {
+    return null;
+  }
+  return cleaned;
+}
+
+function uniqueTextValues(values: string[]) {
+  return Array.from(
+    new Set(values.map((value) => value.trim()).filter(Boolean))
+  );
+}
+
+function sentenceForLabel(value: string) {
+  return value.length > 80 ? value : displayGenericName(value);
+}
+
+function cleanProductContextText(value: string) {
+  return value
+    .replace(/\s+/g, " ")
+    .replace(
+      /^(description|purpose|dosage and administration|active ingredients?|inactive ingredients?)\s*/i,
+      ""
+    )
+    .trim();
 }
 
 function LabelEvidenceContextNote({
