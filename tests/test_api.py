@@ -15,6 +15,7 @@ from apps.api.main import (
 from src.dossier.builder import DossierBuilder
 from src.dossier.models import (
     DrugDossier,
+    IngredientFallbackEvidence,
     LabelSection,
     OpenFDALabelEvidence,
     OpenFDALabelRecord,
@@ -25,7 +26,11 @@ from src.dossier.models import (
 from src.dossier.openfda_store import OpenFDALabelStore
 from src.dossier.rxnorm_store import RxNormParquetStore
 from src.query_answer.config import QueryAnswerParameters
-from src.query_answer.coverage import evidence_snippet
+from src.query_answer.coverage import (
+    add_coverage_limitations,
+    build_evidence_coverage,
+    evidence_snippet,
+)
 from src.query_answer.evidence_map import build_question_evidence_map
 from src.query_answer.models import (
     ContextTargetedEvidence,
@@ -1579,6 +1584,68 @@ def test_secondary_evidence_triggers_interaction_targeted_lookups() -> None:
     assert "terminology" in evidence[0].rxnorm_context.summary.lower()
 
 
+def test_interaction_lookup_uses_ingredient_not_product_name() -> None:
+    class TrackingStore(OpenFDALabelStore):
+        def __init__(self) -> None:
+            super().__init__(allow_live=False, use_cache=False)
+            self.interaction_calls: list[tuple[str, str, str | None]] = []
+
+        def get_label_evidence(
+            self, rxcui: str, fallback_name: str | None = None, limit: int = 5
+        ) -> OpenFDALabelEvidence:
+            return OpenFDALabelEvidence(rxcui=rxcui, label_limit=limit)
+
+        def get_interaction_label_evidence(
+            self,
+            rxcui: str,
+            interaction_name: str,
+            fallback_name: str | None = None,
+            limit: int = 3,
+        ) -> OpenFDALabelEvidence:
+            self.interaction_calls.append((rxcui, interaction_name, fallback_name))
+            return OpenFDALabelEvidence(rxcui=rxcui, label_limit=limit)
+
+    cream = RxNormConcept(
+        rxcui="198300", name="tretinoin 1 MG/ML Topical Cream", tty="SCD"
+    )
+    clindamycin = RxNormConcept(rxcui="2582", name="clindamycin", tty="IN")
+    understanding = QueryUnderstandingResponse(
+        query="Can I use tretinoin cream with clindamycin?",
+        state=QueryState(
+            primary_drug="tretinoin cream",
+            all_drugs_mentioned=["tretinoin cream", "clindamycin"],
+            intents=["interaction_check"],
+        ),
+        resolved_drugs=[
+            ResolvedDrugMention(
+                text="clindamycin",
+                role="mentioned_drug",
+                candidates=[],
+                selected_concept=clindamycin,
+            )
+        ],
+        primary_dossier=DrugDossier(query="tretinoin cream", resolved_drug=cream),
+    )
+
+    store = TrackingStore()
+    build_secondary_evidence(
+        understanding,
+        DossierBuilder(rxnorm_store=RxNormParquetStore(), openfda_store=store),
+        QueryAnswerParameters(interaction_lookup_limit=3, max_secondary_drugs=3),
+    )
+
+    # The cream product is searched as its ingredient "tretinoin", never as the
+    # full product string (which also carries the query-breaking slash).
+    terms = {term for _, term, _ in store.interaction_calls}
+    assert "tretinoin" in terms
+    assert all(
+        "Topical Cream" not in term and "/" not in term
+        for _, term, _ in store.interaction_calls
+    )
+    # The primary's own labels are searched for the secondary ingredient.
+    assert ("198300", "clindamycin", "tretinoin") in store.interaction_calls
+
+
 def test_secondary_evidence_uses_multi_intent_interaction_signal() -> None:
     understanding = response_with_secondary_mention().model_copy(
         update={
@@ -1669,6 +1736,74 @@ def test_evidence_coverage_marks_secondary_and_context_gaps() -> None:
     assert any(
         "did not explicitly mention ibuprofen, migraine, and pregnant" in item
         for item in response.answer.limitations
+    )
+
+
+def test_coverage_flags_ingredient_fallback_broadening() -> None:
+    concept = RxNormConcept(
+        rxcui="198300", name="tretinoin 1 MG/ML Topical Cream", tty="SCD"
+    )
+    ingredient = RxNormConcept(rxcui="10753", name="tretinoin", tty="IN")
+    label_evidence = OpenFDALabelEvidence(
+        rxcui="198300",
+        labels_found=1,
+        label_limit=5,
+        retrieval_mode="ingredient_fallback",
+        label_records=[
+            OpenFDALabelRecord(
+                source_id="L1",
+                generic_names=["TRETINOIN"],
+                provenance_tags=["ingredient_fallback"],
+            )
+        ],
+        sections={
+            "warnings": [
+                LabelSection(
+                    section="warnings",
+                    text="Avoid excessive sun exposure.",
+                    source_id="L1",
+                )
+            ]
+        },
+        section_flags={"has_warnings": True},
+    )
+    understanding = QueryUnderstandingResponse(
+        query="Can I use tretinoin cream?",
+        state=QueryState(primary_drug="tretinoin cream"),
+        primary_dossier=DrugDossier(
+            query="tretinoin cream",
+            resolved_drug=concept,
+            label_evidence=label_evidence,
+            label_evidence_scope="ingredient_fallback",
+            ingredient_fallback=[
+                IngredientFallbackEvidence(
+                    ingredient=ingredient,
+                    label_evidence=label_evidence,
+                )
+            ],
+        ),
+    )
+
+    coverage = build_evidence_coverage(understanding)
+    primary = next(
+        item for item in coverage.items if item.category == "primary_drug"
+    )
+    assert primary.status == "addressed"
+    assert "active ingredient" in primary.reason
+    assert "tretinoin" in primary.reason
+
+    answer = EvidenceAnswer(
+        response="Summary.",
+        evidence_summary="Summary.",
+        summary="Summary.",
+        bullets=[],
+        limitations=[],
+        safety_note="note",
+    )
+    updated = add_coverage_limitations(answer, coverage, understanding)
+    assert any(
+        "active ingredient" in limitation and "tretinoin" in limitation
+        for limitation in updated.limitations
     )
 
 
@@ -2026,6 +2161,41 @@ def secondary_evidence_fixture() -> SecondaryDrugEvidence:
         ),
         retrieval_modes=["standard_secondary_label_lookup"],
     )
+
+
+def test_network_adds_primary_ingredient_as_center() -> None:
+    cream = RxNormConcept(
+        rxcui="198300", name="tretinoin 1 MG/ML Topical Cream", tty="SCD"
+    )
+    understanding = QueryUnderstandingResponse(
+        query="Can I use tretinoin cream?",
+        state=QueryState(
+            primary_drug="tretinoin cream",
+            all_drugs_mentioned=["tretinoin cream"],
+        ),
+        primary_dossier=DrugDossier(
+            query="tretinoin cream",
+            resolved_drug=cream,
+            rxnorm_neighborhood=RxNormNeighborhood(),
+        ),
+    )
+
+    network = build_question_rxnorm_network(
+        understanding,
+        [],
+        DossierBuilder(
+            rxnorm_store=RxNormParquetStore(),
+            openfda_store=OpenFDALabelStore(allow_live=False, use_cache=False),
+        ),
+        QueryAnswerParameters(),
+    )
+
+    center_by_rxcui = {center.rxcui: center for center in network.centers}
+    assert center_by_rxcui["198300"].role == "primary_drug"
+    # The active ingredient becomes its own highlighted center with its own
+    # neighborhood, not just an incidental connected node.
+    assert "10753" in center_by_rxcui
+    assert center_by_rxcui["10753"].role == "ingredient"
 
 
 def test_question_rxnorm_network_two_drugs_flags_shared_nodes() -> None:

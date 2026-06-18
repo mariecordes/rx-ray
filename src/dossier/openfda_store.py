@@ -459,5 +459,7 @@ class OpenFDALabelStore:
         if not value:
             return ""
         cleaned = value.strip().strip('"')
-        parts = [part for part in re.split(r"\s+", cleaned) if part]
+        # Split on whitespace and slashes so dosage/product fragments like
+        # "1 MG/ML" don't produce a malformed OpenFDA query term.
+        parts = [part for part in re.split(r"[\s/]+", cleaned) if part]
         return " ".join(parts)

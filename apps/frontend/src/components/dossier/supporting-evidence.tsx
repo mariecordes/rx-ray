@@ -43,6 +43,7 @@ import {
   buildDisplayEvidenceModel,
   DisplayEvidenceModel,
   DisplayLabelSection,
+  DisplaySourceRecord,
   groupLabelSectionsBySource,
 } from "@/components/dossier/evidence-model";
 import {
@@ -53,6 +54,7 @@ import {
 import {
   DrugDossier,
   EvidenceCitation,
+  IngredientFallbackEvidence,
   OpenFDALabelEvidence,
   QuestionRxNormNetwork,
   RxNormConcept,
@@ -179,6 +181,13 @@ export function SupportingEvidence({
                 <QuestionRxNormNetworkGraph
                   network={questionRxNormNetwork}
                   variant="embedded"
+                  tabRxcuis={
+                    new Set(
+                      evidenceTabs
+                        .map((tab) => tab.rxcui)
+                        .filter((rxcui): rxcui is string => Boolean(rxcui))
+                    )
+                  }
                   onOpenTab={(rxcui) => {
                     const tab = evidenceTabs.find((t) => t.rxcui === rxcui);
                     if (tab) setActiveTabKey(tab.key);
@@ -619,6 +628,7 @@ export function DossierResults({
         activeTexts={activeTexts}
         displayEvidence={displayEvidence}
         labelEvidence={labelEvidence}
+        ingredientFallback={dossier.ingredient_fallback}
         nodeEvidenceError={nodeEvidenceError}
         nodeLabelEvidence={nodeLabelEvidence}
         isNodeEvidenceLoading={isNodeEvidenceLoading}
@@ -778,6 +788,11 @@ function OverviewJumpCard({
   );
 }
 
+function ingredientFallbackNames(evidence: OpenFDALabelEvidence): string[] {
+  const names = evidence.summary_metadata?.generic_names ?? [];
+  return Array.from(new Set(names.map((name) => displayGenericName(name))));
+}
+
 function LabelEvidencePanel({
   ref,
   navRef,
@@ -785,6 +800,7 @@ function LabelEvidencePanel({
   activeTexts,
   displayEvidence,
   labelEvidence,
+  ingredientFallback,
   nodeEvidenceError,
   nodeLabelEvidence,
   isNodeEvidenceLoading,
@@ -803,6 +819,7 @@ function LabelEvidencePanel({
   activeTexts: DisplayLabelSection[];
   displayEvidence: DisplayEvidenceModel;
   labelEvidence: OpenFDALabelEvidence | null;
+  ingredientFallback?: IngredientFallbackEvidence[];
   nodeEvidenceError: string | null;
   nodeLabelEvidence: OpenFDALabelEvidence | null;
   isNodeEvidenceLoading: boolean;
@@ -816,6 +833,21 @@ function LabelEvidencePanel({
   onSelectSourceFromStrip: (sourceKey?: string | null) => void;
 }) {
   const records = displayEvidence.records;
+  // When a specific concept had no labels and we broadened to multiple active
+  // ingredients, group the source cards under each ingredient so it's clear
+  // which labels describe which ingredient.
+  const sourceIdToIngredient = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const bundle of ingredientFallback ?? []) {
+      for (const record of bundle.label_evidence.label_records) {
+        if (record.source_id) {
+          map.set(record.source_id, bundle.ingredient.name);
+        }
+      }
+    }
+    return map;
+  }, [ingredientFallback]);
+  const groupSourcesByIngredient = (ingredientFallback?.length ?? 0) > 1;
   const evidenceCardsRef = useRef<HTMLDivElement>(null);
   const evidenceCardRefs = useRef<Map<string, HTMLElement>>(new Map());
   const [expandedSourceKeys, setExpandedSourceKeys] = useState<Set<string>>(
@@ -932,6 +964,110 @@ function LabelEvidencePanel({
     });
   }, [scrollToEvidenceCardForSource, selectedSourceKey]);
 
+  const renderSourceCard = (source: DisplaySourceRecord) => {
+    const brandName = primaryValue(source.record.brand_names);
+    const genericName = primaryValue(source.record.generic_names);
+    const manufacturerName = primaryValue(source.record.manufacturer_names);
+    const profile = buildLabelSourceProfile(source.record);
+    const hasProfileDetails = hasLabelSourceProfileDetails(profile);
+    const isProfileExpanded = expandedSourceKeys.has(source.key);
+    const hasProductMetadata = hasOpenFdaProductMetadata(source.record);
+    const isSelected = source.key === selectedSourceKey;
+    const sourceClasses = isSelected
+      ? sourceSelectionClasses
+      : source.isSelectedNodeOnly
+        ? nodeSpecificClasses
+        : searchSourceClasses;
+    return (
+      <div
+        key={source.key}
+        role="button"
+        tabIndex={0}
+        onClick={() => handleSourceStripClick(source.key)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            handleSourceStripClick(source.key);
+          }
+        }}
+        className={cn(
+          "w-full cursor-pointer rounded-md border p-2 text-left transition",
+          sourceClasses
+        )}
+        style={{ fontSize: "14px", lineHeight: "20px" }}
+      >
+        <div className="mb-1 flex flex-wrap items-center gap-1.5">
+          <Badge className={sourceNumberBadgeClasses}>
+            Label {source.sourceNumber}
+          </Badge>
+          {!source.isSelectedNodeOnly ? (
+            <Badge className={searchSpecificBadgeClasses}>
+              Medication-specific
+            </Badge>
+          ) : null}
+          {source.isSelectedNodeOnly || source.isSelectedNodeMatch ? (
+            <Badge className={nodeSpecificBadgeClasses}>Node-specific</Badge>
+          ) : null}
+          {source.isInteractionTargeted ? (
+            <Badge className={interactionSpecificBadgeClasses}>
+              Interaction-specific
+            </Badge>
+          ) : null}
+          {source.isContextTargeted ? (
+            <Badge className={contextSpecificBadgeClasses}>
+              Context-specific
+            </Badge>
+          ) : null}
+        </div>
+        <div className="mt-1.5 truncate font-medium text-slate-900">
+          {brandName
+            ? displayBrandName(brandName)
+            : hasProductMetadata
+              ? "Brand unavailable"
+              : unidentifiedDrugLabel}
+        </div>
+        {hasProductMetadata ? (
+          <>
+            <div className="mt-0.5 truncate text-slate-600">
+              {genericName
+                ? displayGenericName(genericName)
+                : "Generic unavailable"}
+            </div>
+            <div className="mt-0.5 truncate text-slate-500">
+              {manufacturerName ?? "Manufacturer unavailable"}
+            </div>
+          </>
+        ) : (
+          <div className="mt-0.5 truncate text-slate-600">
+            {metadataUnavailableLabel}
+          </div>
+        )}
+        {hasProfileDetails ? (
+          <div className="mt-2 border-t border-slate-200/70 pt-2">
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                toggleSourceProfile(source.key);
+              }}
+              className="inline-flex items-center gap-1 text-xs font-medium uppercase text-slate-500 hover:text-slate-900"
+            >
+              {isProfileExpanded ? (
+                <ChevronDown className="size-3.5" />
+              ) : (
+                <ChevronRight className="size-3.5" />
+              )}
+              Details
+            </button>
+            {isProfileExpanded ? (
+              <LabelSourceProfileDetails profile={profile} />
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+    );
+  };
+
   return (
     <div
       ref={(element) => {
@@ -965,17 +1101,33 @@ function LabelEvidencePanel({
             </p>
             {labelEvidence &&
             labelEvidence.labels_found > 0 &&
-            (labelEvidence.retrieval_mode === "live_rxcui" ||
-              labelEvidence.retrieval_mode === "cache") ? (
+            labelEvidence.retrieval_mode === "ingredient_fallback" ? (
+              <p className="mx-auto flex w-full items-center gap-2 mt-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm leading-5 text-amber-900">
+                <Info className="size-4 shrink-0" />
+                <span>
+                  No product-specific labels were found for this medication.
+                  Showing labels for its active ingredient
+                  {ingredientFallbackNames(labelEvidence).length === 1 ? "" : "s"}
+                  {ingredientFallbackNames(labelEvidence).length
+                    ? ` (${ingredientFallbackNames(labelEvidence).join(", ")})`
+                    : ""}
+                  , which may describe other formulations than the one asked
+                  about.
+                </span>
+              </p>
+            ) : labelEvidence &&
+              labelEvidence.labels_found > 0 &&
+              (labelEvidence.retrieval_mode === "live_rxcui" ||
+                labelEvidence.retrieval_mode === "cache") ? (
               <p className="mx-auto flex w-full items-center gap-2 mt-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm leading-5 text-slate-600">
-              <Info className="size-4 shrink-0" />
-              <span>
-                These drug labels are matched to this medication&apos;s RxNorm concept
-                (RXCUI {labelEvidence.rxcui}). Each source card below shows the
-                label&apos;s own brand or generic name (often the active
-                ingredient) which may read more broadly than the matched
-                concept.
-              </span>
+                <Info className="size-4 shrink-0" />
+                <span>
+                  These drug labels are matched to this medication&apos;s RxNorm
+                  concept (RXCUI {labelEvidence.rxcui}). Each source card below
+                  shows the label&apos;s own brand or generic name (often the
+                  active ingredient) which may read more broadly than the matched
+                  concept.
+                </span>
               </p>
             ) : null}
           </div>
@@ -1025,119 +1177,51 @@ function LabelEvidencePanel({
                 <p className="text-sm text-slate-600">
                   No label records returned.
                 </p>
-              ) : (
-                <div className="space-y-2">
-                  {records.map((source) => {
-                    const brandName = primaryValue(source.record.brand_names);
-                    const genericName = primaryValue(source.record.generic_names);
-                    const manufacturerName = primaryValue(
-                      source.record.manufacturer_names
+              ) : groupSourcesByIngredient ? (
+                <div className="space-y-3">
+                  {(ingredientFallback ?? []).map((bundle) => {
+                    const groupSources = records.filter(
+                      (source) =>
+                        sourceIdToIngredient.get(
+                          source.record.source_id ?? ""
+                        ) === bundle.ingredient.name
                     );
-                    const profile = buildLabelSourceProfile(source.record);
-                    const hasProfileDetails = hasLabelSourceProfileDetails(profile);
-                    const isProfileExpanded = expandedSourceKeys.has(source.key);
-                    const hasProductMetadata = hasOpenFdaProductMetadata(
-                      source.record
-                    );
-                    const isSelected = source.key === selectedSourceKey;
-                    const sourceClasses = isSelected
-                      ? sourceSelectionClasses
-                      : source.isSelectedNodeOnly
-                        ? nodeSpecificClasses
-                        : searchSourceClasses;
+                    if (groupSources.length === 0) {
+                      return null;
+                    }
                     return (
-                      <div
-                        key={source.key}
-                        role="button"
-                        tabIndex={0}
-                        onClick={() => handleSourceStripClick(source.key)}
-                        onKeyDown={(event) => {
-                          if (event.key === "Enter" || event.key === " ") {
-                            event.preventDefault();
-                            handleSourceStripClick(source.key);
-                          }
-                        }}
-                        className={cn(
-                          "w-full cursor-pointer rounded-md border p-2 text-left transition",
-                          sourceClasses
-                        )}
-                        style={{ fontSize: "14px", lineHeight: "20px" }}
-                      >
-                        <div className="mb-1 flex flex-wrap items-center gap-1.5">
-                          <Badge className={sourceNumberBadgeClasses}>
-                            Label {source.sourceNumber}
-                          </Badge>
-                          {!source.isSelectedNodeOnly ? (
-                            <Badge className={searchSpecificBadgeClasses}>
-                              Medication-specific
-                            </Badge>
-                          ) : null}
-                          {source.isSelectedNodeOnly ||
-                          source.isSelectedNodeMatch ? (
-                            <Badge className={nodeSpecificBadgeClasses}>
-                              Node-specific
-                            </Badge>
-                          ) : null}
-                          {source.isInteractionTargeted ? (
-                            <Badge className={interactionSpecificBadgeClasses}>
-                              Interaction-specific
-                            </Badge>
-                          ) : null}
-                          {source.isContextTargeted ? (
-                            <Badge className={contextSpecificBadgeClasses}>
-                              Context-specific
-                            </Badge>
-                          ) : null}
+                      <div key={bundle.ingredient.rxcui} className="space-y-2">
+                        <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-700">
+                          <span className="truncate">
+                            {displayGenericName(bundle.ingredient.name)}
+                          </span>
+                          <span className="font-normal text-slate-400">
+                            {groupSources.length} label
+                            {groupSources.length === 1 ? "" : "s"}
+                          </span>
                         </div>
-                        <div className="mt-1.5 truncate font-medium text-slate-900">
-                          {brandName
-                            ? displayBrandName(brandName)
-                            : hasProductMetadata
-                              ? "Brand unavailable"
-                              : unidentifiedDrugLabel}
-                        </div>
-                        {hasProductMetadata ? (
-                          <>
-                            <div className="mt-0.5 truncate text-slate-600">
-                              {genericName
-                                ? displayGenericName(genericName)
-                                : "Generic unavailable"}
-                            </div>
-                            <div className="mt-0.5 truncate text-slate-500">
-                              {manufacturerName ?? "Manufacturer unavailable"}
-                            </div>
-                          </>
-                        ) : (
-                          <div className="mt-0.5 truncate text-slate-600">
-                            {metadataUnavailableLabel}
-                          </div>
-                        )}
-                        {hasProfileDetails ? (
-                          <div className="mt-2 border-t border-slate-200/70 pt-2">
-                            <button
-                              type="button"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                toggleSourceProfile(source.key);
-                              }}
-                              className="inline-flex items-center gap-1 text-xs font-medium uppercase text-slate-500 hover:text-slate-900"
-                            >
-                              {isProfileExpanded ? (
-                                <ChevronDown className="size-3.5" />
-                              ) : (
-                                <ChevronRight className="size-3.5" />
-                              )}
-                              Details
-                            </button>
-                            {isProfileExpanded ? (
-                              <LabelSourceProfileDetails profile={profile} />
-                            ) : null}
-                          </div>
-                        ) : null}
+                        {groupSources.map(renderSourceCard)}
                       </div>
                     );
                   })}
+                  {records.some(
+                    (source) =>
+                      !sourceIdToIngredient.has(source.record.source_id ?? "")
+                  ) ? (
+                    <div className="space-y-2">
+                      {records
+                        .filter(
+                          (source) =>
+                            !sourceIdToIngredient.has(
+                              source.record.source_id ?? ""
+                            )
+                        )
+                        .map(renderSourceCard)}
+                    </div>
+                  ) : null}
                 </div>
+              ) : (
+                <div className="space-y-2">{records.map(renderSourceCard)}</div>
               )}
             </aside>
 

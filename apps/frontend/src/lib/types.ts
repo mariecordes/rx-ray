@@ -88,6 +88,11 @@ export type LabelSourceProfile = {
   provenance_tags: string[];
 };
 
+export type IngredientFallbackEvidence = {
+  ingredient: RxNormConcept;
+  label_evidence: OpenFDALabelEvidence;
+};
+
 export type DrugDossier = {
   query: string;
   generated_at: string;
@@ -95,6 +100,8 @@ export type DrugDossier = {
   resolution_candidates: ResolutionCandidate[];
   rxnorm_neighborhood: RxNormNeighborhood;
   label_evidence?: OpenFDALabelEvidence | null;
+  label_evidence_scope?: string;
+  ingredient_fallback?: IngredientFallbackEvidence[];
   notes: string[];
 };
 

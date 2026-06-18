@@ -45,7 +45,7 @@ Optionally [A4](#a4--live-demo-deployment) live demo if hosting is straightforwa
 | [A4](#a4--live-demo-deployment) | Live demo | Foundation | M | High | todo | A1 |
 | [A5](#a5--architecture-doc) | Architecture doc | Foundation | S | Med | todo | — |
 | [B1](#b1--rxnorm-resolver-indexing--performance) | Resolver indexing/perf | Retrieval | M | Med | todo | — |
-| [B2](#b2--specific-concept-resolution-priority--ingredient-fallback) | Specific-concept priority + ingredient fallback | Retrieval | L | High | todo | B5 |
+| [B2](#b2--specific-concept-resolution-priority--ingredient-fallback) | Specific-concept priority + ingredient fallback | Retrieval | L | High | ✅ done | B5 |
 | [B3](#b3--autocomplete--typeahead-for-drug-dossier) | Autocomplete/typeahead | Retrieval | M | Med | todo | B1 |
 | [B4](#b4--openfda-text-fallback-when-rxnorm-resolution-fails) | OpenFDA text fallback | Retrieval | M | Med | todo | — |
 | [B5](#b5--query-to-concept-matching--display-fidelity) | Query→concept matching & display fidelity | Retrieval | M | High | ✅ done | — |
@@ -176,9 +176,9 @@ The symbolic half of the system. Improving resolution quality and speed directly
 
 ---
 
-### B2 — Specific-concept resolution priority + ingredient fallback
+### ✅ B2 — Specific-concept resolution priority + ingredient fallback
 
-**Effort:** L · **Impact:** High · **Status:** todo · **Depends on:** B5
+**Effort:** L · **Impact:** High · **Status:** done · **Depends on:** B5
 
 **Goal:** Prefer the exact/specific RxNorm concept; when it has no label evidence of its own, fall back to its active ingredient(s) *explicitly*, with a deterministic caveat, rather than silently broadening.
 
@@ -189,9 +189,13 @@ The symbolic half of the system. Improving resolution quality and speed directly
 - Ingredient fallback for labels: when the specific concept returns no OpenFDA labels, walk `has_ingredient` to its ingredient(s), retrieve *their* labels tagged `ingredient_fallback`, name that evidence after the ingredient, and attach a deterministic caveat ("No product-specific labels for <concept>; showing labels for its active ingredient <ingredient>, which may describe other formulations").
 - Multi-ingredient / combination products: retrieve a labelled bundle per ingredient, tag each, and caveat the combination — never merge ingredient evidence silently.
 - Carry the specificity/broadening signal through to the evidence packet so the synthesizer and coverage audit can flag when retrieval broadened the query.
+- Surface the primary's active ingredient(s) as their own Drug Network centers, so a specific product (e.g. a cream) shows an ingredient-focused neighborhood and a highlighted ingredient bubble, mirroring the Evidence Map — not just an incidental connected node.
+- Search drug interactions at the ingredient level (the resolved ingredient name) rather than the full product string, which is both the wrong granularity and a malformed OpenFDA query term.
 - Test set: tretinoin 0.5 MG/ML, hydrochlorothiazide oral tablet, fluoxetine oral solution, benzoyl peroxide topical gel, plus a no-product-label concept and a combination product.
 
-**Done when:** Specific searches keep the primary node + OpenFDA lookup tied to the intended specificity; any ingredient fallback is explicit, ingredient-named, caveated, and surfaced as a limitation (single- and multi-ingredient).
+**Done when:** Specific searches keep the primary node + OpenFDA lookup tied to the intended specificity; any ingredient fallback is explicit, ingredient-named, caveated, and surfaced as a limitation (single- and multi-ingredient); the active ingredient is a first-class network center; and interaction lookups are ingredient-level.
+
+> **Done.** Specific concepts are preferred and kept as the primary node; when one has no labels of its own, retrieval broadens to its active ingredient(s) via an RxNorm ingredient walk, tagged `ingredient_fallback`, with a deterministic caveat surfaced in coverage, synthesis, and the Drug Labels panel (per-ingredient sections for combination products). The primary's active ingredient(s) are added as Drug Network centers, and drug-interaction lookups now search by ingredient name rather than the full product string.
 
 ---
 
@@ -498,13 +502,30 @@ Do these opportunistically, when a concrete query exposes a problem — not pree
 - **F3 — LLM usage / cost panel** (`S–M`): the backend already separates extraction vs synthesis API keys/models for usage tracking; surface token/cost/latency per request.
 - **F4 — Prompt versioning** (`S`): keep all prompt text in `conf/base/prompts.yml`; add version labels so prompt changes are traceable.
 - **F5 — Parameter extraction** (`S`): move remaining magic numbers (`MAX_LABEL_TEXT_CHARS`, `MAX_LABEL_SECTIONS`, `MAX_RXNORM_RELATIONSHIPS`, section priority/order, graph caps) into `parameters.yml`.
-- **F6 — Additional OpenFDA field normalization** (`M`): description, active/inactive ingredient, purpose, dosage; use `indications_and_usage` as short "what is this for?" text.
+- **F6 — Richer drug-label cards & "what is this medication" section** (`M`): normalize and surface more OpenFDA fields — `description`, `package_label_principal_display_panel` (as a product-name line on source cards, with graceful fallbacks since both are inconsistently populated), active/inactive ingredient, purpose, dosage. Add a dedicated section (alongside Indications & Usage) that explains *what the medication is*, visually separated from the warnings/how-to-use sections. Once the cards carry this product-level detail, **retire the "labels matched by RXCUI / generic name" info-note** added in B5 (it exists only because the cards currently look ingredient-generic).
 
 ---
 
 ## Shipped
 
 A record of completed work.
+
+**B2 — Specific-concept priority + ingredient fallback**
+- Builds on B5's preferred-term resolution: the specific concept is kept as the
+  primary/matched node.
+- `RxNormParquetStore.get_ingredient_concepts()` walks composition/ingredient
+  relations to a concept's active ingredient(s) (ingredients are terminal so it
+  can't explode into co-ingredients).
+- When the specific concept has no OpenFDA labels, retrieval broadens to its
+  ingredient(s): per-ingredient bundles in `dossier.ingredient_fallback`, a
+  merged tagged `label_evidence` view, a `label_evidence_scope` flag, and a
+  deterministic caveat — surfaced in coverage, the synthesis evidence packet,
+  and an amber note in the Drug Labels panel (with per-ingredient source
+  sections for combination products).
+- Primary active ingredient(s) added as Drug Network centers (own highlighted
+  bubble + neighborhood), mirroring the Evidence Map.
+- Drug-interaction lookups search by ingredient name, not the full product
+  string (more correct and avoids malformed OpenFDA query terms).
 
 **B5 — Query-to-concept matching & display fidelity**
 - `resolve()` returns the winning RXCUI's preferred RxNorm term + TTY for display

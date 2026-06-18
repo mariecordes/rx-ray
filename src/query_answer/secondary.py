@@ -58,28 +58,36 @@ def build_secondary_evidence(
         )
         targeted_evidence: list[OpenFDALabelEvidence] = []
         if is_interaction_intent and parameters.interaction_lookup_limit > 0:
-            targeted_evidence.append(
-                tag_label_evidence(
-                    builder.openfda_store.get_interaction_label_evidence(
-                        concept.rxcui,
-                        interaction_name=primary.name,
-                        fallback_name=concept.name,
-                        limit=parameters.interaction_lookup_limit,
-                    ),
-                    "interaction_targeted_lookup",
+            # Drug interactions are described at the ingredient level. Searching
+            # by the full product string (e.g. "tretinoin 1 MG/ML Topical Cream")
+            # is both the wrong granularity and a malformed query term, so search
+            # the other drug's labels for each resolved ingredient name instead.
+            primary_terms = interaction_search_terms(builder, primary)
+            concept_terms = interaction_search_terms(builder, concept)
+            for term in primary_terms:
+                targeted_evidence.append(
+                    tag_label_evidence(
+                        builder.openfda_store.get_interaction_label_evidence(
+                            concept.rxcui,
+                            interaction_name=term,
+                            fallback_name=concept_terms[0],
+                            limit=parameters.interaction_lookup_limit,
+                        ),
+                        "interaction_targeted_lookup",
+                    )
                 )
-            )
-            targeted_evidence.append(
-                tag_label_evidence(
-                    builder.openfda_store.get_interaction_label_evidence(
-                        primary.rxcui,
-                        interaction_name=concept.name,
-                        fallback_name=primary.name,
-                        limit=parameters.interaction_lookup_limit,
-                    ),
-                    "interaction_targeted_lookup",
+            for term in concept_terms:
+                targeted_evidence.append(
+                    tag_label_evidence(
+                        builder.openfda_store.get_interaction_label_evidence(
+                            primary.rxcui,
+                            interaction_name=term,
+                            fallback_name=primary_terms[0],
+                            limit=parameters.interaction_lookup_limit,
+                        ),
+                        "interaction_targeted_lookup",
+                    )
                 )
-            )
 
         interaction_evidence = merge_label_evidence(
             concept.rxcui,
@@ -107,6 +115,28 @@ def build_secondary_evidence(
         )
 
     return secondary_evidence
+
+
+def interaction_search_terms(
+    builder: DossierBuilder,
+    concept: RxNormConcept,
+) -> list[str]:
+    """Atomic ingredient names to use when searching drug-interaction text.
+
+    Interactions are described per ingredient, so a specific product is broadened
+    to its active ingredient(s). Only single ingredients (IN/PIN) are returned —
+    multi-ingredient (MIN) names contain slashes that break OpenFDA queries.
+    Falls back to the concept name when no ingredient resolves.
+    """
+
+    if (concept.tty or "") in {"IN", "PIN"}:
+        return [concept.name]
+    ingredients = [
+        ingredient.name
+        for ingredient in builder.rxnorm_store.get_ingredient_concepts(concept.rxcui)
+        if (ingredient.tty or "") in {"IN", "PIN"}
+    ]
+    return ingredients or [concept.name]
 
 
 def select_secondary_mentions(

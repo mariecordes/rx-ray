@@ -91,6 +91,14 @@ class OpenFDALabelEvidence(BaseModel):
     errors: list[str] = Field(default_factory=list)
 
 
+class IngredientFallbackEvidence(BaseModel):
+    """Label evidence for one active ingredient, retrieved when the specific
+    resolved concept has no OpenFDA labels of its own."""
+
+    ingredient: RxNormConcept
+    label_evidence: OpenFDALabelEvidence
+
+
 class DrugDossier(BaseModel):
     """Request-time evidence bundle for one user drug query."""
 
@@ -100,6 +108,11 @@ class DrugDossier(BaseModel):
     resolution_candidates: list[ResolutionCandidate] = Field(default_factory=list)
     rxnorm_neighborhood: RxNormNeighborhood = Field(default_factory=RxNormNeighborhood)
     label_evidence: OpenFDALabelEvidence | None = None
+    # "concept" when label_evidence is the resolved concept's own labels;
+    # "ingredient_fallback" when the concept had none and labels were broadened
+    # to its active ingredient(s). Lets coverage/synthesis/UI flag the broadening.
+    label_evidence_scope: str = "concept"
+    ingredient_fallback: list[IngredientFallbackEvidence] = Field(default_factory=list)
     notes: list[str] = Field(default_factory=list)
 
     def to_jsonable(self) -> dict[str, Any]:

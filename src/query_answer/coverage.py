@@ -19,6 +19,11 @@ SPECIFICITY_LIMITATION = (
     "The user query may be more specific than the resolved medication concept used "
     "for retrieval."
 )
+INGREDIENT_FALLBACK_LIMITATION = (
+    "No product-specific labels were found for the resolved medication, so the "
+    "retrieved evidence describes its active ingredient(s) and may cover other "
+    "formulations."
+)
 SECONDARY_MATCH_SECTION_PRIORITY = (
     "drug_interactions",
     "boxed_warning",
@@ -63,6 +68,13 @@ def build_evidence_coverage(
         if dossier and dossier.resolved_drug
         else None
     )
+    is_ingredient_fallback = bool(
+        dossier and dossier.label_evidence_scope == "ingredient_fallback"
+    )
+    ingredient_fallback_names = [
+        item.ingredient.name
+        for item in (dossier.ingredient_fallback if dossier else [])
+    ]
     items: list[EvidenceCoverageItem] = []
 
     if understanding.state.primary_drug:
@@ -73,8 +85,11 @@ def build_evidence_coverage(
                     label=understanding.state.primary_drug,
                     status="addressed" if has_label_text else "not_found_in_evidence",
                     reason=(
-                        "Retrieved evidence is tied to the resolved primary "
-                        f"concept: {primary_name}."
+                        primary_addressed_reason(
+                            primary_name,
+                            is_ingredient_fallback,
+                            ingredient_fallback_names,
+                        )
                         if has_label_text
                         else (
                             f"Resolved to {primary_name}, "
@@ -295,12 +310,26 @@ def add_coverage_limitations(
             f"{format_human_list(missing_context[:5])}.",
         )
 
+    dossier = understanding.primary_dossier
+    if dossier and dossier.label_evidence_scope == "ingredient_fallback":
+        ingredient_names = [
+            item.ingredient.name for item in dossier.ingredient_fallback
+        ]
+        concept_name = dossier.resolved_drug.name if dossier.resolved_drug else None
+        if concept_name and ingredient_names:
+            append_once(
+                limitations,
+                f"No product-specific labels were found for {concept_name}; the "
+                "retrieved evidence describes its active ingredient"
+                f"{'s' if len(ingredient_names) != 1 else ''} "
+                f"({format_human_list(ingredient_names)}) and may cover other "
+                "formulations.",
+            )
+        else:
+            append_once(limitations, INGREDIENT_FALLBACK_LIMITATION)
+
     primary = understanding.state.primary_drug
-    resolved = (
-        understanding.primary_dossier.resolved_drug.name
-        if understanding.primary_dossier and understanding.primary_dossier.resolved_drug
-        else None
-    )
+    resolved = dossier.resolved_drug.name if dossier and dossier.resolved_drug else None
     if primary and resolved and specificity_differs(primary, resolved):
         append_once(
             limitations,
@@ -308,6 +337,24 @@ def add_coverage_limitations(
         )
 
     return answer.model_copy(update={"limitations": limitations})
+
+
+def primary_addressed_reason(
+    primary_name: str,
+    is_ingredient_fallback: bool,
+    ingredient_fallback_names: list[str],
+) -> str:
+    if is_ingredient_fallback and ingredient_fallback_names:
+        return (
+            f"No product-specific labels were found for {primary_name}; retrieved "
+            "evidence is for its active ingredient"
+            f"{'s' if len(ingredient_fallback_names) != 1 else ''} "
+            f"({format_human_list(ingredient_fallback_names)})."
+        )
+    return (
+        "Retrieved evidence is tied to the resolved primary concept: "
+        f"{primary_name}."
+    )
 
 
 def find_secondary_evidence(
