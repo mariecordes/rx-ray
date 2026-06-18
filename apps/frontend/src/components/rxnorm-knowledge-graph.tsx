@@ -29,6 +29,7 @@ const MAX_DISPLAYED_EDGES = 400;
 const NETWORK_FALLBACK_EDGES = 200;
 const MIN_ZOOM = 0.42;
 const MAX_ZOOM = 2;
+const EMPTY_RXCUIS: ReadonlySet<string> = new Set();
 const FOCUS_ZOOM = 1.55;
 const TYPE_CLUSTER_STRENGTH = 0.035;
 
@@ -198,7 +199,8 @@ function buildVisualGraph(
   nodes: RxNormConcept[],
   edges: RxNormEdge[],
   edgeLimit: number,
-  maxVisualNodes: number = MAX_VISUAL_NODES
+  maxVisualNodes: number = MAX_VISUAL_NODES,
+  sharedRxcuis: ReadonlySet<string> = EMPTY_RXCUIS
 ) {
   const nodeMap = buildNodeMap(nodes);
   const centerEdges = edges.filter(
@@ -208,20 +210,49 @@ function buildVisualGraph(
   const selectedIds = new Set<string>(centerRxcuis);
 
   const visualEdges: RxNormEdge[] = [];
-  const centerEdgeLimit = Math.max(24, Math.floor(edgeLimit * 0.35));
-  for (const edge of centerEdges) {
-    if (visualEdges.length >= centerEdgeLimit) {
-      break;
+  const addedEdges = new Set<RxNormEdge>();
+  function addEdge(edge: RxNormEdge, { force = false } = {}) {
+    if (addedEdges.has(edge)) {
+      return;
+    }
+    if (!force && visualEdges.length >= edgeLimit) {
+      return;
     }
     const newNodeCount =
       Number(!selectedIds.has(edge.source_rxcui)) +
       Number(!selectedIds.has(edge.target_rxcui));
     if (selectedIds.size + newNodeCount > maxVisualNodes) {
-      continue;
+      return;
     }
     visualEdges.push(edge);
+    addedEdges.add(edge);
     selectedIds.add(edge.source_rxcui);
     selectedIds.add(edge.target_rxcui);
+  }
+
+  // Bridge edges first: a node flagged as shared appears in two or more drug
+  // neighborhoods and is drawn with a double ring, so the graph must link it to
+  // each of those centers. The budgeted passes below trim center edges to ~35%
+  // of the limit and can drop one of a shared node's two links, leaving it
+  // hanging off a single drug and contradicting its own ring. These bridges are
+  // few (shared nodes x centers), so force them in ahead of the budget.
+  if (sharedRxcuis.size) {
+    for (const edge of centerEdges) {
+      const other = centerRxcuis.has(edge.source_rxcui)
+        ? edge.target_rxcui
+        : edge.source_rxcui;
+      if (sharedRxcuis.has(other)) {
+        addEdge(edge, { force: true });
+      }
+    }
+  }
+
+  const centerEdgeLimit = Math.max(24, Math.floor(edgeLimit * 0.35));
+  for (const edge of centerEdges) {
+    if (visualEdges.length >= centerEdgeLimit) {
+      break;
+    }
+    addEdge(edge);
   }
 
   const contextEdges = edges.filter((edge) => !centerEdges.includes(edge));
@@ -231,17 +262,10 @@ function buildVisualGraph(
     }
     const knownEndpoints =
       selectedIds.has(edge.source_rxcui) || selectedIds.has(edge.target_rxcui);
-    const newNodeCount =
-      Number(!selectedIds.has(edge.source_rxcui)) +
-      Number(!selectedIds.has(edge.target_rxcui));
-
-    if (!knownEndpoints || selectedIds.size + newNodeCount > maxVisualNodes) {
+    if (!knownEndpoints) {
       continue;
     }
-
-    visualEdges.push(edge);
-    selectedIds.add(edge.source_rxcui);
-    selectedIds.add(edge.target_rxcui);
+    addEdge(edge);
   }
 
   const depthLevelsByRxcui = buildDepthLevels(centerRxcuis, visualEdges);
@@ -308,6 +332,7 @@ function computeDefaultEdgeBudget(
   maxVisualNodes: number
 ) {
   const centerRxcuis = new Set(network.centers.map((center) => center.rxcui));
+  const sharedRxcuis = new Set(network.shared_rxcuis);
   const { edges, nodes } = network;
   const maxBudget = Math.min(MAX_DISPLAYED_EDGES, edges.length);
   const floor = Math.min(
@@ -326,7 +351,8 @@ function computeDefaultEdgeBudget(
       nodes,
       edges,
       limit,
-      maxVisualNodes
+      maxVisualNodes,
+      sharedRxcuis
     );
     if (centersAreConnected(visualEdges, centerRxcuis)) {
       connecting = limit;
@@ -1419,8 +1445,16 @@ export function QuestionRxNormNetworkGraph({
   }, [defaultEdgeBudget]);
 
   const { visualEdges, visualNodes } = useMemo(
-    () => buildVisualGraph(centerRxcuis, nodes, edges, edgeLimit, maxVisualNodes),
-    [centerRxcuis, edgeLimit, edges, maxVisualNodes, nodes]
+    () =>
+      buildVisualGraph(
+        centerRxcuis,
+        nodes,
+        edges,
+        edgeLimit,
+        maxVisualNodes,
+        sharedRxcuiSet
+      ),
+    [centerRxcuis, edgeLimit, edges, maxVisualNodes, nodes, sharedRxcuiSet]
   );
   const layoutNodes = useMemo(
     () => computeLayout(null, visualNodes, visualEdges),
