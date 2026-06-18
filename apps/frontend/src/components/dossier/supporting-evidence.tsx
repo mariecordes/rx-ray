@@ -1292,11 +1292,6 @@ function LabelEvidencePanel({
               )}
             </section>
           </div>
-          {labelEvidence?.errors.length ? (
-            <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-              {labelEvidence.errors.join(" ")}
-            </div>
-          ) : null}
         </div>
       </section>
     </div>

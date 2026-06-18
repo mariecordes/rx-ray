@@ -190,9 +190,6 @@ function EvidenceAnswerResult({
   response: QueryAnswerResponse;
 }) {
   const { answer, understanding } = response;
-  const synthesisWarnings = response.warnings.filter(
-    (warning) => !understanding.warnings.includes(warning)
-  );
   const synthesisErrors = response.errors.filter(
     (error) => !understanding.errors.includes(error)
   );
@@ -221,12 +218,10 @@ function EvidenceAnswerResult({
     <EvidenceAnswerCard
       answer={answer}
       coverage={response.coverage ?? { items: [], summary_counts: {} }}
-      errors={synthesisErrors}
       onCitationClick={onCitationClick}
       onCoverageTargetClick={onCoverageTargetClick}
       secondaryEvidence={response.secondary_evidence ?? []}
       understanding={understanding}
-      warnings={synthesisWarnings}
     />
   );
 }
@@ -234,21 +229,17 @@ function EvidenceAnswerResult({
 function EvidenceAnswerCard({
   answer,
   coverage,
-  errors,
   onCitationClick,
   onCoverageTargetClick,
   secondaryEvidence,
   understanding,
-  warnings,
 }: {
   answer: EvidenceAnswer;
   coverage: EvidenceCoverageReport;
-  errors: string[];
   onCitationClick: (citation: EvidenceCitation) => void;
   onCoverageTargetClick: (target: EvidenceCoverageTarget) => void;
   secondaryEvidence: SecondaryDrugEvidence[];
   understanding: QueryUnderstandingResponse;
-  warnings: string[];
 }) {
   const sourceById = useMemo(() => {
     const records = [
@@ -397,19 +388,6 @@ function EvidenceAnswerCard({
       <p className="text-center text-xs leading-5 text-slate-500">
         {answer.safety_note}
       </p>
-
-      {warnings.length || errors.length ? (
-        <div className="space-y-1 rounded-md border border-[#D7C8F4] bg-[#FBF9FE] px-3 py-3 text-xs leading-5 text-slate-500">
-          {warnings.map((warning) => (
-            <p key={warning}>{warning}</p>
-          ))}
-          {errors.map((error) => (
-            <p key={error} className="text-red-700">
-              {error}
-            </p>
-          ))}
-        </div>
-      ) : null}
     </div>
   );
 }
@@ -803,45 +781,22 @@ function QueryUnderstandingStatus({
 }: {
   result: QueryUnderstandingResponse;
 }) {
-  const hasNoPrimaryDossier = !result.primary_dossier;
-  const visibleWarnings = result.warnings.filter(
-    (warning) => !warning.startsWith("No primary drug could be resolved")
-  );
-
-  if (!hasNoPrimaryDossier && visibleWarnings.length === 0 && result.errors.length === 0) {
+  // Technical warnings/errors are intentionally not surfaced in the UI (they
+  // remain in the API response and server logs). Only the essential "we could
+  // not build a dossier" explanation is shown, so the page isn't left blank.
+  if (result.primary_dossier) {
     return null;
   }
 
   return (
     <div className="space-y-2 border-t border-slate-200 p-3">
-      {hasNoPrimaryDossier || visibleWarnings.length ? (
-        <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm leading-5 text-amber-900">
-          {hasNoPrimaryDossier ? (
-            <p>
-              We could not link the primary medication to the current medication
-              terminology database, so no generated answer or supporting
-              evidence dossier was created for this query.
-            </p>
-          ) : null}
-          {visibleWarnings.length ? (
-            <div className={cn("space-y-1", hasNoPrimaryDossier ? "mt-2" : "")}>
-              {visibleWarnings.map((warning) => (
-                <p key={warning}>{warning}</p>
-              ))}
-            </div>
-          ) : null}
-        </div>
-      ) : null}
-
-      {result.errors.length ? (
-        <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm leading-5 text-red-800">
-          <ul className="list-disc space-y-1 pl-4">
-            {result.errors.map((error) => (
-              <li key={error}>{error}</li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
+      <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm leading-5 text-amber-900">
+        <p>
+          We could not link the primary medication to the current medication
+          terminology database, so no generated answer or supporting evidence
+          dossier was created for this query.
+        </p>
+      </div>
     </div>
   );
 }
