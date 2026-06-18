@@ -53,6 +53,12 @@ export type OpenFDALabelRecord = {
   product_types: string[];
   routes: string[];
   substance_names: string[];
+  descriptions: string[];
+  package_label_principal_display_panels: string[];
+  active_ingredients: string[];
+  inactive_ingredients: string[];
+  purposes: string[];
+  dosages: string[];
   rxcuis: string[];
   provenance_tags: string[];
 };
@@ -77,6 +83,12 @@ export type LabelSourceProfile = {
   route?: string | null;
   product_type?: string | null;
   substances: string[];
+  descriptions: string[];
+  product_display_names: string[];
+  active_ingredients: string[];
+  inactive_ingredients: string[];
+  purposes: string[];
+  dosages: string[];
   rxcuis: string[];
   product_ndcs: string[];
   spl_ids: string[];
