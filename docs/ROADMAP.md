@@ -45,7 +45,7 @@ Optionally [A4](#a4--live-demo-deployment) live demo if hosting is straightforwa
 | [A4](#a4--live-demo-deployment) | Live demo | Foundation | M | High | todo | A1 |
 | [A5](#a5--architecture-doc) | Architecture doc | Foundation | S | Med | todo | — |
 | [B1](#b1--rxnorm-resolver-indexing--performance) | Resolver indexing/perf | Retrieval | M | Med | todo | — |
-| [B2](#b2--specific-concept-resolution-priority--ingredient-fallback) | Specific-concept priority + ingredient fallback | Retrieval | L | High | todo | B5 |
+| [B2](#b2--specific-concept-resolution-priority--ingredient-fallback) | Specific-concept priority + ingredient fallback | Retrieval | L | High | ✅ done | B5 |
 | [B3](#b3--autocomplete--typeahead-for-drug-dossier) | Autocomplete/typeahead | Retrieval | M | Med | todo | B1 |
 | [B4](#b4--openfda-text-fallback-when-rxnorm-resolution-fails) | OpenFDA text fallback | Retrieval | M | Med | todo | — |
 | [B5](#b5--query-to-concept-matching--display-fidelity) | Query→concept matching & display fidelity | Retrieval | M | High | ✅ done | — |
@@ -176,9 +176,9 @@ The symbolic half of the system. Improving resolution quality and speed directly
 
 ---
 
-### B2 — Specific-concept resolution priority + ingredient fallback
+### ✅ B2 — Specific-concept resolution priority + ingredient fallback
 
-**Effort:** L · **Impact:** High · **Status:** todo · **Depends on:** B5
+**Effort:** L · **Impact:** High · **Status:** done · **Depends on:** B5
 
 **Goal:** Prefer the exact/specific RxNorm concept; when it has no label evidence of its own, fall back to its active ingredient(s) *explicitly*, with a deterministic caveat, rather than silently broadening.
 
@@ -194,6 +194,8 @@ The symbolic half of the system. Improving resolution quality and speed directly
 - Test set: tretinoin 0.5 MG/ML, hydrochlorothiazide oral tablet, fluoxetine oral solution, benzoyl peroxide topical gel, plus a no-product-label concept and a combination product.
 
 **Done when:** Specific searches keep the primary node + OpenFDA lookup tied to the intended specificity; any ingredient fallback is explicit, ingredient-named, caveated, and surfaced as a limitation (single- and multi-ingredient); the active ingredient is a first-class network center; and interaction lookups are ingredient-level.
+
+> **Done.** Specific concepts are preferred and kept as the primary node; when one has no labels of its own, retrieval broadens to its active ingredient(s) via an RxNorm ingredient walk, tagged `ingredient_fallback`, with a deterministic caveat surfaced in coverage, synthesis, and the Drug Labels panel (per-ingredient sections for combination products). The primary's active ingredient(s) are added as Drug Network centers, and drug-interaction lookups now search by ingredient name rather than the full product string.
 
 ---
 
@@ -507,6 +509,23 @@ Do these opportunistically, when a concrete query exposes a problem — not pree
 ## Shipped
 
 A record of completed work.
+
+**B2 — Specific-concept priority + ingredient fallback**
+- Builds on B5's preferred-term resolution: the specific concept is kept as the
+  primary/matched node.
+- `RxNormParquetStore.get_ingredient_concepts()` walks composition/ingredient
+  relations to a concept's active ingredient(s) (ingredients are terminal so it
+  can't explode into co-ingredients).
+- When the specific concept has no OpenFDA labels, retrieval broadens to its
+  ingredient(s): per-ingredient bundles in `dossier.ingredient_fallback`, a
+  merged tagged `label_evidence` view, a `label_evidence_scope` flag, and a
+  deterministic caveat — surfaced in coverage, the synthesis evidence packet,
+  and an amber note in the Drug Labels panel (with per-ingredient source
+  sections for combination products).
+- Primary active ingredient(s) added as Drug Network centers (own highlighted
+  bubble + neighborhood), mirroring the Evidence Map.
+- Drug-interaction lookups search by ingredient name, not the full product
+  string (more correct and avoids malformed OpenFDA query terms).
 
 **B5 — Query-to-concept matching & display fidelity**
 - `resolve()` returns the winning RXCUI's preferred RxNorm term + TTY for display
