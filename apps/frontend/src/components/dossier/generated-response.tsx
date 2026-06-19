@@ -275,7 +275,7 @@ function EvidenceAnswerCard({
     <div className="space-y-3">
       {hasVisibleCoverage ? (
         <AnswerSection
-          title="Find out what evidence was retrieved"
+          title="Find out what the retrieved evidence covers"
           infoText="This is a deterministic, pre-answer check: did we retrieve label text that would normally cover what was extracted from your question and what intent it was tagged with? It does not assess whether the generated answer below actually used or correctly interpreted that evidence — it only confirms whether matching evidence exists in what was retrieved. Hover over a reason when available to inspect the matching evidence snippet."
           tone="audit"
           headerExtra={<CoverageStatusChips counts={visibleCoverageStatusCounts} />}
@@ -443,9 +443,21 @@ function EvidenceCoverageList({
       buckets.set(bucket, current);
     }
 
-    return coverageBucketOrder
-      .map((bucket) => [bucket, buckets.get(bucket) ?? []] as const)
-      .filter(([, groups]) => groups.length > 0);
+    return coverageBucketOrder.reduce<
+      Array<[CoverageBucket, Array<[string, EvidenceCoverageItem[]]>]>
+    >((result, bucket) => {
+      const groups = buckets.get(bucket) ?? [];
+      if (groups.length === 0) {
+        return result;
+      }
+      if (coverageBucketMergesCategories(bucket)) {
+        const mergedItems = groups.flatMap(([, items]) => items);
+        result.push([bucket, [["_merged", mergedItems]]]);
+        return result;
+      }
+      result.push([bucket, groups]);
+      return result;
+    }, []);
   }, [coverage.items]);
 
   return (
@@ -461,7 +473,7 @@ function EvidenceCoverageList({
                 key={category}
                 className="rounded-md border border-slate-200 bg-white px-3 py-3"
               >
-                {bucket !== "intent" ? (
+                {!coverageBucketMergesCategories(bucket) ? (
                   <div className="mb-2 text-xs font-medium uppercase text-slate-500">
                     {displayCoverageCategory(category)}
                   </div>
@@ -638,8 +650,9 @@ function AnswerSection({
         )}
         {icon ? <span className="shrink-0">{icon}</span> : null}
         <span className="text-xs font-medium uppercase">{title}</span>
+        {infoText ? <InfoTooltip text={infoText} /> : null}
         {badgeCount ? (
-          <span className="rounded-full bg-slate-200 px-1.5 py-0.5 text-[10px] font-semibold text-slate-700">
+          <span className="rounded-full border border-slate-300 bg-white px-1.5 py-0.5 text-[10px] font-semibold text-slate-700">
             {badgeCount}
           </span>
         ) : null}
@@ -648,7 +661,6 @@ function AnswerSection({
             {headerExtra}
           </span>
         ) : null}
-        {infoText ? <InfoTooltip text={infoText} /> : null}
       </button>
       {isOpen ? (
         <div className={cn("border-t px-3 py-3", borderClass)}>{children}</div>
@@ -759,6 +771,10 @@ const coverageBucketLabels: Record<CoverageBucket, string> = {
   intent: "Intent coverage",
   other: "Other",
 };
+
+function coverageBucketMergesCategories(bucket: CoverageBucket) {
+  return bucket === "intent" || bucket === "medication_concepts";
+}
 
 function coverageBucket(category: string): CoverageBucket {
   if (

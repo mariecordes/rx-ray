@@ -856,12 +856,18 @@ export const demoQueryAnswer: QueryAnswerResponse = {
         matched_evidence: "ask a doctor or pharmacist before use if taking aspirin...",
         source_id: "fixture-ibuprofen-1",
         section: "drug_interactions",
+        target_rxcui: "5640",
       },
       {
         category: "intent",
         label: "label_context_check",
         status: "addressed",
         reason: "Label text was retrieved for the primary medication.",
+        matched_evidence:
+          "...Demo label excerpt: ibuprofen labels can include warnings about stomach bleeding risk, allergy alerts, and asking a health professional before use with other pain relievers....",
+        source_id: "fixture-ibuprofen-1",
+        section: "warnings",
+        target_rxcui: "5640",
       },
       {
         category: "primary_drug",
