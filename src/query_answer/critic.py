@@ -146,7 +146,7 @@ def critique_answer(
     return _parse_critique(data, answer)
 
 
-def run_guardrails_v3(
+def finalize_answer_critique(
     *,
     query: str,
     understanding: QueryUnderstandingResponse,
@@ -388,5 +388,5 @@ __all__ = [
     "apply_deterministic_statuses",
     "critique_answer",
     "deterministic_support_status",
-    "run_guardrails_v3",
+    "finalize_answer_critique",
 ]

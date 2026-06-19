@@ -15,7 +15,7 @@ from src.query_answer.critic import (
     apply_deterministic_statuses,
     critique_answer,
     deterministic_support_status,
-    run_guardrails_v3,
+    finalize_answer_critique,
 )
 from src.query_answer.models import (
     AnswerContract,
@@ -279,8 +279,8 @@ def test_critique_answer_ignores_invalid_claim_indices_and_statuses() -> None:
     assert outcome.critique.claims == []
 
 
-def test_run_guardrails_v3_returns_none_when_no_answer() -> None:
-    answer, critique, validation = run_guardrails_v3(
+def test_finalize_answer_critique_returns_none_when_no_answer() -> None:
+    answer, critique, validation = finalize_answer_critique(
         query="Can I take aspirin?",
         understanding=understanding_with_label_evidence(),
         secondary_evidence=None,
@@ -296,13 +296,13 @@ def test_run_guardrails_v3_returns_none_when_no_answer() -> None:
     assert validation == "unchanged"
 
 
-def test_run_guardrails_v3_disabled_returns_deterministic_floor() -> None:
+def test_finalize_answer_critique_disabled_returns_deterministic_floor() -> None:
     understanding = understanding_with_label_evidence()
     coverage = build_evidence_coverage(understanding)
     contract = build_answer_contract(understanding, coverage)
     answer = answer_with_bullets([bullet("Cited.", "label-1", "warnings")])
 
-    final_answer, critique, validation = run_guardrails_v3(
+    final_answer, critique, validation = finalize_answer_critique(
         query="Can I take aspirin?",
         understanding=understanding,
         secondary_evidence=None,
@@ -322,7 +322,7 @@ def test_run_guardrails_v3_disabled_returns_deterministic_floor() -> None:
     assert validation == "unchanged"
 
 
-def test_run_guardrails_v3_enabled_without_regeneration(
+def test_finalize_answer_critique_enabled_without_regeneration(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("ANSWER_SYNTHESIS_OPENAI_API_KEY", "test-key")
@@ -347,7 +347,7 @@ def test_run_guardrails_v3_enabled_without_regeneration(
             "needs_regeneration": False,
         }
 
-    final_answer, critique, _validation = run_guardrails_v3(
+    final_answer, critique, _validation = finalize_answer_critique(
         query="Can I take aspirin?",
         understanding=understanding,
         secondary_evidence=None,
@@ -367,7 +367,7 @@ def test_run_guardrails_v3_enabled_without_regeneration(
     assert synth_calls == []
 
 
-def test_run_guardrails_v3_regenerates_exactly_once(
+def test_finalize_answer_critique_regenerates_exactly_once(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("ANSWER_SYNTHESIS_OPENAI_API_KEY", "test-key")
@@ -405,7 +405,7 @@ def test_run_guardrails_v3_regenerates_exactly_once(
             "needs_regeneration": True,
         }
 
-    final_answer, critique, _validation = run_guardrails_v3(
+    final_answer, critique, _validation = finalize_answer_critique(
         query="Can I take aspirin?",
         understanding=understanding,
         secondary_evidence=None,
@@ -426,7 +426,7 @@ def test_run_guardrails_v3_regenerates_exactly_once(
     assert final_answer.bullets[0].text == "Regenerated bullet."
 
 
-def test_run_guardrails_v3_skips_regeneration_when_max_is_zero(
+def test_finalize_answer_critique_skips_regeneration_when_max_is_zero(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("ANSWER_SYNTHESIS_OPENAI_API_KEY", "test-key")
@@ -448,7 +448,7 @@ def test_run_guardrails_v3_skips_regeneration_when_max_is_zero(
             "needs_regeneration": True,
         }
 
-    final_answer, critique, _validation = run_guardrails_v3(
+    final_answer, critique, _validation = finalize_answer_critique(
         query="Can I take aspirin?",
         understanding=understanding,
         secondary_evidence=None,

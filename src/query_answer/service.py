@@ -11,7 +11,7 @@ from src.query_answer.context import (
 )
 from src.query_answer.contract import build_answer_contract
 from src.query_answer.coverage import build_evidence_coverage
-from src.query_answer.critic import run_guardrails_v3
+from src.query_answer.critic import finalize_answer_critique
 from src.query_answer.evidence_map import build_question_evidence_map
 from src.query_answer.models import QueryAnswerResponse
 from src.query_answer.network import build_question_rxnorm_network
@@ -86,7 +86,7 @@ class QueryAnswerService:
             contract=contract,
         )
         answer, validation = validate_and_enforce(synthesis.answer, contract)
-        answer, critique, validation = run_guardrails_v3(
+        answer, critique, validation = finalize_answer_critique(
             query=query,
             understanding=understanding,
             secondary_evidence=secondary_evidence,
