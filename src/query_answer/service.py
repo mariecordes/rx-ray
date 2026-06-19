@@ -11,6 +11,7 @@ from src.query_answer.context import (
 )
 from src.query_answer.contract import build_answer_contract
 from src.query_answer.coverage import build_evidence_coverage
+from src.query_answer.critic import run_guardrails_v3
 from src.query_answer.evidence_map import build_question_evidence_map
 from src.query_answer.models import QueryAnswerResponse
 from src.query_answer.network import build_question_rxnorm_network
@@ -85,6 +86,17 @@ class QueryAnswerService:
             contract=contract,
         )
         answer, validation = validate_and_enforce(synthesis.answer, contract)
+        answer, critique, validation = run_guardrails_v3(
+            query=query,
+            understanding=understanding,
+            secondary_evidence=secondary_evidence,
+            context_evidence=context_evidence,
+            answer=answer,
+            contract=contract,
+            validation=validation,
+            synthesizer=self.synthesizer,
+            parameters=parameters,
+        )
         question_rxnorm_network = build_question_rxnorm_network(
             understanding,
             secondary_evidence,
@@ -116,6 +128,7 @@ class QueryAnswerService:
             coverage=coverage,
             contract=contract,
             validation=validation,
+            critique=critique,
             warnings=warnings,
             errors=errors,
         )

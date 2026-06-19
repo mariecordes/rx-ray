@@ -23,6 +23,7 @@ ANSWER_SYNTHESIS_API_KEY_ENV = "ANSWER_SYNTHESIS_OPENAI_API_KEY"
 ANSWER_SYNTHESIS_MODEL_ENV = "ANSWER_SYNTHESIS_OPENAI_MODEL"
 ANSWER_SYNTHESIS_PROMPT_KEY = "evidence_answer_synthesis"
 ANSWER_CITATION_RETRY_PROMPT_KEY = "evidence_answer_citation_retry"
+ANSWER_CRITIC_REGEN_PROMPT_KEY = "evidence_answer_critic_regen"
 STANDARD_SAFETY_NOTE = (
     "This is an educational summary of retrieved public evidence, not medical advice."
 )
@@ -84,6 +85,7 @@ class EvidenceAnswerSynthesizer:
         secondary_evidence: list[SecondaryDrugEvidence] | None = None,
         context_evidence: list[ContextTargetedEvidence] | None = None,
         contract: AnswerContract | None = None,
+        critic_feedback: str | None = None,
     ) -> AnswerSynthesisResult:
         if understanding.primary_dossier is None:
             return AnswerSynthesisResult(
@@ -107,11 +109,18 @@ class EvidenceAnswerSynthesizer:
             context_evidence=context_evidence or [],
             contract=contract,
         )
+        allowed_citations = self.allowed_citations(evidence_packet)
         messages = self._format_messages(
             prompt_config.get("messages", []),
             query=query,
             evidence_packet=json.dumps(evidence_packet, indent=2),
         )
+        if critic_feedback:
+            messages.append(
+                self._format_critic_feedback_message(
+                    critic_feedback, allowed_citations
+                )
+            )
 
         try:
             data = self._request_answer_json(
@@ -128,7 +137,6 @@ class EvidenceAnswerSynthesizer:
         except Exception as exc:  # pragma: no cover - requires live LLM config
             return AnswerSynthesisResult(errors=[f"Answer synthesis failed: {exc}"])
 
-        allowed_citations = self.allowed_citations(evidence_packet)
         answer = self.parse_answer_data(data, allowed_citations)
         if self._needs_source_retry(answer, allowed_citations):
             try:
@@ -408,6 +416,36 @@ class EvidenceAnswerSynthesizer:
                 {
                     "allowed_citations": json.dumps(allowed, indent=2),
                     "previous_response": json.dumps(previous_response, indent=2),
+                },
+            ),
+        }
+
+    @staticmethod
+    def _format_critic_feedback_message(
+        critic_feedback: str,
+        allowed_citations: set[tuple[str, str]],
+    ) -> dict[str, str]:
+        prompt_config = EvidenceAnswerSynthesizer._load_prompt_config(
+            ANSWER_CRITIC_REGEN_PROMPT_KEY
+        )
+        message = prompt_config.get("message")
+        if not isinstance(message, dict):
+            raise ValueError(
+                f"Missing prompt message: {ANSWER_CRITIC_REGEN_PROMPT_KEY}"
+            )
+        role = str(message.get("role", "user"))
+        content = str(message.get("content", ""))
+        allowed = [
+            {"source_id": source_id, "section": section}
+            for source_id, section in sorted(allowed_citations)
+        ]
+        return {
+            "role": role,
+            "content": EvidenceAnswerSynthesizer._replace_prompt_placeholders(
+                content,
+                {
+                    "critic_feedback": critic_feedback,
+                    "allowed_citations": json.dumps(allowed, indent=2),
                 },
             ),
         }

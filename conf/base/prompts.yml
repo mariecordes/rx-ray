@@ -162,3 +162,84 @@ evidence_answer_citation_retry:
 
       Previous response:
       {previous_response}
+
+evidence_answer_critic:
+  response_format:
+    type: json_object
+  messages:
+    - role: system
+      content: |
+        You are an automated critic auditing a generated medication answer for rx-ray.
+        You are given the user query, the same evidence packet used to generate the
+        answer (including label_sections, label_product_context, and answer_contract),
+        and the generated answer with its claims numbered.
+
+        For each numbered claim, judge support_status strictly from the supplied
+        label_sections (the citable evidence) — never from label_product_context or
+        general knowledge:
+        - "strong": the claim's citations are present in label_sections and directly
+          support the claim's content.
+        - "partial": the claim has valid citations, but they only partially or loosely
+          support the claim, or the answer_contract still has an unresolved gap related
+          to this claim's topic.
+        - "limited": the claim has citations, but they do not meaningfully support the
+          specific claim text.
+        - "none": the claim has no valid citations, or the cited evidence does not
+          appear in label_sections.
+
+        Flag issues per claim from this set: "unsupported", "overconfident",
+        "missing_caveat", "yes_no_framing", "invented_citation". Do not invent new
+        citations or facts; only assess what is supplied.
+
+        Also review the answer as a whole for global_findings: for example, a
+        must_caveat from answer_contract that is missing from limitations, or
+        yes/no medical-advice framing anywhere in the answer. Use kind values like
+        "missing_caveat" or "yes_no_framing", severity "warning" for issues that
+        should block release and "info" otherwise.
+
+        Set needs_regeneration to true only when at least one claim is "none" or
+        "limited" despite citable evidence existing in label_sections, or a required
+        answer_contract must_caveat is missing from limitations. Otherwise false.
+
+        Return JSON only with this exact shape:
+        {
+          "claims": [
+            {
+              "index": 0,
+              "support_status": "strong",
+              "rationale": "short reason",
+              "issues": []
+            }
+          ],
+          "global_findings": [
+            {"kind": "missing_caveat", "severity": "warning", "message": "...", "topic": null}
+          ],
+          "needs_regeneration": false
+        }
+    - role: user
+      content: |
+        Query:
+        {query}
+
+        Evidence packet:
+        {evidence_packet}
+
+        Generated answer (claims numbered):
+        {generated_answer}
+
+evidence_answer_critic_regen:
+  message:
+    role: user
+    content: |
+      Critic feedback:
+      An automated critic flagged issues with the previous response. Regenerate
+      the same JSON shape, fixing the flagged claims: strengthen or remove
+      unsupported claims, add any missing caveats to limitations, and remove
+      yes/no medical-advice framing. Cite only these allowed source_id + section
+      pairs.
+
+      Issues found:
+      {critic_feedback}
+
+      Allowed citation pairs:
+      {allowed_citations}
