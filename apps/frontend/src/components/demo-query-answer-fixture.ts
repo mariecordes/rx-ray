@@ -17,7 +17,7 @@ export const demoQueryAnswer: QueryAnswerResponse = {
       conditions: ["swollen eyes"],
       patient_context: [],
       intent: "interaction_check",
-      intents: ["interaction_check", "medication_use", "symptom_context"],
+      intents: ["interaction_check", "label_context_check"],
     },
     resolved_drugs: [
       {
@@ -317,6 +317,7 @@ export const demoQueryAnswer: QueryAnswerResponse = {
       "This is static demo data, not a fresh FDA label lookup.",
       "The fixture is intentionally compact and may not represent the full public label record set.",
       "The response is for UI testing only and is not medical advice.",
+      "RxNorm terminology overlap is not evidence of a clinical interaction.",
     ],
     safety_note:
       "This educational prototype summarizes public-label-style evidence and does not provide medical advice.",
@@ -847,6 +848,28 @@ export const demoQueryAnswer: QueryAnswerResponse = {
   coverage: {
     items: [
       {
+        category: "intent",
+        label: "interaction_check",
+        status: "addressed",
+        reason:
+          "Drug-interactions label text was retrieved for at least one mentioned medication.",
+        matched_evidence: "ask a doctor or pharmacist before use if taking aspirin...",
+        source_id: "fixture-ibuprofen-1",
+        section: "drug_interactions",
+        target_rxcui: "5640",
+      },
+      {
+        category: "intent",
+        label: "label_context_check",
+        status: "addressed",
+        reason: "Label text was retrieved for the primary medication.",
+        matched_evidence:
+          "...Demo label excerpt: ibuprofen labels can include warnings about stomach bleeding risk, allergy alerts, and asking a health professional before use with other pain relievers....",
+        source_id: "fixture-ibuprofen-1",
+        section: "warnings",
+        target_rxcui: "5640",
+      },
+      {
         category: "primary_drug",
         label: "ibuprofen",
         status: "addressed",
@@ -857,7 +880,7 @@ export const demoQueryAnswer: QueryAnswerResponse = {
         target_rxcui: "5640",
       },
       {
-        category: "mentioned_medication",
+        category: "mentioned_drug",
         label: "aspirin",
         status: "addressed",
         reason: "Demo secondary medication evidence is available.",
@@ -892,9 +915,60 @@ export const demoQueryAnswer: QueryAnswerResponse = {
       },
     ],
     summary_counts: {
-      addressed: 3,
+      addressed: 5,
       not_found_in_evidence: 2,
     },
+  },
+  contract: {
+    items: [
+      {
+        kind: "must_mention",
+        topic: "interaction_check",
+        intent: "interaction_check",
+        statement: "Address what the retrieved drug interaction label sections say.",
+        evidence_available: true,
+        required_sections: ["drug_interactions"],
+        coverage_category: "intent",
+        coverage_label: "interaction_check",
+      },
+      {
+        kind: "must_caveat",
+        topic: "interaction_terminology",
+        intent: "interaction_check",
+        statement:
+          "RxNorm terminology overlap is not evidence of a clinical interaction.",
+        evidence_available: true,
+        required_sections: [],
+        coverage_category: "intent",
+        coverage_label: "interaction_check",
+      },
+      {
+        kind: "must_mention",
+        topic: "label_context_check",
+        intent: "label_context_check",
+        statement: "Address what the retrieved label availability label sections say.",
+        evidence_available: true,
+        required_sections: [],
+        coverage_category: "intent",
+        coverage_label: "label_context_check",
+      },
+    ],
+    coverage_level: "direct",
+  },
+  validation: {
+    findings: [
+      {
+        kind: "missing_caveat_enforced",
+        severity: "warning",
+        message:
+          "Generated answer omitted a required caveat for 'interaction_terminology'; it was appended deterministically.",
+        topic: "interaction_terminology",
+      },
+    ],
+    enforced_caveats: [
+      "RxNorm terminology overlap is not evidence of a clinical interaction.",
+    ],
+    passed: false,
   },
   warnings: ["Demo fixture loaded; no LLM or live API calls were made."],
   errors: [],

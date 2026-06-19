@@ -391,8 +391,17 @@ class HybridQueryExtractor:
             intents.append("patient_context_check")
         if re.search(r"\ballerg(?:y|ies|ic)\b", normalized_query):
             intents.append("allergy_context_check")
-        if re.search(r"\b(can|should|could)\s+i\b|\bsafe\b|\bokay\b", normalized_query):
-            intents.append("safety_context_check")
+        if re.search(
+            r"\bside effects?\b|\badverse (?:reactions?|effects?)\b",
+            normalized_query,
+        ):
+            intents.append("side_effect_check")
+        if re.search(
+            r"\bused for\b|\bindicated for\b|\bwhat (?:is|are) .*\bfor\b|"
+            r"\btreats?\b|\btreatment for\b",
+            normalized_query,
+        ):
+            intents.append("indication_check")
         if normalized_query.strip():
             intents.append("label_context_check")
         return HybridQueryExtractor._dedupe_strings(intents)

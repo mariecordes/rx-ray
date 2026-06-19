@@ -194,6 +194,42 @@ export type EvidenceCoverageReport = {
   summary_counts: Record<string, number>;
 };
 
+export type AnswerContractKind = "must_mention" | "must_caveat";
+
+export type AnswerCoverageLevel = "direct" | "partial" | "limited" | "none";
+
+export type AnswerContractItem = {
+  kind: AnswerContractKind;
+  topic: string;
+  intent?: string | null;
+  statement: string;
+  evidence_available: boolean;
+  required_sections: string[];
+  coverage_category?: string | null;
+  coverage_label?: string | null;
+  target_rxcui?: string | null;
+};
+
+export type AnswerContract = {
+  items: AnswerContractItem[];
+  coverage_level: AnswerCoverageLevel;
+};
+
+export type ValidationSeverity = "info" | "warning";
+
+export type ValidationFinding = {
+  kind: string;
+  severity: ValidationSeverity;
+  message: string;
+  topic?: string | null;
+};
+
+export type AnswerValidationReport = {
+  findings: ValidationFinding[];
+  enforced_caveats: string[];
+  passed: boolean;
+};
+
 export type RxNormNetworkCenter = {
   rxcui: string;
   name: string;
@@ -281,6 +317,8 @@ export type QueryAnswerResponse = {
   question_rxnorm_network: QuestionRxNormNetwork;
   question_evidence_map: QuestionEvidenceMap;
   coverage: EvidenceCoverageReport;
+  contract: AnswerContract;
+  validation: AnswerValidationReport;
   warnings: string[];
   errors: string[];
 };

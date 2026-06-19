@@ -9,12 +9,14 @@ from src.query_answer.context import (
     merge_context_evidence_into_secondary,
     merge_context_evidence_into_understanding,
 )
-from src.query_answer.coverage import add_coverage_limitations, build_evidence_coverage
+from src.query_answer.contract import build_answer_contract
+from src.query_answer.coverage import build_evidence_coverage
 from src.query_answer.evidence_map import build_question_evidence_map
 from src.query_answer.models import QueryAnswerResponse
 from src.query_answer.network import build_question_rxnorm_network
 from src.query_answer.secondary import build_secondary_evidence
 from src.query_answer.synthesizer import EvidenceAnswerSynthesizer
+from src.query_answer.validation import validate_and_enforce
 from src.query_understanding.service import QueryUnderstandingService
 
 logger = logging.getLogger(__name__)
@@ -69,17 +71,20 @@ class QueryAnswerService:
             secondary_evidence,
             context_evidence,
         )
-        synthesis = self.synthesizer.synthesize(
-            query,
-            understanding,
-            secondary_evidence=secondary_evidence,
-            context_evidence=context_evidence,
-        )
         coverage = build_evidence_coverage(
             understanding,
             secondary_evidence=secondary_evidence,
             context_evidence=context_evidence,
         )
+        contract = build_answer_contract(understanding, coverage)
+        synthesis = self.synthesizer.synthesize(
+            query,
+            understanding,
+            secondary_evidence=secondary_evidence,
+            context_evidence=context_evidence,
+            contract=contract,
+        )
+        answer, validation = validate_and_enforce(synthesis.answer, contract)
         question_rxnorm_network = build_question_rxnorm_network(
             understanding,
             secondary_evidence,
@@ -90,11 +95,6 @@ class QueryAnswerService:
             understanding,
             secondary_evidence=secondary_evidence,
             context_evidence=context_evidence,
-        )
-        answer = add_coverage_limitations(
-            synthesis.answer,
-            coverage,
-            understanding,
         )
         warnings = [*understanding.warnings, *synthesis.warnings]
         errors = [*understanding.errors, *synthesis.errors]
@@ -114,6 +114,8 @@ class QueryAnswerService:
             question_rxnorm_network=question_rxnorm_network,
             question_evidence_map=question_evidence_map,
             coverage=coverage,
+            contract=contract,
+            validation=validation,
             warnings=warnings,
             errors=errors,
         )

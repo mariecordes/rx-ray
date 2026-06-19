@@ -260,7 +260,11 @@ function EvidenceAnswerCard({
     );
   }, [secondaryEvidence, understanding.primary_dossier]);
   const hasVisibleCoverage = coverage.items.some(
-    (item) => !hiddenCoverageCategories.has(item.category)
+    (item) => !isLowSignalCoverageItem(item)
+  );
+  const visibleCoverageStatusCounts = useMemo(
+    () => coverageStatusCounts(coverage),
+    [coverage]
   );
   const directResponse = (answer.response || answer.summary || "").trim();
   const evidenceSummary = (answer.evidence_summary || "").trim();
@@ -269,6 +273,21 @@ function EvidenceAnswerCard({
 
   return (
     <div className="space-y-3">
+      {hasVisibleCoverage ? (
+        <AnswerSection
+          title="Find out what the retrieved evidence covers"
+          infoText="This is a deterministic, pre-answer check: did we retrieve label text that would normally cover what was extracted from your question and what intent it was tagged with? It does not assess whether the generated answer below actually used or correctly interpreted that evidence — it only confirms whether matching evidence exists in what was retrieved. Hover over a reason when available to inspect the matching evidence snippet."
+          tone="audit"
+          headerExtra={<CoverageStatusChips counts={visibleCoverageStatusCounts} />}
+        >
+          <EvidenceCoverageList
+            coverage={coverage}
+            onCitationClick={onCitationClick}
+            onCoverageTargetClick={onCoverageTargetClick}
+          />
+        </AnswerSection>
+      ) : null}
+
       <div className="rounded-md border border-[#C7B4EF] bg-[#FBF9FE] px-4 py-4 shadow-sm">
         <section>
           <h3
@@ -346,7 +365,7 @@ function EvidenceAnswerCard({
                   )}
                   style={{ fontSize: "14px" }}
                 >
-                  {bullet.text}
+                  <InlineBoldMarkdown text={bullet.text} />
                 </p>
               </button>
             ))}
@@ -355,7 +374,10 @@ function EvidenceAnswerCard({
       ) : null}
 
       {answer.limitations.length ? (
-        <AnswerSection title="Limitations">
+        <AnswerSection
+          title="Caveats & limitations"
+          badgeCount={answer.limitations.length}
+        >
           <div className="space-y-2">
             {answer.limitations.map((limitation) => (
               <div
@@ -364,24 +386,12 @@ function EvidenceAnswerCard({
                 style={{ fontSize: "14px" }}
               >
                 <TriangleAlert className="mt-1 size-4 shrink-0 text-slate-700" />
-                <span>{limitation}</span>
+                <span>
+                  <InlineBoldMarkdown text={limitation} />
+                </span>
               </div>
             ))}
           </div>
-        </AnswerSection>
-      ) : null}
-
-      {hasVisibleCoverage ? (
-        <AnswerSection
-          title="Evidence coverage"
-          infoText="This checklist compares what the system extracted from your question with the retrieved evidence. It shows what was addressed, what was not found in the retrieved labels, what was not retrieved, and what is only used as context. Hover over a reason when available to inspect the matching evidence snippet."
-          tone="audit"
-        >
-          <EvidenceCoverageList
-            coverage={coverage}
-            onCitationClick={onCitationClick}
-            onCoverageTargetClick={onCoverageTargetClick}
-          />
         </AnswerSection>
       ) : null}
 
@@ -414,90 +424,92 @@ function EvidenceCoverageList({
   onCitationClick: (citation: EvidenceCitation) => void;
   onCoverageTargetClick: (target: EvidenceCoverageTarget) => void;
 }) {
-  const groupedItems = useMemo(() => {
-    const groups = new Map<string, EvidenceCoverageItem[]>();
+  const bucketedGroups = useMemo(() => {
+    const categoryGroups = new Map<string, EvidenceCoverageItem[]>();
     for (const item of coverage.items) {
-      // Hide V1-only bookkeeping rows until secondary-drug retrieval and
-      // intent-specific coverage checks are implemented.
-      if (hiddenCoverageCategories.has(item.category)) {
+      if (isLowSignalCoverageItem(item)) {
         continue;
       }
-      const current = groups.get(item.category) ?? [];
+      const current = categoryGroups.get(item.category) ?? [];
       current.push(item);
-      groups.set(item.category, current);
+      categoryGroups.set(item.category, current);
     }
-    return Array.from(groups.entries());
-  }, [coverage.items]);
-  const visibleSummaryCounts = useMemo(() => {
-    const counts: Partial<Record<EvidenceCoverageStatus, number>> = {};
-    for (const [, items] of groupedItems) {
-      for (const item of items) {
-        counts[item.status] = (counts[item.status] ?? 0) + 1;
+
+    const buckets = new Map<CoverageBucket, Array<[string, EvidenceCoverageItem[]]>>();
+    for (const [category, items] of categoryGroups) {
+      const bucket = coverageBucket(category);
+      const current = buckets.get(bucket) ?? [];
+      current.push([category, items]);
+      buckets.set(bucket, current);
+    }
+
+    return coverageBucketOrder.reduce<
+      Array<[CoverageBucket, Array<[string, EvidenceCoverageItem[]]>]>
+    >((result, bucket) => {
+      const groups = buckets.get(bucket) ?? [];
+      if (groups.length === 0) {
+        return result;
       }
-    }
-    return counts;
-  }, [groupedItems]);
+      if (coverageBucketMergesCategories(bucket)) {
+        const mergedItems = groups.flatMap(([, items]) => items);
+        result.push([bucket, [["_merged", mergedItems]]]);
+        return result;
+      }
+      result.push([bucket, groups]);
+      return result;
+    }, []);
+  }, [coverage.items]);
 
   return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap gap-1.5">
-        {coverageStatusOrder.map((status) => {
-          const count = visibleSummaryCounts[status] ?? 0;
-          if (count === 0) {
-            return null;
-          }
-          return (
-            <span
-              key={status}
-              className={cn(
-                "inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium",
-                coverageStatusClasses[status]
-              )}
-            >
-              {coverageStatusLabels[status]} {count}
-            </span>
-          );
-        })}
-      </div>
-      <div className="space-y-2">
-        {groupedItems.map(([category, items]) => (
-          <div
-            key={category}
-            className="rounded-md border border-slate-200 bg-white px-3 py-3"
-          >
-            <div className="mb-2 text-xs font-medium uppercase text-slate-500">
-              {displayCoverageCategory(category)}
-            </div>
-            <div className="space-y-2">
-              {items.map((item) => (
-                <div
-                  key={`${item.category}-${item.label}-${item.status}`}
-                  className="grid gap-2 sm:grid-cols-[minmax(120px,0.32fr)_auto_minmax(0,1fr)] sm:items-start"
-                >
-                  <span className="rounded-md bg-slate-50 px-2 py-1 text-sm font-medium leading-5 text-slate-800">
-                    {item.label}
-                  </span>
-                  <span
-                    className={cn(
-                      "w-fit rounded-md border px-2 py-1 text-xs font-medium",
-                      coverageStatusClasses[item.status]
-                    )}
-                  >
-                    {coverageStatusLabels[item.status]}
-                  </span>
-                  <div className="text-sm leading-5 text-slate-600">
-                    <CoverageReason
-                      item={item}
-                      onCitationClick={onCitationClick}
-                      onCoverageTargetClick={onCoverageTargetClick}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
+    <div className="space-y-4">
+      {bucketedGroups.map(([bucket, categoryGroups]) => (
+        <div key={bucket} className="space-y-2">
+          <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+            {coverageBucketLabels[bucket]}
           </div>
-        ))}
-      </div>
+          <div className="space-y-2">
+            {categoryGroups.map(([category, items]) => (
+              <div
+                key={category}
+                className="rounded-md border border-slate-200 bg-white px-3 py-3"
+              >
+                {!coverageBucketMergesCategories(bucket) ? (
+                  <div className="mb-2 text-xs font-medium uppercase text-slate-500">
+                    {displayCoverageCategory(category)}
+                  </div>
+                ) : null}
+                <div className="space-y-2">
+                  {items.map((item) => (
+                    <div
+                      key={`${item.category}-${item.label}-${item.status}`}
+                      className="grid gap-2 sm:grid-cols-[minmax(120px,0.32fr)_auto_minmax(0,1fr)] sm:items-start"
+                    >
+                      <span className="rounded-md bg-slate-50 px-2 py-1 text-sm font-medium leading-5 text-slate-800">
+                        {displayCoverageItemLabel(item)}
+                      </span>
+                      <span
+                        className={cn(
+                          "w-fit rounded-md border px-2 py-1 text-xs font-medium",
+                          coverageStatusClasses[item.status]
+                        )}
+                      >
+                        {coverageStatusLabels[item.status]}
+                      </span>
+                      <div className="text-sm leading-5 text-slate-600">
+                        <CoverageReason
+                          item={item}
+                          onCitationClick={onCitationClick}
+                          onCoverageTargetClick={onCoverageTargetClick}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -604,13 +616,17 @@ function escapeRegExp(value: string) {
 }
 
 function AnswerSection({
+  badgeCount,
   children,
+  headerExtra,
   icon,
   infoText,
   title,
   tone = "synthesis",
 }: {
+  badgeCount?: number;
   children: ReactNode;
+  headerExtra?: ReactNode;
   icon?: ReactNode;
   infoText?: string;
   title: string;
@@ -625,7 +641,7 @@ function AnswerSection({
       <button
         type="button"
         onClick={() => setIsOpen((current) => !current)}
-        className="flex w-full items-center gap-2 px-3 py-3 text-left text-slate-500"
+        className="flex w-full flex-wrap items-center gap-2 px-3 py-3 text-left text-slate-500"
       >
         {isOpen ? (
           <ChevronDown className="size-4 shrink-0" />
@@ -635,11 +651,60 @@ function AnswerSection({
         {icon ? <span className="shrink-0">{icon}</span> : null}
         <span className="text-xs font-medium uppercase">{title}</span>
         {infoText ? <InfoTooltip text={infoText} /> : null}
+        {badgeCount ? (
+          <span className="rounded-full border border-slate-300 bg-white px-1.5 py-0.5 text-[10px] font-semibold text-slate-700">
+            {badgeCount}
+          </span>
+        ) : null}
+        {headerExtra ? (
+          <span className="flex flex-wrap items-center gap-1.5">
+            {headerExtra}
+          </span>
+        ) : null}
       </button>
       {isOpen ? (
         <div className={cn("border-t px-3 py-3", borderClass)}>{children}</div>
       ) : null}
     </div>
+  );
+}
+
+function coverageStatusCounts(coverage: EvidenceCoverageReport) {
+  const counts: Partial<Record<EvidenceCoverageStatus, number>> = {};
+  for (const item of coverage.items) {
+    if (isLowSignalCoverageItem(item)) {
+      continue;
+    }
+    counts[item.status] = (counts[item.status] ?? 0) + 1;
+  }
+  return counts;
+}
+
+function CoverageStatusChips({
+  counts,
+}: {
+  counts: Partial<Record<EvidenceCoverageStatus, number>>;
+}) {
+  return (
+    <>
+      {coverageStatusOrder.map((status) => {
+        const count = counts[status] ?? 0;
+        if (count === 0) {
+          return null;
+        }
+        return (
+          <span
+            key={status}
+            className={cn(
+              "inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium",
+              coverageStatusClasses[status]
+            )}
+          >
+            {coverageStatusLabels[status]} {count}
+          </span>
+        );
+      })}
+    </>
   );
 }
 
@@ -664,7 +729,19 @@ const coverageStatusClasses: Record<EvidenceCoverageStatus, string> = {
   out_of_scope: "border-slate-200 bg-slate-50 text-slate-700",
 };
 
-const hiddenCoverageCategories = new Set(["intent"]);
+function isLowSignalCoverageItem(item: EvidenceCoverageItem) {
+  // "out_of_scope" only ever comes from intents the system has no
+  // deterministic evidence check for (e.g. an LLM-invented intent label) —
+  // showing it would just be noise rather than a real signal.
+  return item.category === "intent" && item.status === "out_of_scope";
+}
+
+function displayCoverageItemLabel(item: EvidenceCoverageItem) {
+  if (item.category === "intent") {
+    return displayStateLabel(item.label);
+  }
+  return item.label;
+}
 
 const coverageCategoryLabels: Record<string, string> = {
   primary_drug: "Primary medication",
@@ -677,6 +754,47 @@ const coverageCategoryLabels: Record<string, string> = {
 
 function displayCoverageCategory(category: string) {
   return coverageCategoryLabels[category] ?? category.replaceAll("_", " ");
+}
+
+type CoverageBucket = "medication_concepts" | "patient_context" | "intent" | "other";
+
+const coverageBucketOrder: CoverageBucket[] = [
+  "medication_concepts",
+  "patient_context",
+  "intent",
+  "other",
+];
+
+const coverageBucketLabels: Record<CoverageBucket, string> = {
+  medication_concepts: "Medication concepts",
+  patient_context: "Patient context",
+  intent: "Intent coverage",
+  other: "Other",
+};
+
+function coverageBucketMergesCategories(bucket: CoverageBucket) {
+  return bucket === "intent" || bucket === "medication_concepts";
+}
+
+function coverageBucket(category: string): CoverageBucket {
+  if (
+    category === "primary_drug" ||
+    category === "mentioned_drug" ||
+    category === "current_medication"
+  ) {
+    return "medication_concepts";
+  }
+  if (
+    category === "allergy" ||
+    category === "condition" ||
+    category === "patient_context"
+  ) {
+    return "patient_context";
+  }
+  if (category === "intent") {
+    return "intent";
+  }
+  return "other";
 }
 
 function QueryUnderstandingLoadingState() {

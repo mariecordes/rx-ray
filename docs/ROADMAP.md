@@ -53,7 +53,7 @@ Optionally [A4](#a4--live-demo-deployment) live demo if hosting is straightforwa
 | [C2](#c2--external-interaction-data-source) | External interaction data | Evidence | XL | High | todo | — |
 | [C3](#c3--question-level-provenance-graph-maturation) | Provenance graph maturation | Evidence | L | High | todo | — |
 | [C4](#c4--context-targeted-retrieval-tuning) | Context-targeted tuning | Evidence | M | Low–Med | todo | — |
-| [D1](#d1--guardrails-v2) | Guardrails V2 | Safety | M | High | todo | — |
+| [D1](#d1--guardrails-v2) | Guardrails V2 | Safety | M | High | ✅ done | — |
 | [D2](#d2--guardrails-v3) | Guardrails V3 | Safety | L | High | todo | D1 |
 | [D3](#d3--evaluation-harness--curated-question-set) | Evaluation harness | Safety | L | High | todo | — |
 | [D4](#d4--neural-vs-symbolic-vs-combined) | Neural vs symbolic vs combined | Safety | L | High | todo | D3 |
@@ -330,9 +330,9 @@ Maturing how evidence is modeled, especially for multi-drug / interaction questi
 
 The differentiator. This turns "careful prompting" into a measurable, layered safety architecture.
 
-### D1 — Guardrails V2
+### ✅ D1 — Guardrails V2
 
-**Effort:** M · **Impact:** High · **Status:** todo
+**Effort:** M · **Impact:** High · **Status:** done
 
 **Goal:** Deterministic, intent-aware checks that the retrieved evidence actually addresses the question, plus a must-mention/must-caveat checklist fed into synthesis.
 
@@ -354,6 +354,8 @@ The differentiator. This turns "careful prompting" into a measurable, layered sa
 - Expand post-generation validation beyond citation presence: cited supplied evidence only; important extracted entities mentioned or caveated; deterministic limitations preserved; no yes/no medical-advice framing.
 
 **Done when:** Each intent has a deterministic coverage check and a pre-synthesis caveat contract that post-generation validation enforces.
+
+> **Done.** Each intent (`patient_context_check`, `allergy_context_check`, `interaction_check`, `side_effect_check`, `indication_check`, `label_context_check`) has a deterministic coverage check (`intent_evidence_status`) against the actual retrieved label sections, with matched evidence linked back into Supporting evidence in the UI. `build_answer_contract` turns coverage into a must-mention/must-caveat checklist built before synthesis and fed into the prompt, alongside a bounded, non-citable `label_product_context` block. `validate_and_enforce` runs post-generation: it deterministically appends any must-caveat the model dropped, flags yes/no medical-advice framing, and records unaddressed must-mention topics as validation findings — surfacing those findings in the UI is carried forward into D2, since it's specifically about critiquing how well the LLM used the evidence.
 
 ---
 

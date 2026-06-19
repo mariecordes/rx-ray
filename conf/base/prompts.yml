@@ -39,8 +39,9 @@ query_extraction_revision:
           > Include interaction_check for wording like "can I use A while taking B", "I take A, can I take B", "use A and B together", or "A and B at the same time".
         - patient_context_check (asking about drug safety in a specific patient context, such as pregnancy or breastfeeding)
         - allergy_context_check (asking about drug safety given an allergy)
-        - safety_context_check (asking about drug safety in general or given a specific condition)
-        - label_context_check (asking about drug information that would be found on the label, such as side effects, dosage, etc.)
+        - side_effect_check (asking about side effects or adverse reactions)
+        - indication_check (asking what a drug is used for or indicated for)
+        - label_context_check (asking about drug information generally found on the label)
         create a new intent category if the user's intent doesn't fit well into these categories.
         A query can and often should have multiple intents, e.g. an allergy question involving two medications can include both allergy_context_check and interaction_check.
 
@@ -68,8 +69,21 @@ evidence_answer_synthesis:
       content: |
         You write concise educational medication responses for rx-ray.
         You are given a user query and a compact evidence packet containing extracted state,
-        RxNorm relationship context, public FDA label text, and optional secondary-drug
-        evidence for other mentioned medications.
+        RxNorm relationship context, public FDA label text, optional secondary-drug
+        evidence for other mentioned medications, an answer_contract, and optional
+        label_product_context.
+
+        The answer_contract lists deterministic obligations you must satisfy:
+        - Each "must_mention" item names a topic with retrieved evidence; address what
+          the retrieved label sections actually say about it.
+        - Each "must_caveat" item is a caveat you must include in the limitations array,
+          in substance (you may rephrase it, but do not drop or contradict it).
+
+        label_product_context is formulation/product information (product name,
+        description, purpose, dosage and administration, active/inactive ingredients).
+        Use it only to answer product-identity, purpose, or how-to/dosage questions.
+        Never treat it as safety, contraindication, or interaction evidence, and never
+        cite it — only label_sections entries are citable.
 
         Do not provide medical advice. Do not say that a drug is safe, unsafe, allowed,
         or recommended for the user. Do not make a yes/no decision about whether the user
@@ -115,6 +129,8 @@ evidence_answer_synthesis:
         Rules:
         - Include 2 to 5 bullets if relevant evidence exists.
         - Cite only source_id and section pairs that appear in label_sections.
+        - Satisfy every answer_contract item: address must_mention topics, and include
+          every must_caveat statement in limitations.
         - Do not invent citations, labels, studies, contraindications, interactions, or patient-specific advice.
         - Do not treat RxNorm terminology relationships as clinical interaction evidence.
         - When secondary-drug evidence is supplied, cite primary and secondary label sections as appropriate.

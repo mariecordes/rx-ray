@@ -62,6 +62,53 @@ class EvidenceCoverageReport(BaseModel):
     summary_counts: dict[str, int] = Field(default_factory=dict)
 
 
+AnswerContractKind = Literal["must_mention", "must_caveat"]
+
+
+class AnswerContractItem(BaseModel):
+    """One deterministic obligation synthesis must satisfy before generation."""
+
+    kind: AnswerContractKind
+    topic: str
+    intent: str | None = None
+    statement: str
+    evidence_available: bool
+    required_sections: list[str] = Field(default_factory=list)
+    coverage_category: str | None = None
+    coverage_label: str | None = None
+    target_rxcui: str | None = None
+
+
+AnswerCoverageLevel = Literal["direct", "partial", "limited", "none"]
+
+
+class AnswerContract(BaseModel):
+    """Deterministic must-mention/must-caveat checklist fed into synthesis."""
+
+    items: list[AnswerContractItem] = Field(default_factory=list)
+    coverage_level: AnswerCoverageLevel = "none"
+
+
+ValidationSeverity = Literal["info", "warning"]
+
+
+class ValidationFinding(BaseModel):
+    """A post-generation validation observation about the synthesized answer."""
+
+    kind: str
+    severity: ValidationSeverity
+    message: str
+    topic: str | None = None
+
+
+class AnswerValidationReport(BaseModel):
+    """Outcome of enforcing the answer contract against the generated answer."""
+
+    findings: list[ValidationFinding] = Field(default_factory=list)
+    enforced_caveats: list[str] = Field(default_factory=list)
+    passed: bool = True
+
+
 class RxNormPairContext(BaseModel):
     """Terminology-only context between primary and secondary RxNorm concepts."""
 
@@ -177,5 +224,7 @@ class QueryAnswerResponse(BaseModel):
         default_factory=QuestionEvidenceMap
     )
     coverage: EvidenceCoverageReport = Field(default_factory=EvidenceCoverageReport)
+    contract: AnswerContract = Field(default_factory=AnswerContract)
+    validation: AnswerValidationReport = Field(default_factory=AnswerValidationReport)
     warnings: list[str] = Field(default_factory=list)
     errors: list[str] = Field(default_factory=list)
