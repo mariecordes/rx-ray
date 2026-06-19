@@ -9,6 +9,7 @@ from typing import Any, Protocol
 from src.dossier.models import DrugDossier, LabelSection, OpenFDALabelRecord, RxNormEdge
 from src.query_answer.config import QueryAnswerParameters, load_query_answer_parameters
 from src.query_answer.models import (
+    AnswerContract,
     ContextTargetedEvidence,
     EvidenceAnswer,
     EvidenceBullet,
@@ -44,6 +45,8 @@ PRIORITIZED_SECTIONS = (
 MAX_LABEL_TEXT_CHARS = 1000
 MAX_LABEL_SECTIONS = 16
 MAX_RXNORM_RELATIONSHIPS = 40
+MAX_PRODUCT_CONTEXT_ENTRIES = 12
+MAX_PRODUCT_CONTEXT_TEXT_CHARS = 600
 
 
 @dataclass
@@ -80,6 +83,7 @@ class EvidenceAnswerSynthesizer:
         understanding: QueryUnderstandingResponse,
         secondary_evidence: list[SecondaryDrugEvidence] | None = None,
         context_evidence: list[ContextTargetedEvidence] | None = None,
+        contract: AnswerContract | None = None,
     ) -> AnswerSynthesisResult:
         if understanding.primary_dossier is None:
             return AnswerSynthesisResult(
@@ -101,6 +105,7 @@ class EvidenceAnswerSynthesizer:
             understanding,
             secondary_evidence=secondary_evidence or [],
             context_evidence=context_evidence or [],
+            contract=contract,
         )
         messages = self._format_messages(
             prompt_config.get("messages", []),
@@ -227,6 +232,7 @@ class EvidenceAnswerSynthesizer:
         understanding: QueryUnderstandingResponse,
         secondary_evidence: list[SecondaryDrugEvidence] | None = None,
         context_evidence: list[ContextTargetedEvidence] | None = None,
+        contract: AnswerContract | None = None,
     ) -> dict[str, Any]:
         dossier = understanding.primary_dossier
         if dossier is None:
@@ -266,6 +272,22 @@ class EvidenceAnswerSynthesizer:
                 retrieval_modes=item.retrieval_modes,
             )
         ]
+        primary_product_context = [
+            label_product_context_payload(record, evidence_scope="primary")
+            for record in (label_evidence.label_records if label_evidence else [])
+        ]
+        secondary_product_context = [
+            label_product_context_payload(
+                record,
+                evidence_scope="secondary",
+                drug_name=item.resolved_concept.name,
+                rxcui=item.resolved_concept.rxcui,
+            )
+            for item in secondary_evidence
+            for record in (
+                item.label_evidence.label_records if item.label_evidence else []
+            )
+        ]
         return {
             "query": understanding.query,
             "state": understanding.state.model_dump(),
@@ -293,6 +315,11 @@ class EvidenceAnswerSynthesizer:
             ],
             "label_sources": [*primary_sources, *secondary_sources],
             "label_sections": [*primary_sections, *secondary_sections],
+            "label_product_context": [
+                *primary_product_context,
+                *secondary_product_context,
+            ][:MAX_PRODUCT_CONTEXT_ENTRIES],
+            "answer_contract": (contract or AnswerContract()).model_dump(),
             "retrieval_notes": dossier.notes,
         }
 
@@ -463,6 +490,41 @@ def label_record_payload(
         "rxcuis": record.rxcuis[:5],
         "provenance_tags": record.provenance_tags,
     }
+
+
+def label_product_context_payload(
+    record: OpenFDALabelRecord,
+    *,
+    evidence_scope: str,
+    drug_name: str | None = None,
+    rxcui: str | None = None,
+) -> dict[str, Any]:
+    """Bounded, non-citable formulation/product context from F6 label fields.
+
+    Kept out of label_sections so it can never satisfy a citation requirement;
+    it answers product-identity/how-to questions, not safety claims.
+    """
+
+    return {
+        "evidence_scope": evidence_scope,
+        "drug_name": drug_name,
+        "rxcui": rxcui,
+        "source_id": record.source_id,
+        "product_display_name": first_truncated(
+            record.package_label_principal_display_panels
+        ),
+        "description": first_truncated(record.descriptions),
+        "purpose": first_truncated(record.purposes),
+        "dosage_and_administration": first_truncated(record.dosages),
+        "active_ingredients": record.active_ingredients[:5],
+        "inactive_ingredients": record.inactive_ingredients[:5],
+    }
+
+
+def first_truncated(values: list[str]) -> str | None:
+    if not values:
+        return None
+    return truncate_text(values[0], MAX_PRODUCT_CONTEXT_TEXT_CHARS)
 
 
 def label_section_payloads(
