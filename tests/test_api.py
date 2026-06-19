@@ -2217,6 +2217,52 @@ def test_query_answer_response_carries_contract_and_validation() -> None:
     assert response.validation is not None
 
 
+def test_query_answer_response_carries_critique_with_deterministic_support_status() -> (
+    None
+):
+    class FakeCitedAnswerSynthesizer:
+        def synthesize(
+            self,
+            query: str,
+            understanding: QueryUnderstandingResponse,
+            secondary_evidence: list[SecondaryDrugEvidence] | None = None,
+            context_evidence: list[ContextTargetedEvidence] | None = None,
+            contract: AnswerContract | None = None,
+        ) -> AnswerSynthesisResult:
+            return AnswerSynthesisResult(
+                answer=EvidenceAnswer(
+                    summary="Retrieved evidence mentions aspirin warnings.",
+                    bullets=[
+                        EvidenceBullet(
+                            text="Aspirin warning text was retrieved.",
+                            citations=[
+                                EvidenceCitation(
+                                    source_id="label-1", section="warnings"
+                                )
+                            ],
+                        )
+                    ],
+                    limitations=[],
+                    safety_note=STANDARD_SAFETY_NOTE,
+                )
+            )
+
+    understanding = response_with_label_evidence()
+    service = QueryAnswerService(
+        builder=offline_builder(),
+        understanding_service=FakeUnderstandingService(understanding),
+        synthesizer=FakeCitedAnswerSynthesizer(),
+    )
+
+    response = service.answer("Can I take aspirin?")
+
+    assert response.critique.enabled is False
+    assert response.critique.source == "deterministic"
+    assert response.answer is not None
+    assert response.answer.bullets[0].support_status is not None
+    assert len(response.critique.claims) == len(response.answer.bullets)
+
+
 def test_secondary_evidence_ignores_resolved_mentions_outside_final_state() -> None:
     understanding = response_with_secondary_mention()
     stray_concept = RxNormConcept(
