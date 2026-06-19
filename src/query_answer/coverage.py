@@ -266,7 +266,7 @@ def build_evidence_coverage(
         )
 
     for intent in unique_values(understanding.state.intents):
-        intent_status, matched_sections = intent_evidence_status(
+        intent_result = intent_evidence_status(
             intent,
             sections,
             secondary_evidence,
@@ -276,8 +276,20 @@ def build_evidence_coverage(
             EvidenceCoverageItem(
                 category="intent",
                 label=intent,
-                status=intent_status,
-                reason=intent_coverage_reason(intent, intent_status, matched_sections),
+                status=intent_result.status,
+                reason=intent_coverage_reason(
+                    intent, intent_result.status, intent_result.matched_sections
+                ),
+                matched_evidence=(
+                    intent_result.match.snippet if intent_result.match else None
+                ),
+                source_id=(
+                    intent_result.match.source_id if intent_result.match else None
+                ),
+                section=(
+                    intent_result.match.section if intent_result.match else None
+                ),
+                target_rxcui=intent_result.target_rxcui,
             )
         )
 
@@ -340,38 +352,73 @@ def has_interaction_evidence(
     return False
 
 
+@dataclass(frozen=True)
+class IntentEvidenceResult:
+    status: EvidenceCoverageStatus
+    matched_sections: list[str]
+    match: CoverageEvidenceMatch | None = None
+    target_rxcui: str | None = None
+
+
 def intent_evidence_status(
     intent: str,
     sections: dict[str, list[LabelSection]],
     secondary_evidence: list[SecondaryDrugEvidence],
     understanding: QueryUnderstandingResponse,
-) -> tuple[EvidenceCoverageStatus, list[str]]:
+) -> IntentEvidenceResult:
     """Deterministically check whether retrieved evidence addresses an intent."""
 
+    dossier = understanding.primary_dossier
+    primary_rxcui = (
+        dossier.resolved_drug.rxcui if dossier and dossier.resolved_drug else None
+    )
+
     if intent == "interaction_check":
-        if has_interaction_evidence(sections, secondary_evidence):
-            return "addressed", ["drug_interactions"]
-        return "not_found_in_evidence", []
+        primary_match = first_section_evidence(sections, "drug_interactions")
+        if primary_match:
+            return IntentEvidenceResult(
+                "addressed", ["drug_interactions"], primary_match, primary_rxcui
+            )
+        for item in secondary_evidence:
+            for evidence in (item.label_evidence, item.interaction_label_evidence):
+                if evidence is None:
+                    continue
+                match = first_section_evidence(evidence.sections, "drug_interactions")
+                if match:
+                    return IntentEvidenceResult(
+                        "addressed",
+                        ["drug_interactions"],
+                        match,
+                        item.resolved_concept.rxcui,
+                    )
+        return IntentEvidenceResult("not_found_in_evidence", [])
 
     if intent == "label_context_check":
         if has_primary_label_text(sections):
-            return "addressed", []
-        return "not_found_in_evidence", []
+            label_match = first_nonempty_section_evidence(sections)
+            return IntentEvidenceResult(
+                "addressed", [], label_match, primary_rxcui
+            )
+        return IntentEvidenceResult("not_found_in_evidence", [])
 
     required_sections = INTENT_REQUIRED_SECTIONS.get(intent)
     if required_sections is None:
-        return "out_of_scope", []
+        return IntentEvidenceResult("out_of_scope", [])
 
     matched = [name for name in required_sections if sections.get(name)]
     if matched:
-        return "addressed", matched
+        match = first_section_evidence(sections, matched[0])
+        return IntentEvidenceResult("addressed", matched, match, primary_rxcui)
 
     if intent == "allergy_context_check":
         for allergy in understanding.state.allergies:
-            if find_match_in_sections(allergy, sections):
-                return "addressed", []
+            allergy_match = find_match_in_sections(allergy, sections)
+            if allergy_match:
+                return IntentEvidenceResult(
+                    "addressed", [], allergy_match, primary_rxcui
+                )
 
-    return "not_found_in_evidence", []
+    return IntentEvidenceResult("not_found_in_evidence", [])
 
 
 def intent_coverage_reason(
@@ -582,6 +629,31 @@ def first_section_source(
         source_id=first_entry.source_id,
         section=section_name,
     )
+
+
+def first_section_evidence(
+    sections: dict[str, list[LabelSection]],
+    section_name: str,
+) -> CoverageEvidenceMatch | None:
+    for entry in sections.get(section_name, []):
+        if not entry.text.strip():
+            continue
+        return CoverageEvidenceMatch(
+            snippet=section_preview(entry.text),
+            source_id=entry.source_id,
+            section=section_name,
+        )
+    return None
+
+
+def first_nonempty_section_evidence(
+    sections: dict[str, list[LabelSection]],
+) -> CoverageEvidenceMatch | None:
+    for section_name in sections:
+        match = first_section_evidence(sections, section_name)
+        if match:
+            return match
+    return None
 
 
 def same_concept(left: str | None, right: str | None) -> bool:
