@@ -26,18 +26,23 @@ from src.dossier.models import (
 from src.dossier.openfda_store import OpenFDALabelStore
 from src.dossier.rxnorm_store import RxNormParquetStore
 from src.query_answer.config import QueryAnswerParameters
+from src.query_answer.contract import build_answer_contract
 from src.query_answer.coverage import (
-    add_coverage_limitations,
     build_evidence_coverage,
     evidence_snippet,
 )
 from src.query_answer.evidence_map import build_question_evidence_map
 from src.query_answer.models import (
+    AnswerContract,
+    AnswerContractItem,
     ContextTargetedEvidence,
     EvidenceAnswer,
+    EvidenceBullet,
+    EvidenceCitation,
     RxNormPairContext,
     SecondaryDrugEvidence,
 )
+from src.query_answer.validation import validate_and_enforce
 from src.query_answer.context import (
     build_context_targeted_evidence,
     select_context_targets,
@@ -1800,7 +1805,9 @@ def test_coverage_flags_ingredient_fallback_broadening() -> None:
         limitations=[],
         safety_note="note",
     )
-    updated = add_coverage_limitations(answer, coverage, understanding)
+    contract = build_answer_contract(understanding, coverage)
+    updated, _validation = validate_and_enforce(answer, contract)
+    assert updated is not None
     assert any(
         "active ingredient" in limitation and "tretinoin" in limitation
         for limitation in updated.limitations
@@ -1842,6 +1849,372 @@ def test_evidence_coverage_marks_secondary_as_addressed() -> None:
         "ibuprofen was recognized but not retrieved" in item
         for item in response.answer.limitations
     )
+
+
+def test_query_extraction_infers_side_effect_and_indication_intents() -> None:
+    side_effect_result = HybridQueryExtractor()._extract_deterministic(
+        "What are the side effects of aspirin?"
+    )
+    assert "side_effect_check" in side_effect_result.state.intents
+
+    indication_result = HybridQueryExtractor()._extract_deterministic(
+        "What is aspirin used for?"
+    )
+    assert "indication_check" in indication_result.state.intents
+
+
+def test_query_extraction_does_not_infer_safety_context_check() -> None:
+    result = HybridQueryExtractor()._extract_deterministic(
+        "Can I safely take aspirin?"
+    )
+
+    assert "safety_context_check" not in result.state.intents
+    assert "label_context_check" in result.state.intents
+
+
+def test_evidence_coverage_checks_side_effect_and_indication_intents() -> None:
+    addressed = response_with_label_evidence().model_copy(
+        update={
+            "state": QueryState(
+                primary_drug="aspirin",
+                all_drugs_mentioned=["aspirin"],
+                intents=["side_effect_check", "indication_check"],
+            ),
+        }
+    )
+    addressed.primary_dossier.label_evidence.sections.update(
+        {
+            "indications_and_usage": [
+                LabelSection(
+                    section="indications_and_usage",
+                    text="Indicated for pain relief.",
+                    source_id="label-1",
+                )
+            ],
+        }
+    )
+    coverage = build_evidence_coverage(addressed)
+    coverage_by_label = {item.label: item for item in coverage.items}
+    # side_effect_check is satisfied by the pre-existing "warnings" section.
+    assert coverage_by_label["side_effect_check"].status == "addressed"
+    assert coverage_by_label["indication_check"].status == "addressed"
+
+    not_addressed = response_with_label_evidence().model_copy(
+        update={
+            "state": QueryState(
+                primary_drug="aspirin",
+                all_drugs_mentioned=["aspirin"],
+                intents=["indication_check"],
+            ),
+        }
+    )
+    coverage_missing = build_evidence_coverage(not_addressed)
+    missing_item = next(
+        item for item in coverage_missing.items if item.label == "indication_check"
+    )
+    assert missing_item.status == "not_found_in_evidence"
+
+
+def test_evidence_coverage_checks_label_context_check_intent() -> None:
+    addressed = response_with_label_evidence().model_copy(
+        update={
+            "state": QueryState(
+                primary_drug="aspirin",
+                all_drugs_mentioned=["aspirin"],
+                intents=["label_context_check"],
+            ),
+        }
+    )
+    coverage = build_evidence_coverage(addressed)
+    label_item = next(
+        item for item in coverage.items if item.label == "label_context_check"
+    )
+    assert label_item.status == "addressed"
+
+    no_label_understanding = response_with_label_evidence()
+    none_understanding = no_label_understanding.model_copy(
+        update={
+            "state": QueryState(
+                primary_drug="aspirin",
+                all_drugs_mentioned=["aspirin"],
+                intents=["label_context_check"],
+            ),
+            "primary_dossier": no_label_understanding.primary_dossier.model_copy(
+                update={"label_evidence": None}
+            ),
+        }
+    )
+    coverage_missing = build_evidence_coverage(none_understanding)
+    missing_item = next(
+        item
+        for item in coverage_missing.items
+        if item.label == "label_context_check"
+    )
+    assert missing_item.status == "not_found_in_evidence"
+
+
+def test_build_answer_contract_excludes_label_context_check_from_coverage_level() -> (
+    None
+):
+    understanding = response_with_label_evidence().model_copy(
+        update={
+            "state": QueryState(
+                primary_drug="aspirin",
+                all_drugs_mentioned=["aspirin"],
+                intents=["label_context_check", "indication_check"],
+            ),
+        }
+    )
+    coverage = build_evidence_coverage(understanding)
+
+    contract = build_answer_contract(understanding, coverage)
+
+    # label_context_check is addressed (label text exists) but indication_check
+    # is not, and label_context_check must not mask that gap.
+    assert contract.coverage_level == "limited"
+
+
+def test_build_answer_contract_emits_must_mention_and_terminology_caveat() -> None:
+    understanding = response_with_secondary_mention()
+    secondary_evidence = [secondary_evidence_fixture()]
+    coverage = build_evidence_coverage(
+        understanding, secondary_evidence=secondary_evidence
+    )
+
+    contract = build_answer_contract(understanding, coverage)
+
+    interaction_must_mention = next(
+        item
+        for item in contract.items
+        if item.intent == "interaction_check" and item.kind == "must_mention"
+    )
+    assert interaction_must_mention.evidence_available is True
+    assert any(
+        item.kind == "must_caveat" and item.topic == "interaction_terminology"
+        for item in contract.items
+    )
+
+
+def test_build_answer_contract_emits_must_caveat_for_unretrieved_secondary_drug() -> (
+    None
+):
+    understanding = response_with_secondary_mention()
+    coverage = build_evidence_coverage(understanding)
+
+    contract = build_answer_contract(understanding, coverage)
+
+    secondary_caveat = next(
+        item for item in contract.items if item.topic == "secondary_not_retrieved"
+    )
+    assert secondary_caveat.kind == "must_caveat"
+    assert secondary_caveat.evidence_available is False
+    assert "ibuprofen was recognized but not retrieved" in secondary_caveat.statement
+
+
+def test_build_answer_contract_coverage_level_boundaries() -> None:
+    direct_understanding = response_with_secondary_mention()
+    direct_coverage = build_evidence_coverage(
+        direct_understanding, secondary_evidence=[secondary_evidence_fixture()]
+    )
+    direct_contract = build_answer_contract(direct_understanding, direct_coverage)
+    assert direct_contract.coverage_level == "direct"
+
+    partial_understanding = direct_understanding.model_copy(
+        update={
+            "state": direct_understanding.state.model_copy(
+                update={"intents": ["interaction_check", "indication_check"]}
+            )
+        }
+    )
+    partial_coverage = build_evidence_coverage(
+        partial_understanding, secondary_evidence=[secondary_evidence_fixture()]
+    )
+    partial_contract = build_answer_contract(partial_understanding, partial_coverage)
+    assert partial_contract.coverage_level == "partial"
+
+    limited_understanding = response_with_label_evidence()
+    limited_coverage = build_evidence_coverage(limited_understanding)
+    limited_contract = build_answer_contract(limited_understanding, limited_coverage)
+    assert limited_contract.coverage_level == "limited"
+
+    no_label_understanding = response_with_label_evidence()
+    none_understanding = no_label_understanding.model_copy(
+        update={
+            "primary_dossier": no_label_understanding.primary_dossier.model_copy(
+                update={"label_evidence": None}
+            )
+        }
+    )
+    none_coverage = build_evidence_coverage(none_understanding)
+    none_contract = build_answer_contract(none_understanding, none_coverage)
+    assert none_contract.coverage_level == "none"
+
+
+def test_validate_and_enforce_appends_missing_caveat_and_flags_yes_no_framing() -> (
+    None
+):
+    contract = AnswerContract(
+        items=[
+            AnswerContractItem(
+                kind="must_caveat",
+                topic="interaction_terminology",
+                intent="interaction_check",
+                statement=(
+                    "RxNorm terminology overlap is not evidence of a clinical "
+                    "interaction."
+                ),
+                evidence_available=True,
+            )
+        ],
+        coverage_level="partial",
+    )
+    answer = EvidenceAnswer(
+        response="You can take both medications together.",
+        evidence_summary="Summary.",
+        summary="Summary.",
+        bullets=[],
+        limitations=[],
+        safety_note="note",
+    )
+
+    updated, validation = validate_and_enforce(answer, contract)
+
+    assert updated is not None
+    assert (
+        "RxNorm terminology overlap is not evidence of a clinical interaction."
+        in updated.limitations
+    )
+    assert any(
+        finding.kind == "missing_caveat_enforced" for finding in validation.findings
+    )
+    assert any(finding.kind == "yes_no_framing" for finding in validation.findings)
+    assert any(
+        "discuss your specific situation" in limitation
+        for limitation in updated.limitations
+    )
+    assert validation.passed is False
+    assert len(validation.enforced_caveats) == 2
+
+
+def test_validate_and_enforce_does_not_duplicate_existing_caveat() -> None:
+    statement = "RxNorm terminology overlap is not evidence of a clinical interaction."
+    contract = AnswerContract(
+        items=[
+            AnswerContractItem(
+                kind="must_caveat",
+                topic="interaction_terminology",
+                intent="interaction_check",
+                statement=statement,
+                evidence_available=True,
+            )
+        ],
+    )
+    answer = EvidenceAnswer(
+        response="Evidence-based response.",
+        evidence_summary="Summary.",
+        summary="Summary.",
+        bullets=[],
+        limitations=[statement],
+        safety_note="note",
+    )
+
+    updated, validation = validate_and_enforce(answer, contract)
+
+    assert updated is not None
+    assert updated.limitations == [statement]
+    assert validation.findings == []
+    assert validation.passed is True
+
+
+def test_validate_and_enforce_flags_unaddressed_must_mention() -> None:
+    contract = AnswerContract(
+        items=[
+            AnswerContractItem(
+                kind="must_mention",
+                topic="indication_check",
+                intent="indication_check",
+                statement="Address what the retrieved indication label sections say.",
+                evidence_available=True,
+                required_sections=["indications_and_usage"],
+            )
+        ],
+    )
+    answer = EvidenceAnswer(
+        response="This medication has several uses.",
+        evidence_summary="Summary.",
+        summary="Summary.",
+        bullets=[
+            EvidenceBullet(
+                text="See warnings.",
+                citations=[EvidenceCitation(source_id="label-1", section="warnings")],
+            )
+        ],
+        limitations=[],
+        safety_note="note",
+    )
+
+    _updated, validation = validate_and_enforce(answer, contract)
+
+    assert any(
+        finding.kind == "must_mention_unaddressed" for finding in validation.findings
+    )
+
+
+def test_evidence_packet_includes_contract_and_product_context() -> None:
+    contract = AnswerContract(
+        items=[
+            AnswerContractItem(
+                kind="must_caveat",
+                topic="interaction_terminology",
+                intent="interaction_check",
+                statement="Terminology overlap is not clinical interaction evidence.",
+                evidence_available=True,
+            )
+        ],
+        coverage_level="direct",
+    )
+    understanding = response_with_label_evidence()
+    understanding.primary_dossier.label_evidence.label_records[0] = (
+        understanding.primary_dossier.label_evidence.label_records[0].model_copy(
+            update={
+                "descriptions": ["Aspirin is a salicylate."],
+                "purposes": ["Pain reliever"],
+                "dosages": ["Take 1 tablet every 4 hours."],
+                "active_ingredients": ["ASPIRIN"],
+                "inactive_ingredients": ["STARCH"],
+            }
+        )
+    )
+
+    packet = EvidenceAnswerSynthesizer.build_evidence_packet(
+        understanding,
+        contract=contract,
+    )
+
+    assert packet["answer_contract"]["coverage_level"] == "direct"
+    assert packet["answer_contract"]["items"][0]["topic"] == "interaction_terminology"
+    product_context = packet["label_product_context"][0]
+    assert product_context["description"] == "Aspirin is a salicylate."
+    assert product_context["purpose"] == "Pain reliever"
+    assert product_context["active_ingredients"] == ["ASPIRIN"]
+
+    allowed_citations = EvidenceAnswerSynthesizer.allowed_citations(packet)
+    citable_source_ids = {entry["source_id"] for entry in packet["label_sections"]}
+    assert all(source_id in citable_source_ids for source_id, _ in allowed_citations)
+
+
+def test_query_answer_response_carries_contract_and_validation() -> None:
+    understanding = response_with_label_evidence()
+    service = QueryAnswerService(
+        builder=offline_builder(),
+        understanding_service=FakeUnderstandingService(understanding),
+        synthesizer=FakeAnswerSynthesizer(),
+    )
+
+    response = service.answer("Can I take aspirin?")
+
+    assert response.contract.coverage_level in {"direct", "partial", "limited", "none"}
+    assert response.validation is not None
 
 
 def test_secondary_evidence_ignores_resolved_mentions_outside_final_state() -> None:
@@ -1960,6 +2333,7 @@ class FakeAnswerSynthesizer:
         understanding: QueryUnderstandingResponse,
         secondary_evidence: list[SecondaryDrugEvidence] | None = None,
         context_evidence: list[ContextTargetedEvidence] | None = None,
+        contract: AnswerContract | None = None,
     ) -> AnswerSynthesisResult:
         return AnswerSynthesisResult(
             answer=EvidenceAnswer(
