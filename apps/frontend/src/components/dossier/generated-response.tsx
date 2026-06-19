@@ -27,6 +27,7 @@ import {
   AnswerCritique,
   ClaimSupportStatus,
   EvidenceAnswer,
+  EvidenceBullet,
   EvidenceCitation,
   EvidenceCoverageItem,
   EvidenceCoverageReport,
@@ -271,6 +272,10 @@ function EvidenceAnswerCard({
     () => coverageStatusCounts(coverage),
     [coverage]
   );
+  const claimSupportCounts = useMemo(
+    () => claimSupportStatusCounts(answer.bullets),
+    [answer.bullets]
+  );
   const directResponse = (answer.response || answer.summary || "").trim();
   const evidenceSummary = (answer.evidence_summary || "").trim();
   const shouldShowEvidenceSummary =
@@ -330,7 +335,10 @@ function EvidenceAnswerCard({
       </div>
 
       {answer.bullets.length ? (
-        <AnswerSection title="Sources">
+        <AnswerSection
+          title="Sources"
+          headerExtra={<ClaimSupportChips counts={claimSupportCounts} />}
+        >
           <div className="space-y-2">
             {answer.bullets.map((bullet, index) => (
               <button
@@ -780,6 +788,50 @@ const coverageStatusClasses: Record<EvidenceCoverageStatus, string> = {
   not_retrieved: "border-slate-200 bg-slate-50 text-slate-700",
   out_of_scope: "border-slate-200 bg-slate-50 text-slate-700",
 };
+
+function claimSupportStatusCounts(bullets: EvidenceBullet[]) {
+  const counts: Partial<Record<ClaimSupportStatus, number>> = {};
+  for (const bullet of bullets) {
+    const status = bullet.support_status ?? "none";
+    counts[status] = (counts[status] ?? 0) + 1;
+  }
+  return counts;
+}
+
+function ClaimSupportChips({
+  counts,
+}: {
+  counts: Partial<Record<ClaimSupportStatus, number>>;
+}) {
+  return (
+    <>
+      {claimSupportStatusOrder.map((status) => {
+        const count = counts[status] ?? 0;
+        if (count === 0) {
+          return null;
+        }
+        return (
+          <span
+            key={status}
+            className={cn(
+              "inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium",
+              claimSupportClasses[status]
+            )}
+          >
+            {claimSupportLabels[status]} {count}
+          </span>
+        );
+      })}
+    </>
+  );
+}
+
+const claimSupportStatusOrder: ClaimSupportStatus[] = [
+  "strong",
+  "partial",
+  "limited",
+  "none",
+];
 
 const claimSupportLabels: Record<ClaimSupportStatus, string> = {
   strong: "Strong support",
