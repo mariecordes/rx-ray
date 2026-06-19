@@ -158,9 +158,12 @@ export type EvidenceCitation = {
   rxcui?: string | null;
 };
 
+export type ClaimSupportStatus = "strong" | "partial" | "limited" | "none";
+
 export type EvidenceBullet = {
   text: string;
   citations: EvidenceCitation[];
+  support_status?: ClaimSupportStatus | null;
 };
 
 export type EvidenceAnswer = {
@@ -228,6 +231,24 @@ export type AnswerValidationReport = {
   findings: ValidationFinding[];
   enforced_caveats: string[];
   passed: boolean;
+};
+
+export type ClaimCritique = {
+  bullet_index: number;
+  support_status: ClaimSupportStatus;
+  rationale: string;
+  issues: string[];
+};
+
+export type CritiqueSource = "llm" | "deterministic";
+
+export type AnswerCritique = {
+  enabled: boolean;
+  source: CritiqueSource;
+  claims: ClaimCritique[];
+  global_findings: ValidationFinding[];
+  regenerated: boolean;
+  notes: string[];
 };
 
 export type RxNormNetworkCenter = {
@@ -319,6 +340,7 @@ export type QueryAnswerResponse = {
   coverage: EvidenceCoverageReport;
   contract: AnswerContract;
   validation: AnswerValidationReport;
+  critique: AnswerCritique;
   warnings: string[];
   errors: string[];
 };

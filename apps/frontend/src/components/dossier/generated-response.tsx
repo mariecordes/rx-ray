@@ -24,6 +24,8 @@ import { InfoTooltip } from "@/components/ui/info-tooltip";
 import { citationDisplayLabel } from "@/components/dossier/display";
 import { EvidenceCoverageTarget } from "@/components/dossier/evidence-model";
 import {
+  AnswerCritique,
+  ClaimSupportStatus,
   EvidenceAnswer,
   EvidenceCitation,
   EvidenceCoverageItem,
@@ -218,6 +220,7 @@ function EvidenceAnswerResult({
     <EvidenceAnswerCard
       answer={answer}
       coverage={response.coverage ?? { items: [], summary_counts: {} }}
+      critique={response.critique}
       onCitationClick={onCitationClick}
       onCoverageTargetClick={onCoverageTargetClick}
       secondaryEvidence={response.secondary_evidence ?? []}
@@ -229,6 +232,7 @@ function EvidenceAnswerResult({
 function EvidenceAnswerCard({
   answer,
   coverage,
+  critique,
   onCitationClick,
   onCoverageTargetClick,
   secondaryEvidence,
@@ -236,6 +240,7 @@ function EvidenceAnswerCard({
 }: {
   answer: EvidenceAnswer;
   coverage: EvidenceCoverageReport;
+  critique?: AnswerCritique;
   onCitationClick: (citation: EvidenceCitation) => void;
   onCoverageTargetClick: (target: EvidenceCoverageTarget) => void;
   secondaryEvidence: SecondaryDrugEvidence[];
@@ -354,6 +359,16 @@ function EvidenceAnswerCard({
                       >
                         <FileText className="mt-0.5 size-4 shrink-0 text-slate-700" />
                         <span>{citationDisplayLabel(citation, sourceById)}</span>
+                        {citationIndex === 0 && bullet.support_status ? (
+                          <span
+                            className={cn(
+                              "ml-1 w-fit shrink-0 rounded-md border px-1.5 py-0.5 text-[11px] font-medium",
+                              claimSupportClasses[bullet.support_status]
+                            )}
+                          >
+                            {claimSupportLabels[bullet.support_status]}
+                          </span>
+                        ) : null}
                       </div>
                     ))}
                   </div>
@@ -395,10 +410,47 @@ function EvidenceAnswerCard({
         </AnswerSection>
       ) : null}
 
+      {critique?.enabled ? <AnswerCritiqueSection critique={critique} /> : null}
+
       <p className="text-center text-xs leading-5 text-slate-500">
         {answer.safety_note}
       </p>
     </div>
+  );
+}
+
+function AnswerCritiqueSection({ critique }: { critique: AnswerCritique }) {
+  return (
+    <AnswerSection
+      title="Answer critique"
+      infoText="An automated self-check: a second LLM pass reviews each claim above against the same retrieved evidence and flags anything unsupported, overconfident, or missing a required caveat. This is not a clinical review."
+      tone="audit"
+      badgeCount={critique.global_findings.length || undefined}
+    >
+      <div className="space-y-2">
+        {critique.regenerated ? (
+          <div className="rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-sm leading-5 text-sky-900">
+            The response above was regenerated once after the critic flagged
+            issues with the first draft.
+          </div>
+        ) : null}
+        {critique.global_findings.length ? (
+          critique.global_findings.map((finding, index) => (
+            <div
+              key={`${finding.kind}-${index}`}
+              className="flex items-start gap-2 rounded-md border border-[#D7C8F4] bg-white px-3 py-2 text-sm leading-5 text-slate-800"
+            >
+              <TriangleAlert className="mt-0.5 size-4 shrink-0 text-slate-700" />
+              <span>{finding.message}</span>
+            </div>
+          ))
+        ) : (
+          <p className="text-sm leading-5 text-slate-600">
+            The critic did not flag any issues with this response.
+          </p>
+        )}
+      </div>
+    </AnswerSection>
   );
 }
 
@@ -727,6 +779,20 @@ const coverageStatusClasses: Record<EvidenceCoverageStatus, string> = {
   not_found_in_evidence: "border-amber-200 bg-amber-50 text-amber-900",
   not_retrieved: "border-slate-200 bg-slate-50 text-slate-700",
   out_of_scope: "border-slate-200 bg-slate-50 text-slate-700",
+};
+
+const claimSupportLabels: Record<ClaimSupportStatus, string> = {
+  strong: "Strong support",
+  partial: "Partial support",
+  limited: "Limited support",
+  none: "No citation",
+};
+
+const claimSupportClasses: Record<ClaimSupportStatus, string> = {
+  strong: "border-emerald-200 bg-emerald-50 text-emerald-800",
+  partial: "border-sky-200 bg-sky-50 text-sky-800",
+  limited: "border-amber-200 bg-amber-50 text-amber-900",
+  none: "border-slate-200 bg-slate-50 text-slate-700",
 };
 
 function isLowSignalCoverageItem(item: EvidenceCoverageItem) {
