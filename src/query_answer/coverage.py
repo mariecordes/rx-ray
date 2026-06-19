@@ -7,7 +7,6 @@ from dataclasses import dataclass
 from src.dossier.models import LabelSection
 from src.query_answer.models import (
     ContextTargetedEvidence,
-    EvidenceAnswer,
     EvidenceCoverageItem,
     EvidenceCoverageReport,
     EvidenceCoverageStatus,
@@ -36,6 +35,42 @@ SECONDARY_MATCH_SECTION_PRIORITY = (
     "adverse_reactions",
     "use_in_specific_populations",
 )
+INTENT_REQUIRED_SECTIONS: dict[str, tuple[str, ...]] = {
+    "patient_context_check": (
+        "pregnancy",
+        "lactation",
+        "pregnancy_or_breast_feeding",
+        "use_in_specific_populations",
+    ),
+    "allergy_context_check": (
+        "contraindications",
+        "warnings",
+        "warnings_and_precautions",
+    ),
+    "side_effect_check": ("adverse_reactions", "warnings"),
+    "indication_check": ("indications_and_usage",),
+}
+INTENT_TOPIC_LABELS: dict[str, str] = {
+    "patient_context_check": "pregnancy/lactation",
+    "allergy_context_check": "allergy",
+    "side_effect_check": "side effect",
+    "indication_check": "indication",
+    "label_context_check": "label availability",
+}
+
+
+def primary_label_sections(
+    understanding: QueryUnderstandingResponse,
+) -> dict[str, list[LabelSection]]:
+    dossier = understanding.primary_dossier
+    return dossier.label_evidence.sections if dossier and dossier.label_evidence else {}
+
+
+def has_primary_label_text(sections: dict[str, list[LabelSection]]) -> bool:
+    evidence_text = "\n".join(
+        section.text for entries in sections.values() for section in entries
+    )
+    return bool(evidence_text.strip())
 
 
 def build_evidence_coverage(
@@ -54,15 +89,8 @@ def build_evidence_coverage(
         normalize(item.mention_text): item for item in secondary_evidence
     }
     dossier = understanding.primary_dossier
-    sections = (
-        dossier.label_evidence.sections
-        if dossier and dossier.label_evidence
-        else {}
-    )
-    evidence_text = "\n".join(
-        section.text for entries in sections.values() for section in entries
-    )
-    has_label_text = bool(evidence_text.strip())
+    sections = primary_label_sections(understanding)
+    has_label_text = has_primary_label_text(sections)
     primary_name = (
         dossier.resolved_drug.name
         if dossier and dossier.resolved_drug
@@ -233,37 +261,23 @@ def build_evidence_coverage(
             patient_context_coverage(
                 context,
                 sections,
-                evidence_text,
                 has_label_text,
             )
         )
 
     for intent in unique_values(understanding.state.intents):
-        intent_status: EvidenceCoverageStatus = "out_of_scope"
-        intent_reason = (
-            "Intent is recognized for context, but V1 does not yet "
-            "check whether the retrieved evidence fully addresses it."
+        intent_status, matched_sections = intent_evidence_status(
+            intent,
+            sections,
+            secondary_evidence,
+            understanding,
         )
-        if intent == "interaction_check":
-            if has_interaction_evidence(sections, secondary_evidence):
-                intent_status = "addressed"
-                intent_reason = (
-                    "Drug-interactions label text was retrieved for at least "
-                    "one mentioned medication. This is evidence coverage, not "
-                    "a clinical interaction conclusion."
-                )
-            else:
-                intent_status = "not_found_in_evidence"
-                intent_reason = (
-                    "No drug-interactions label text was retrieved for the "
-                    "mentioned medication pair."
-                )
         items.append(
             EvidenceCoverageItem(
                 category="intent",
                 label=intent,
                 status=intent_status,
-                reason=intent_reason,
+                reason=intent_coverage_reason(intent, intent_status, matched_sections),
             )
         )
 
@@ -274,69 +288,6 @@ def build_evidence_coverage(
             status: counts.get(status, 0) for status in coverage_statuses()
         },
     )
-
-
-def add_coverage_limitations(
-    answer: EvidenceAnswer | None,
-    coverage: EvidenceCoverageReport,
-    understanding: QueryUnderstandingResponse,
-) -> EvidenceAnswer | None:
-    if answer is None:
-        return None
-
-    limitations = list(answer.limitations)
-    non_primary_drugs = [
-        item.label
-        for item in coverage.items
-        if item.category == "mentioned_drug" and item.status == "not_retrieved"
-    ]
-    if non_primary_drugs:
-        append_once(
-            limitations,
-            secondary_drug_limitation(non_primary_drugs),
-        )
-
-    missing_context = [
-        item.label
-        for item in coverage.items
-        if item.category
-        in {"current_medication", "allergy", "condition", "patient_context"}
-        and item.status in {"not_found_in_evidence", "not_retrieved"}
-    ]
-    if missing_context:
-        append_once(
-            limitations,
-            "The retrieved labels did not explicitly mention "
-            f"{format_human_list(missing_context[:5])}.",
-        )
-
-    dossier = understanding.primary_dossier
-    if dossier and dossier.label_evidence_scope == "ingredient_fallback":
-        ingredient_names = [
-            item.ingredient.name for item in dossier.ingredient_fallback
-        ]
-        concept_name = dossier.resolved_drug.name if dossier.resolved_drug else None
-        if concept_name and ingredient_names:
-            append_once(
-                limitations,
-                f"No product-specific labels were found for {concept_name}; the "
-                "retrieved evidence describes its active ingredient"
-                f"{'s' if len(ingredient_names) != 1 else ''} "
-                f"({format_human_list(ingredient_names)}) and may cover other "
-                "formulations.",
-            )
-        else:
-            append_once(limitations, INGREDIENT_FALLBACK_LIMITATION)
-
-    primary = understanding.state.primary_drug
-    resolved = dossier.resolved_drug.name if dossier and dossier.resolved_drug else None
-    if primary and resolved and specificity_differs(primary, resolved):
-        append_once(
-            limitations,
-            f"{SPECIFICITY_LIMITATION} ({primary} -> {resolved})",
-        )
-
-    return answer.model_copy(update={"limitations": limitations})
 
 
 def primary_addressed_reason(
@@ -387,6 +338,75 @@ def has_interaction_evidence(
         if interaction and interaction.sections.get("drug_interactions"):
             return True
     return False
+
+
+def intent_evidence_status(
+    intent: str,
+    sections: dict[str, list[LabelSection]],
+    secondary_evidence: list[SecondaryDrugEvidence],
+    understanding: QueryUnderstandingResponse,
+) -> tuple[EvidenceCoverageStatus, list[str]]:
+    """Deterministically check whether retrieved evidence addresses an intent."""
+
+    if intent == "interaction_check":
+        if has_interaction_evidence(sections, secondary_evidence):
+            return "addressed", ["drug_interactions"]
+        return "not_found_in_evidence", []
+
+    if intent == "label_context_check":
+        if has_primary_label_text(sections):
+            return "addressed", []
+        return "not_found_in_evidence", []
+
+    required_sections = INTENT_REQUIRED_SECTIONS.get(intent)
+    if required_sections is None:
+        return "out_of_scope", []
+
+    matched = [name for name in required_sections if sections.get(name)]
+    if matched:
+        return "addressed", matched
+
+    if intent == "allergy_context_check":
+        for allergy in understanding.state.allergies:
+            if find_match_in_sections(allergy, sections):
+                return "addressed", []
+
+    return "not_found_in_evidence", []
+
+
+def intent_coverage_reason(
+    intent: str,
+    status: EvidenceCoverageStatus,
+    matched_sections: list[str],
+) -> str:
+    if intent == "interaction_check":
+        if status == "addressed":
+            return (
+                "Drug-interactions label text was retrieved for at least "
+                "one mentioned medication."
+            )
+        return (
+            "No drug-interactions label text was retrieved for the "
+            "mentioned medication pair."
+        )
+
+    if intent == "label_context_check":
+        if status == "addressed":
+            return "Label text was retrieved for the primary medication."
+        return "No label text was retrieved for the primary medication."
+
+    topic = INTENT_TOPIC_LABELS.get(intent)
+    if topic is None:
+        return (
+            "Intent is recognized for context, but is not checked against "
+            "specific retrieved label sections."
+        )
+    if status == "addressed":
+        return (
+            f"Retrieved label sections ({', '.join(matched_sections)}) address "
+            f"this {topic} question."
+        )
+    return f"No retrieved label sections addressed this {topic} question."
 
 
 def coverage_from_context_evidence(
@@ -457,7 +477,6 @@ def coverage_from_text(
 def patient_context_coverage(
     label: str,
     sections: dict[str, list[LabelSection]],
-    evidence_text: str,
     has_label_text: bool,
 ) -> EvidenceCoverageItem:
     if not has_label_text:
@@ -626,11 +645,6 @@ def unique_values(values: list[str]) -> list[str]:
         seen.add(key)
         unique.append(value)
     return unique
-
-
-def append_once(values: list[str], value: str) -> None:
-    if value not in values:
-        values.append(value)
 
 
 def format_human_list(values: list[str]) -> str:

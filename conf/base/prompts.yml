@@ -39,8 +39,9 @@ query_extraction_revision:
           > Include interaction_check for wording like "can I use A while taking B", "I take A, can I take B", "use A and B together", or "A and B at the same time".
         - patient_context_check (asking about drug safety in a specific patient context, such as pregnancy or breastfeeding)
         - allergy_context_check (asking about drug safety given an allergy)
-        - safety_context_check (asking about drug safety in general or given a specific condition)
-        - label_context_check (asking about drug information that would be found on the label, such as side effects, dosage, etc.)
+        - side_effect_check (asking about side effects or adverse reactions)
+        - indication_check (asking what a drug is used for or indicated for)
+        - label_context_check (asking about drug information generally found on the label)
         create a new intent category if the user's intent doesn't fit well into these categories.
         A query can and often should have multiple intents, e.g. an allergy question involving two medications can include both allergy_context_check and interaction_check.
 
