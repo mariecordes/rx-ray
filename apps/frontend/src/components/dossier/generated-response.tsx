@@ -34,6 +34,7 @@ import {
   EvidenceCoverageStatus,
   OpenFDALabelRecord,
   QueryAnswerResponse,
+  QueryState,
   QueryUnderstandingResponse,
   SecondaryDrugEvidence,
 } from "@/lib/types";
@@ -934,6 +935,23 @@ function AnswerSynthesisLoadingState() {
   );
 }
 
+function allDrugsMentionedWithPrimary(state: QueryState) {
+  const primary = state.primary_drug;
+  if (!primary) {
+    return state.all_drugs_mentioned;
+  }
+  const seen = new Set([primary.toLowerCase()]);
+  const rest = state.all_drugs_mentioned.filter((drug) => {
+    const key = drug.toLowerCase();
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
+  return [primary, ...rest];
+}
+
 function QueryUnderstandingResult({
   result,
 }: {
@@ -971,16 +989,12 @@ function QueryUnderstandingResult({
         <div className="space-y-3 border-t border-slate-200 p-3">
           <ParameterGroup title="Medication concepts">
             <ParameterRow
-              label="Primary medication"
-              values={result.state.primary_drug ? [result.state.primary_drug] : []}
-            />
-            <ParameterRow
               label="Current medications"
               values={result.state.current_medications}
             />
             <ParameterRow
               label="All drugs mentioned"
-              values={result.state.all_drugs_mentioned}
+              values={allDrugsMentionedWithPrimary(result.state)}
             />
           </ParameterGroup>
 
