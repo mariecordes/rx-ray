@@ -11,16 +11,17 @@ from src.query_answer.config import QueryAnswerParameters
 from src.query_answer.contract import build_answer_contract
 from src.query_answer.coverage import build_evidence_coverage
 from src.query_answer.critic import (
-    apply_critique_statuses,
-    apply_deterministic_statuses,
+    MAX_CRITIC_BULLETS,
+    MAX_CRITIC_CITATIONS,
+    _critic_input,
+    apply_citation_statuses,
     critique_answer,
-    deterministic_support_status,
     finalize_answer_critique,
 )
 from src.query_answer.models import (
     AnswerContract,
-    AnswerContractItem,
     AnswerCritique,
+    CitationCritique,
     EvidenceAnswer,
     EvidenceBullet,
     EvidenceCitation,
@@ -65,36 +66,17 @@ def understanding_with_label_evidence() -> QueryUnderstandingResponse:
     )
 
 
-def contract_with_addressed_warnings() -> AnswerContract:
-    return AnswerContract(
-        items=[
-            AnswerContractItem(
-                kind="must_mention",
-                topic="allergy_context_check",
-                intent="allergy_context_check",
-                statement="Address what the retrieved allergy label sections say.",
-                evidence_available=True,
-                required_sections=["warnings"],
-                coverage_category="intent",
-                coverage_label="allergy_context_check",
-            )
-        ],
-        coverage_level="direct",
-    )
-
-
 def bullet(
     text: str,
     source_id: str | None,
     section: str | None,
-    topic: str | None = None,
 ) -> EvidenceBullet:
     citations = (
         [EvidenceCitation(source_id=source_id, section=section)]
         if source_id and section
         else []
     )
-    return EvidenceBullet(text=text, citations=citations, topic=topic)
+    return EvidenceBullet(text=text, citations=citations)
 
 
 def answer_with_bullets(bullets: list[EvidenceBullet]) -> EvidenceAnswer:
@@ -106,270 +88,148 @@ def answer_with_bullets(bullets: list[EvidenceBullet]) -> EvidenceAnswer:
     )
 
 
-def test_deterministic_support_status_none_without_citations() -> None:
-    status = deterministic_support_status(
-        bullet("No citation.", None, None), AnswerContract()
-    )
-    assert status == "none"
-
-
-def test_deterministic_support_status_limited_when_citation_section_not_addressed() -> (
-    None
-):
-    contract = contract_with_addressed_warnings()
-    status = deterministic_support_status(
-        bullet("Weakly cited.", "label-1", "adverse_reactions"), contract
-    )
-    assert status == "limited"
-
-
-def test_deterministic_support_status_strong_when_addressed_and_no_gap() -> None:
-    contract = contract_with_addressed_warnings()
-    status = deterministic_support_status(
-        bullet("Cited.", "label-1", "warnings"), contract
-    )
-    assert status == "strong"
-
-
-def test_deterministic_support_status_partial_when_unresolved_gap_present() -> None:
-    contract = contract_with_addressed_warnings().model_copy(
-        update={
-            "items": [
-                *contract_with_addressed_warnings().items,
-                AnswerContractItem(
-                    kind="must_caveat",
-                    topic="missing_context",
-                    statement="The retrieved labels did not explicitly mention X.",
-                    evidence_available=False,
-                ),
-            ]
-        }
-    )
-    status = deterministic_support_status(
-        bullet("Cited.", "label-1", "warnings"), contract
-    )
-    assert status == "partial"
-
-
-def test_deterministic_support_status_ignores_structural_interaction_caveat() -> None:
-    contract = AnswerContract(
-        items=[
-            AnswerContractItem(
-                kind="must_mention",
-                topic="interaction_check",
-                intent="interaction_check",
-                statement="Address what the retrieved drug interaction sections say.",
-                evidence_available=True,
-                required_sections=["drug_interactions"],
-                coverage_category="intent",
-                coverage_label="interaction_check",
-            ),
-            AnswerContractItem(
-                kind="must_caveat",
-                topic="interaction_terminology",
-                intent="interaction_check",
-                statement=(
-                    "RxNorm terminology overlap is not evidence of a clinical "
-                    "interaction."
-                ),
-                evidence_available=True,
-                coverage_category="intent",
-                coverage_label="interaction_check",
-            ),
+def test_critic_input_includes_only_response_limitations_and_citations() -> None:
+    answer = answer_with_bullets([bullet("Cited.", "label-1", "warnings")])
+    evidence_packet = {
+        "label_sections": [
+            {"source_id": "label-1", "section": "warnings", "text": "Real text."}
         ],
-        coverage_level="direct",
-    )
-    status = deterministic_support_status(
-        bullet("Cited.", "label-1", "drug_interactions"), contract
-    )
-    assert status == "strong"
+        "label_product_context": [{"description": "not for the critic"}],
+        "answer_contract": {"items": []},
+        "state": {},
+    }
 
+    result = _critic_input(answer, evidence_packet)
 
-def _ibuprofen_aspirin_allergy_contract() -> AnswerContract:
-    """Reproduces the reported cross-intent leakage scenario.
-
-    interaction_check is addressed via drug_interactions text; separately,
-    allergy_context_check is addressed via a "warnings" section match. Before
-    the topic-aware fix, a bullet about the interaction claim that happened to
-    cite "warnings" (instead of "drug_interactions") was incorrectly scored
-    "strong" because "warnings" was pooled in from the unrelated allergy
-    intent.
-    """
-
-    return AnswerContract(
-        items=[
-            AnswerContractItem(
-                kind="must_mention",
-                topic="interaction_check",
-                intent="interaction_check",
-                statement="Address what the retrieved drug interaction sections say.",
-                evidence_available=True,
-                required_sections=["drug_interactions"],
-                coverage_category="intent",
-                coverage_label="interaction_check",
-            ),
-            AnswerContractItem(
-                kind="must_mention",
-                topic="allergy_context_check",
-                intent="allergy_context_check",
-                statement="Address what the retrieved allergy label sections say.",
-                evidence_available=True,
-                required_sections=["warnings"],
-                coverage_category="intent",
-                coverage_label="allergy_context_check",
-            ),
-        ],
-        coverage_level="direct",
-    )
-
-
-def test_deterministic_support_status_topic_scopes_to_matching_intent() -> None:
-    contract = _ibuprofen_aspirin_allergy_contract()
-    interaction_bullet = bullet(
-        "No interaction-specific evidence was retrieved.",
-        "label-1",
-        "warnings",
-        topic="interaction_check",
-    )
-    status = deterministic_support_status(interaction_bullet, contract)
-    assert status == "limited"
-
-
-def test_deterministic_support_status_topic_unaffected_for_matching_intent() -> None:
-    contract = _ibuprofen_aspirin_allergy_contract()
-    allergy_bullet = bullet(
-        "Allergy warnings were retrieved.",
-        "label-1",
-        "warnings",
-        topic="allergy_context_check",
-    )
-    status = deterministic_support_status(allergy_bullet, contract)
-    assert status == "strong"
-
-
-def test_deterministic_support_status_without_topic_falls_back_to_pooled_check() -> (
-    None
-):
-    contract = _ibuprofen_aspirin_allergy_contract()
-    untagged_bullet = bullet(
-        "No topic was assigned to this claim.", "label-1", "warnings"
-    )
-    status = deterministic_support_status(untagged_bullet, contract)
-    assert status == "strong"
-
-
-def test_deterministic_support_status_topic_scoped_unaffected_by_unrelated_gap() -> (
-    None
-):
-    """A gap unrelated to a bullet's own topic shouldn't cap that bullet.
-
-    Reproduces the cetirizine/ibuprofen/aspirin scenario: interaction_check
-    and allergy_context_check are both addressed, but the patient's stated
-    allergy ("pollen") wasn't found in any retrieved label text, so the
-    contract carries an unrelated missing_context caveat. Before this fix,
-    that single unrelated caveat capped every bullet at "partial" via the
-    global _has_unresolved_gap() check, even bullets whose own topic has no
-    gap of its own.
-    """
-
-    contract = _ibuprofen_aspirin_allergy_contract().model_copy(
-        update={
-            "items": [
-                *_ibuprofen_aspirin_allergy_contract().items,
-                AnswerContractItem(
-                    kind="must_caveat",
-                    topic="missing_context",
-                    statement="The retrieved labels did not explicitly mention pollen.",
-                    evidence_available=False,
-                ),
-            ]
+    assert set(result.keys()) == {"response", "limitations", "citations"}
+    assert result["citations"] == [
+        {
+            "bullet_index": 0,
+            "citation_index": 0,
+            "claim_text": "Cited.",
+            "source_id": "label-1",
+            "section": "warnings",
+            "cited_text": "Real text.",
         }
-    )
-    interaction_bullet = bullet(
-        "Ibuprofen labels describe an interaction with aspirin.",
-        "label-1",
-        "drug_interactions",
-        topic="interaction_check",
-    )
-    allergy_bullet = bullet(
-        "Allergy warnings were retrieved.",
-        "label-1",
-        "warnings",
-        topic="allergy_context_check",
-    )
-    assert deterministic_support_status(interaction_bullet, contract) == "strong"
-    assert deterministic_support_status(allergy_bullet, contract) == "strong"
+    ]
 
 
-def test_apply_deterministic_statuses_sets_status_per_bullet() -> None:
-    contract = contract_with_addressed_warnings()
+def test_critic_input_looks_up_cited_text_and_falls_back_when_missing() -> None:
     answer = answer_with_bullets(
         [
-            bullet("Cited and addressed.", "label-1", "warnings"),
-            bullet("Not cited.", None, None),
+            bullet("Matches a section.", "label-1", "warnings"),
+            bullet("Cites something not in label_sections.", "label-2", "dosage"),
         ]
     )
-    updated = apply_deterministic_statuses(answer, contract)
-    assert updated.bullets[0].support_status == "strong"
-    assert updated.bullets[1].support_status == "none"
+    evidence_packet = {
+        "label_sections": [
+            {"source_id": "label-1", "section": "warnings", "text": "Warning text."}
+        ]
+    }
+
+    result = _critic_input(answer, evidence_packet)
+
+    assert result["citations"][0]["cited_text"] == "Warning text."
+    assert result["citations"][1]["cited_text"] == ""
 
 
-def test_apply_critique_statuses_overrides_only_named_indices() -> None:
+def test_critic_input_caps_bullets_considered() -> None:
+    bullets = [
+        bullet(f"Bullet {index}.", f"label-{index}", "warnings")
+        for index in range(MAX_CRITIC_BULLETS + 3)
+    ]
+    answer = answer_with_bullets(bullets)
+    evidence_packet = {
+        "label_sections": [
+            {"source_id": f"label-{index}", "section": "warnings", "text": "Text."}
+            for index in range(MAX_CRITIC_BULLETS + 3)
+        ]
+    }
+
+    result = _critic_input(answer, evidence_packet)
+
+    considered_bullet_indices = {row["bullet_index"] for row in result["citations"]}
+    assert max(considered_bullet_indices) < MAX_CRITIC_BULLETS
+
+
+def test_critic_input_caps_total_flattened_citations() -> None:
+    bullets = [
+        EvidenceBullet(
+            text=f"Bullet {bullet_index}.",
+            citations=[
+                EvidenceCitation(source_id=f"label-{bullet_index}", section="warnings"),
+                EvidenceCitation(
+                    source_id=f"label-{bullet_index}", section="contraindications"
+                ),
+                EvidenceCitation(
+                    source_id=f"label-{bullet_index}", section="drug_interactions"
+                ),
+                EvidenceCitation(
+                    source_id=f"label-{bullet_index}", section="adverse_reactions"
+                ),
+            ],
+        )
+        for bullet_index in range(3)
+    ]
+    answer = answer_with_bullets(bullets)
+
+    result = _critic_input(answer, {"label_sections": []})
+
+    assert len(result["citations"]) == MAX_CRITIC_CITATIONS
+
+
+def test_apply_citation_statuses_overrides_only_named_citations() -> None:
     answer = answer_with_bullets(
         [
-            bullet("First.", "label-1", "warnings").model_copy(
-                update={"support_status": "strong"}
+            EvidenceBullet(
+                text="First.",
+                citations=[
+                    EvidenceCitation(source_id="label-1", section="warnings"),
+                    EvidenceCitation(source_id="label-2", section="contraindications"),
+                ],
             ),
-            bullet("Second.", "label-1", "warnings").model_copy(
-                update={"support_status": "strong"}
-            ),
+            bullet("Second.", "label-1", "warnings"),
         ]
     )
     critique = AnswerCritique(
         enabled=True,
         source="llm",
-        claims=[],
+        citations=[
+            CitationCritique(
+                bullet_index=0, citation_index=1, support_status="contradicted"
+            ),
+        ],
     )
-    unchanged = apply_critique_statuses(answer, critique)
-    assert unchanged.bullets[0].support_status == "strong"
 
-    from src.query_answer.models import ClaimCritique
+    updated = apply_citation_statuses(answer, critique)
 
-    critique_with_override = critique.model_copy(
-        update={
-            "claims": [
-                ClaimCritique(bullet_index=0, support_status="limited"),
-            ]
-        }
-    )
-    overridden = apply_critique_statuses(answer, critique_with_override)
-    assert overridden.bullets[0].support_status == "limited"
-    assert overridden.bullets[1].support_status == "strong"
+    assert updated.bullets[0].citations[0].support_status is None
+    assert updated.bullets[0].citations[1].support_status == "contradicted"
+    assert updated.bullets[1].citations[0].support_status is None
 
 
-def test_critique_answer_parses_claims_and_findings_with_stub_requester() -> None:
-    answer = answer_with_bullets(
-        [bullet("Cited.", "label-1", "warnings")]
-    )
+def test_critique_answer_parses_citations_and_findings_with_stub_requester() -> None:
+    answer = answer_with_bullets([bullet("Cited.", "label-1", "warnings")])
 
     def fake_requester(*, messages: list[dict], prompt_config: dict) -> dict:
         return {
-            "claims": [
+            "citations": [
                 {
-                    "index": 0,
-                    "support_status": "strong",
-                    "rationale": "Well supported.",
+                    "bullet_index": 0,
+                    "citation_index": 0,
+                    "support_status": "accurate",
+                    "rationale": "Faithfully reflects the cited text.",
                     "issues": [],
                 }
             ],
             "global_findings": [
                 {
-                    "kind": "missing_caveat",
-                    "severity": "warning",
-                    "message": "A caveat was missing.",
+                    "kind": "extra_nuance",
+                    "severity": "info",
+                    "message": "Worth a caveat.",
                 }
             ],
-            "needs_regeneration": True,
+            "needs_regeneration": False,
         }
 
     outcome = critique_answer(
@@ -379,21 +239,26 @@ def test_critique_answer_parses_claims_and_findings_with_stub_requester() -> Non
         json_requester=fake_requester,
     )
 
-    assert outcome.needs_regeneration is True
+    assert outcome.needs_regeneration is False
     assert outcome.critique.enabled is True
     assert outcome.critique.source == "llm"
-    assert outcome.critique.claims[0].support_status == "strong"
-    assert outcome.critique.global_findings[0].kind == "missing_caveat"
+    assert outcome.critique.citations[0].support_status == "accurate"
+    assert outcome.critique.global_findings[0].kind == "extra_nuance"
 
 
-def test_critique_answer_ignores_invalid_claim_indices_and_statuses() -> None:
+def test_critique_answer_ignores_invalid_citation_indices_and_statuses() -> None:
     answer = answer_with_bullets([bullet("Cited.", "label-1", "warnings")])
 
     def fake_requester(*, messages: list[dict], prompt_config: dict) -> dict:
         return {
-            "claims": [
-                {"index": 5, "support_status": "strong"},
-                {"index": 0, "support_status": "not-a-real-status"},
+            "citations": [
+                {"bullet_index": 5, "citation_index": 0, "support_status": "accurate"},
+                {"bullet_index": 0, "citation_index": 9, "support_status": "accurate"},
+                {
+                    "bullet_index": 0,
+                    "citation_index": 0,
+                    "support_status": "not-a-real-status",
+                },
             ],
             "global_findings": [],
             "needs_regeneration": False,
@@ -405,7 +270,7 @@ def test_critique_answer_ignores_invalid_claim_indices_and_statuses() -> None:
         evidence_packet={"label_sections": []},
         json_requester=fake_requester,
     )
-    assert outcome.critique.claims == []
+    assert outcome.critique.citations == []
 
 
 def test_finalize_answer_critique_returns_none_when_no_answer() -> None:
@@ -425,7 +290,7 @@ def test_finalize_answer_critique_returns_none_when_no_answer() -> None:
     assert validation == "unchanged"
 
 
-def test_finalize_answer_critique_disabled_returns_deterministic_floor() -> None:
+def test_finalize_answer_critique_disabled_returns_no_statuses() -> None:
     understanding = understanding_with_label_evidence()
     coverage = build_evidence_coverage(understanding)
     contract = build_answer_contract(understanding, coverage)
@@ -444,10 +309,10 @@ def test_finalize_answer_critique_disabled_returns_deterministic_floor() -> None
     )
 
     assert critique.enabled is False
-    assert critique.source == "deterministic"
-    assert len(critique.claims) == 1
+    assert critique.source == "none"
+    assert critique.citations == []
     assert final_answer is not None
-    assert final_answer.bullets[0].support_status is not None
+    assert final_answer.bullets[0].citations[0].support_status is None
     assert validation == "unchanged"
 
 
@@ -471,7 +336,9 @@ def test_finalize_answer_critique_enabled_without_regeneration(
 
     def critic_requester(*, messages: list[dict], prompt_config: dict) -> dict:
         return {
-            "claims": [{"index": 0, "support_status": "strong"}],
+            "citations": [
+                {"bullet_index": 0, "citation_index": 0, "support_status": "accurate"}
+            ],
             "global_findings": [],
             "needs_regeneration": False,
         }
@@ -492,7 +359,7 @@ def test_finalize_answer_critique_enabled_without_regeneration(
     assert critique.enabled is True
     assert critique.source == "llm"
     assert critique.regenerated is False
-    assert final_answer.bullets[0].support_status == "strong"
+    assert final_answer.bullets[0].citations[0].support_status == "accurate"
     assert synth_calls == []
 
 
@@ -528,7 +395,13 @@ def test_finalize_answer_critique_regenerates_exactly_once(
     def critic_requester(*, messages: list[dict], prompt_config: dict) -> dict:
         critic_calls["count"] += 1
         return {
-            "claims": [{"index": 0, "support_status": "limited"}],
+            "citations": [
+                {
+                    "bullet_index": 0,
+                    "citation_index": 0,
+                    "support_status": "misrepresented",
+                }
+            ],
             "global_findings": [],
             "needs_regeneration": True,
         }
@@ -571,7 +444,13 @@ def test_finalize_answer_critique_skips_regeneration_when_max_is_zero(
 
     def critic_requester(*, messages: list[dict], prompt_config: dict) -> dict:
         return {
-            "claims": [{"index": 0, "support_status": "limited"}],
+            "citations": [
+                {
+                    "bullet_index": 0,
+                    "citation_index": 0,
+                    "support_status": "misrepresented",
+                }
+            ],
             "global_findings": [],
             "needs_regeneration": True,
         }
