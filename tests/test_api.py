@@ -2302,6 +2302,61 @@ def test_validate_and_enforce_does_not_duplicate_existing_caveat() -> None:
     assert validation.passed is True
 
 
+def test_validate_and_enforce_relocates_uncited_bullets_to_limitations() -> None:
+    contract = AnswerContract(items=[])
+    answer = EvidenceAnswer(
+        response="Some response.",
+        bullets=[
+            EvidenceBullet(
+                text="Ibuprofen labels describe an interaction with aspirin.",
+                citations=[
+                    EvidenceCitation(source_id="label-1", section="drug_interactions")
+                ],
+            ),
+            EvidenceBullet(
+                text="The labels do not mention cetirizine in any section.",
+                citations=[],
+            ),
+        ],
+        limitations=["Existing limitation."],
+        safety_note="note",
+    )
+
+    updated, validation = validate_and_enforce(answer, contract)
+
+    assert updated is not None
+    assert [bullet.text for bullet in updated.bullets] == [
+        "Ibuprofen labels describe an interaction with aspirin."
+    ]
+    assert updated.limitations == [
+        "Existing limitation.",
+        "The labels do not mention cetirizine in any section.",
+    ]
+    assert any(
+        finding.kind == "uncited_bullet_relocated" for finding in validation.findings
+    )
+
+
+def test_validate_and_enforce_does_not_duplicate_relocated_bullet_text() -> None:
+    contract = AnswerContract(items=[])
+    text = "The labels do not mention cetirizine in any section."
+    answer = EvidenceAnswer(
+        response="Some response.",
+        bullets=[EvidenceBullet(text=text, citations=[])],
+        limitations=[text],
+        safety_note="note",
+    )
+
+    updated, validation = validate_and_enforce(answer, contract)
+
+    assert updated is not None
+    assert updated.bullets == []
+    assert updated.limitations == [text]
+    assert not any(
+        finding.kind == "uncited_bullet_relocated" for finding in validation.findings
+    )
+
+
 def test_validate_and_enforce_flags_unaddressed_must_mention() -> None:
     contract = AnswerContract(
         items=[

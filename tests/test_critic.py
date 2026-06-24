@@ -258,6 +258,49 @@ def test_deterministic_support_status_without_topic_falls_back_to_pooled_check()
     assert status == "strong"
 
 
+def test_deterministic_support_status_topic_scoped_unaffected_by_unrelated_gap() -> (
+    None
+):
+    """A gap unrelated to a bullet's own topic shouldn't cap that bullet.
+
+    Reproduces the cetirizine/ibuprofen/aspirin scenario: interaction_check
+    and allergy_context_check are both addressed, but the patient's stated
+    allergy ("pollen") wasn't found in any retrieved label text, so the
+    contract carries an unrelated missing_context caveat. Before this fix,
+    that single unrelated caveat capped every bullet at "partial" via the
+    global _has_unresolved_gap() check, even bullets whose own topic has no
+    gap of its own.
+    """
+
+    contract = _ibuprofen_aspirin_allergy_contract().model_copy(
+        update={
+            "items": [
+                *_ibuprofen_aspirin_allergy_contract().items,
+                AnswerContractItem(
+                    kind="must_caveat",
+                    topic="missing_context",
+                    statement="The retrieved labels did not explicitly mention pollen.",
+                    evidence_available=False,
+                ),
+            ]
+        }
+    )
+    interaction_bullet = bullet(
+        "Ibuprofen labels describe an interaction with aspirin.",
+        "label-1",
+        "drug_interactions",
+        topic="interaction_check",
+    )
+    allergy_bullet = bullet(
+        "Allergy warnings were retrieved.",
+        "label-1",
+        "warnings",
+        topic="allergy_context_check",
+    )
+    assert deterministic_support_status(interaction_bullet, contract) == "strong"
+    assert deterministic_support_status(allergy_bullet, contract) == "strong"
+
+
 def test_apply_deterministic_statuses_sets_status_per_bullet() -> None:
     contract = contract_with_addressed_warnings()
     answer = answer_with_bullets(

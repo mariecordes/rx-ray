@@ -140,6 +140,9 @@ evidence_answer_synthesis:
         - When secondary-drug evidence is supplied, cite primary and secondary label sections as appropriate.
         - When context-targeted evidence is supplied, cite it only as label-text coverage for that context.
         - Keep snippets short and quote-like, but do not copy long passages.
+        - Every bullet must have at least one citation. If you have nothing to cite —
+          for example, noting that label_sections does not mention a drug or topic —
+          that observation is a limitation, not a bullet; put it in limitations instead.
         - If no relevant label text exists, return an empty bullets array and explain the limitation.
         - The response field should feel connected to the user's actual question.
         - response and bullets should together cover the relevant retrieved evidence;
@@ -180,18 +183,21 @@ evidence_answer_critic:
         You are an automated critic auditing a generated medication answer for rx-ray.
         You are given the user query, the same evidence packet used to generate the
         answer (including label_sections, label_product_context, and answer_contract),
-        and the generated answer with its claims numbered.
+        and the generated answer with its claims numbered, each with the label_sections
+        entry (or entries) it cites as its source.
 
-        For each numbered claim, judge support_status strictly from the supplied
-        label_sections (the citable evidence) — never from label_product_context or
-        general knowledge:
-        - "strong": the claim's citations are present in label_sections and directly
-          support the claim's content.
+        For each numbered claim, judge support_status by checking whether the claim
+        text faithfully reflects what its cited source(s) actually say in label_sections
+        (the citable evidence) — never from label_product_context or general knowledge.
+        You are rating how well the claim represents its cited source, not the source
+        itself (a retrieved label section is never "partial" or "limited" on its own):
+        - "strong": the cited source(s) are present in label_sections and the claim
+          accurately reflects what they say.
         - "partial": the claim has valid citations, but they only partially or loosely
-          support the claim, or the answer_contract still has an unresolved gap related
-          to this claim's topic.
-        - "limited": the claim has citations, but they do not meaningfully support the
-          specific claim text.
+          support what the claim says, or the answer_contract still has an unresolved
+          gap related to this claim's topic.
+        - "limited": the claim has citations, but the cited source(s) do not say what
+          the claim says.
         - "none": the claim has no valid citations, or the cited evidence does not
           appear in label_sections.
 

@@ -79,17 +79,29 @@ def deterministic_support_status(
     both intents happen to share a section name. Untagged bullets, or topics
     that don't resolve to a section-bearing item, fall back to the legacy
     pooled-sections check across all addressed intents.
+
+    The same topic-scoping applies to the unresolved-gap check: an addressed,
+    topic-matched intent item can't have its own open caveat (the contract
+    only ever records one or the other per intent), so a gap elsewhere in the
+    contract — e.g. a patient-stated allergy term that wasn't found in any
+    label text — should not cap *this* claim's status. Only untagged bullets
+    fall back to the global, pooled gap check, since we don't know what
+    they're about and hedging broadly is the safer default for them.
     """
 
     if not bullet.citations:
         return "none"
     bullet_citation_sections = {citation.section for citation in bullet.citations}
-    addressed_sections = _topic_required_sections(bullet.topic, contract)
-    if addressed_sections is None:
+    topic_sections = _topic_required_sections(bullet.topic, contract)
+    if topic_sections is not None:
+        addressed_sections = topic_sections
+        has_unresolved_gap = False
+    else:
         addressed_sections = _addressed_intent_sections(contract)
+        has_unresolved_gap = _has_unresolved_gap(contract)
     if not bullet_citation_sections & addressed_sections:
         return "limited"
-    return "partial" if _has_unresolved_gap(contract) else "strong"
+    return "partial" if has_unresolved_gap else "strong"
 
 
 def apply_deterministic_statuses(
