@@ -8,6 +8,7 @@ from typing import Any, Protocol
 
 from src.dossier.models import DrugDossier, LabelSection, OpenFDALabelRecord, RxNormEdge
 from src.query_answer.config import QueryAnswerParameters, load_query_answer_parameters
+from src.query_answer.contract import required_label_sections
 from src.query_answer.models import (
     AnswerContract,
     ContextTargetedEvidence,
@@ -45,6 +46,8 @@ PRIORITIZED_SECTIONS = (
 )
 MAX_LABEL_TEXT_CHARS = 1000
 MAX_LABEL_SECTIONS = 16
+MAX_SECTION_ENTRIES = 3
+DEDUPE_PREFIX_CHARS = 200
 MAX_RXNORM_RELATIONSHIPS = 40
 MAX_PRODUCT_CONTEXT_ENTRIES = 12
 MAX_PRODUCT_CONTEXT_TEXT_CHARS = 600
@@ -269,9 +272,13 @@ class EvidenceAnswerSynthesizer:
                 item.label_evidence.label_records if item.label_evidence else []
             )
         ]
+        required_sections = (
+            required_label_sections(contract) if contract is not None else set()
+        )
         primary_sections = label_section_payloads(
             label_evidence.sections if label_evidence else {},
             evidence_scope="primary",
+            required_sections=required_sections,
         )
         secondary_sections = [
             payload
@@ -282,6 +289,7 @@ class EvidenceAnswerSynthesizer:
                 drug_name=item.resolved_concept.name,
                 rxcui=item.resolved_concept.rxcui,
                 retrieval_modes=item.retrieval_modes,
+                required_sections=required_sections,
             )
         ]
         primary_product_context = [
@@ -585,25 +593,81 @@ def label_section_payloads(
     drug_name: str | None = None,
     rxcui: str | None = None,
     retrieval_modes: list[str] | None = None,
+    required_sections: set[str] | None = None,
 ) -> list[dict[str, Any]]:
+    """Build the citable label-section payload for one drug, bounded for the prompt.
+
+    Walks PRIORITIZED_SECTIONS in order, deduplicating near-identical
+    boilerplate repeated across a drug's many label records and capping each
+    section to MAX_SECTION_ENTRIES so one bloated section (typically
+    `warnings`) can't consume the whole MAX_LABEL_SECTIONS budget before
+    later sections are ever reached. Any section in `required_sections` that
+    the contract already relied on is then guaranteed at least one entry,
+    evicting from the lowest-priority tail if the cap was already hit — the
+    LLM should never be missing evidence the contract told it to address.
+    """
+
+    required_sections = required_sections or set()
+
+    def build_payload(section_name: str, label_section: LabelSection) -> dict[str, Any]:
+        return {
+            "evidence_scope": evidence_scope,
+            "drug_name": drug_name,
+            "rxcui": rxcui,
+            "retrieval_modes": retrieval_modes or [],
+            "section": section_name,
+            "source_id": label_section.source_id,
+            "text": truncate_text(label_section.text, MAX_LABEL_TEXT_CHARS),
+            "provenance_tags": label_section.provenance_tags,
+        }
+
     payloads: list[dict[str, Any]] = []
+    included_sections: set[str] = set()
     for section_name in PRIORITIZED_SECTIONS:
-        for label_section in sections.get(section_name, []):
+        entries = deduplicated_label_sections(sections.get(section_name, []))
+        entries = entries[:MAX_SECTION_ENTRIES]
+        if not entries:
+            continue
+        for label_section in entries:
             if len(payloads) >= MAX_LABEL_SECTIONS:
-                return payloads
-            payloads.append(
-                {
-                    "evidence_scope": evidence_scope,
-                    "drug_name": drug_name,
-                    "rxcui": rxcui,
-                    "retrieval_modes": retrieval_modes or [],
-                    "section": section_name,
-                    "source_id": label_section.source_id,
-                    "text": truncate_text(label_section.text, MAX_LABEL_TEXT_CHARS),
-                    "provenance_tags": label_section.provenance_tags,
-                }
-            )
+                break
+            payloads.append(build_payload(section_name, label_section))
+            included_sections.add(section_name)
+
+    for section_name in sorted(required_sections - included_sections):
+        entries = deduplicated_label_sections(sections.get(section_name, []))
+        entries = entries[:MAX_SECTION_ENTRIES]
+        if not entries:
+            continue
+        overflow = len(payloads) + len(entries) - MAX_LABEL_SECTIONS
+        if overflow > 0:
+            payloads = payloads[:-overflow]
+        payloads.extend(build_payload(section_name, entry) for entry in entries)
+
     return payloads
+
+
+def deduplicated_label_sections(entries: list[LabelSection]) -> list[LabelSection]:
+    """Collapse near-identical boilerplate repeated across label records.
+
+    OTC generics often have many manufacturer-specific label records that
+    repeat near-identical FDA-mandated section text (e.g. the same allergy
+    alert paragraph). Comparing normalized text prefixes is enough to catch
+    these without needing exact-match text, while still letting genuinely
+    different content for the same section through.
+    """
+
+    seen: set[str] = set()
+    deduped: list[LabelSection] = []
+    for entry in entries:
+        if not entry.text.strip():
+            continue
+        key = " ".join(entry.text.split()).lower()[:DEDUPE_PREFIX_CHARS]
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(entry)
+    return deduped
 
 
 def secondary_evidence_payload(item: SecondaryDrugEvidence) -> dict[str, Any]:

@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from typing import Any, Protocol
 
 from src.query_answer.config import QueryAnswerParameters
+from src.query_answer.contract import required_label_sections
 from src.query_answer.models import (
     AnswerContract,
     AnswerCritique,
@@ -269,15 +270,7 @@ def _topic_required_sections(
 
 
 def _addressed_intent_sections(contract: AnswerContract) -> set[str]:
-    sections: set[str] = set()
-    for item in contract.items:
-        if (
-            item.coverage_category == "intent"
-            and item.evidence_available
-            and item.required_sections
-        ):
-            sections.update(item.required_sections)
-    return sections
+    return required_label_sections(contract)
 
 
 def _has_unresolved_gap(contract: AnswerContract) -> bool:
