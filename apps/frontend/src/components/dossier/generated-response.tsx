@@ -273,9 +273,13 @@ function EvidenceAnswerCard({
     () => coverageStatusCounts(coverage),
     [coverage]
   );
-  const claimSupportCounts = useMemo(
-    () => claimSupportStatusCounts(answer.bullets),
+  const citedBullets = useMemo(
+    () => answer.bullets.filter((bullet) => bullet.citations.length > 0),
     [answer.bullets]
+  );
+  const claimSupportCounts = useMemo(
+    () => claimSupportStatusCounts(citedBullets),
+    [citedBullets]
   );
   const directResponse = (answer.response || "").trim();
 
@@ -314,13 +318,14 @@ function EvidenceAnswerCard({
         </section>
       </div>
 
-      {answer.bullets.length ? (
+      {citedBullets.length ? (
         <AnswerSection
           title="Sources"
+          infoText="Each source's badge rates how faithfully the text next to it reflects what that retrieved label section actually says — not the quality of the source itself. Strong: the cited section matches what this point is about and says what's claimed. Limited: it's cited, but doesn't say what's claimed. Partial: the point isn't tied to one specific topic and the answer still has an open gap elsewhere. This is a structural check, not a full read of the cited text — enable the optional answer critic for a deeper semantic check."
           headerExtra={<ClaimSupportChips counts={claimSupportCounts} />}
         >
           <div className="space-y-2">
-            {answer.bullets.map((bullet, index) => (
+            {citedBullets.map((bullet, index) => (
               <button
                 key={`${bullet.text}-${index}`}
                 type="button"
@@ -330,42 +335,32 @@ function EvidenceAnswerCard({
                     onCitationClick(firstCitation);
                   }
                 }}
-                className={cn(
-                  "w-full rounded-md border border-[#D7C8F4] bg-white px-3 py-3 text-left transition",
-                  bullet.citations.length
-                    ? "hover:border-[#C7B4EF] hover:bg-[#F8F4FC]"
-                    : ""
-                )}
+                className="w-full rounded-md border border-[#D7C8F4] bg-white px-3 py-3 text-left transition hover:border-[#C7B4EF] hover:bg-[#F8F4FC]"
               >
-                {bullet.citations.length ? (
-                  <div className="mb-1.5 flex flex-col gap-1">
-                    {bullet.citations.map((citation, citationIndex) => (
-                      <div
-                        key={`${citation.source_id}-${citation.section}-${citationIndex}`}
-                        className="flex items-start gap-2 font-semibold leading-5 text-slate-800"
-                        style={{ fontSize: "14px" }}
-                      >
-                        <FileText className="mt-0.5 size-4 shrink-0 text-slate-700" />
-                        <span>{citationDisplayLabel(citation, sourceById)}</span>
-                        {citationIndex === 0 && bullet.support_status ? (
-                          <span
-                            className={cn(
-                              "ml-1 w-fit shrink-0 rounded-md border px-1.5 py-0.5 text-[11px] font-medium",
-                              claimSupportClasses[bullet.support_status]
-                            )}
-                          >
-                            {claimSupportLabels[bullet.support_status]}
-                          </span>
-                        ) : null}
-                      </div>
-                    ))}
-                  </div>
-                ) : null}
+                <div className="mb-1.5 flex flex-col gap-1">
+                  {bullet.citations.map((citation, citationIndex) => (
+                    <div
+                      key={`${citation.source_id}-${citation.section}-${citationIndex}`}
+                      className="flex items-start gap-2 font-semibold leading-5 text-slate-800"
+                      style={{ fontSize: "14px" }}
+                    >
+                      <FileText className="mt-0.5 size-4 shrink-0 text-slate-700" />
+                      <span>{citationDisplayLabel(citation, sourceById)}</span>
+                      {bullet.support_status ? (
+                        <span
+                          className={cn(
+                            "ml-1 w-fit shrink-0 rounded-md border px-1.5 py-0.5 text-[11px] font-medium",
+                            claimSupportClasses[bullet.support_status]
+                          )}
+                        >
+                          {claimSupportLabels[bullet.support_status]}
+                        </span>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
                 <p
-                  className={cn(
-                    "leading-6 text-slate-800",
-                    bullet.citations.length ? "pl-6" : ""
-                  )}
+                  className="pl-6 leading-6 text-slate-800"
                   style={{ fontSize: "14px" }}
                 >
                   <InlineBoldMarkdown text={bullet.text} />
