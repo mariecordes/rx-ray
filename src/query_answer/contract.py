@@ -43,6 +43,8 @@ def build_answer_contract(
             continue
         if intent == "interaction_check":
             required_sections = ["drug_interactions"]
+        elif item.matched_sections:
+            required_sections = list(item.matched_sections)
         else:
             required_sections = list(INTENT_REQUIRED_SECTIONS.get(intent, ()))
         if item.status == "addressed":

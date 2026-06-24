@@ -33,6 +33,7 @@ class EvidenceBullet(BaseModel):
     text: str
     citations: list[EvidenceCitation] = Field(default_factory=list)
     support_status: ClaimSupportStatus | None = None
+    topic: str | None = None
 
 
 class EvidenceAnswer(BaseModel):
@@ -56,6 +57,7 @@ class EvidenceCoverageItem(BaseModel):
     matched_evidence: str | None = None
     source_id: str | None = None
     section: str | None = None
+    matched_sections: list[str] = Field(default_factory=list)
     target_rxcui: str | None = None
 
 

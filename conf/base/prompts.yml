@@ -114,6 +114,7 @@ evidence_answer_synthesis:
           "bullets": [
             {
               "text": "one evidence point grounded in the packet",
+              "topic": "the answer_contract item topic this bullet primarily addresses, or null",
               "citations": [
                 {
                   "source_id": "source_id from a supplied label section",
@@ -131,6 +132,10 @@ evidence_answer_synthesis:
         - Cite only source_id and section pairs that appear in label_sections.
         - Satisfy every answer_contract item: address must_mention topics, and include
           every must_caveat statement in limitations.
+        - Set each bullet's "topic" to the exact "topic" value of the single
+          answer_contract item it primarily addresses. Use null if the bullet is
+          general or doesn't map cleanly to one specific item. Never invent a topic
+          that isn't in answer_contract.
         - Do not invent citations, labels, studies, contraindications, interactions, or patient-specific advice.
         - Do not treat RxNorm terminology relationships as clinical interaction evidence.
         - When secondary-drug evidence is supplied, cite primary and secondary label sections as appropriate.

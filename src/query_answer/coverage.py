@@ -292,6 +292,7 @@ def build_evidence_coverage(
                 section=(
                     intent_result.match.section if intent_result.match else None
                 ),
+                matched_sections=intent_result.matched_sections,
                 target_rxcui=intent_result.target_rxcui,
             )
         )

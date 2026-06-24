@@ -13,6 +13,7 @@ from src.query_answer.models import (
     ClaimSupportStatus,
     ContextTargetedEvidence,
     EvidenceAnswer,
+    EvidenceBullet,
     SecondaryDrugEvidence,
     ValidationFinding,
 )
@@ -61,19 +62,30 @@ class CritiqueOutcome:
 
 
 def deterministic_support_status(
-    bullet_citation_sections: set[str],
-    has_citations: bool,
+    bullet: EvidenceBullet,
     contract: AnswerContract,
 ) -> ClaimSupportStatus:
     """Classify one bullet's support status from its citations and the contract.
 
     This is the always-on floor: it never needs the LLM critic, so every bullet
     has a status even when the critic is disabled (e.g. in demo mode).
+
+    When the bullet is tagged with a topic that matches a section-bearing
+    intent item on the contract, the check is scoped to *that* item's
+    required_sections only — this avoids a citation that genuinely supports
+    one intent (e.g. an allergy caveat citing "warnings") from spuriously
+    "supporting" an unrelated bullet (e.g. an interaction claim) just because
+    both intents happen to share a section name. Untagged bullets, or topics
+    that don't resolve to a section-bearing item, fall back to the legacy
+    pooled-sections check across all addressed intents.
     """
 
-    if not has_citations:
+    if not bullet.citations:
         return "none"
-    addressed_sections = _addressed_intent_sections(contract)
+    bullet_citation_sections = {citation.section for citation in bullet.citations}
+    addressed_sections = _topic_required_sections(bullet.topic, contract)
+    if addressed_sections is None:
+        addressed_sections = _addressed_intent_sections(contract)
     if not bullet_citation_sections & addressed_sections:
         return "limited"
     return "partial" if _has_unresolved_gap(contract) else "strong"
@@ -86,11 +98,7 @@ def apply_deterministic_statuses(
     bullets = [
         bullet.model_copy(
             update={
-                "support_status": deterministic_support_status(
-                    {citation.section for citation in bullet.citations},
-                    bool(bullet.citations),
-                    contract,
-                )
+                "support_status": deterministic_support_status(bullet, contract)
             }
         )
         for bullet in answer.bullets
@@ -234,6 +242,30 @@ def finalize_answer_critique(
             critique = recheck.critique.model_copy(update={"regenerated": True})
 
     return answer, critique, validation
+
+
+def _topic_required_sections(
+    topic: str | None,
+    contract: AnswerContract,
+) -> set[str] | None:
+    """Required sections for the contract item matching ``topic``, if any.
+
+    Returns None when there's no topic, or the topic doesn't resolve to a
+    section-bearing intent item, so the caller can fall back to the pooled
+    legacy check instead of incorrectly treating it as "no sections required."
+    """
+
+    if not topic:
+        return None
+    for item in contract.items:
+        if (
+            item.topic == topic
+            and item.coverage_category == "intent"
+            and item.evidence_available
+            and item.required_sections
+        ):
+            return set(item.required_sections)
+    return None
 
 
 def _addressed_intent_sections(contract: AnswerContract) -> set[str]:

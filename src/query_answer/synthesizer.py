@@ -137,7 +137,7 @@ class EvidenceAnswerSynthesizer:
         except Exception as exc:  # pragma: no cover - requires live LLM config
             return AnswerSynthesisResult(errors=[f"Answer synthesis failed: {exc}"])
 
-        answer = self.parse_answer_data(data, allowed_citations)
+        answer = self.parse_answer_data(data, allowed_citations, contract)
         if self._needs_source_retry(answer, allowed_citations):
             try:
                 retry_answer = self._retry_with_citation_feedback(
@@ -146,6 +146,7 @@ class EvidenceAnswerSynthesizer:
                     evidence_packet=evidence_packet,
                     prompt_config=prompt_config,
                     allowed_citations=allowed_citations,
+                    contract=contract,
                 )
             except Exception as exc:  # pragma: no cover - requires live LLM failure
                 return AnswerSynthesisResult(
@@ -194,6 +195,7 @@ class EvidenceAnswerSynthesizer:
         evidence_packet: dict[str, Any],
         prompt_config: dict[str, Any],
         allowed_citations: set[tuple[str, str]],
+        contract: AnswerContract | None = None,
     ) -> EvidenceAnswer | None:
         for _ in range(self.parameters.max_synthesis_retries):
             messages = self._format_messages(
@@ -208,7 +210,9 @@ class EvidenceAnswerSynthesizer:
                 messages=messages,
                 prompt_config=prompt_config,
             )
-            retry_answer = self.parse_answer_data(retry_data, allowed_citations)
+            retry_answer = self.parse_answer_data(
+                retry_data, allowed_citations, contract
+            )
             if not self._needs_source_retry(retry_answer, allowed_citations):
                 return retry_answer
             data = retry_data
@@ -343,7 +347,11 @@ class EvidenceAnswerSynthesizer:
     def parse_answer_data(
         data: dict[str, Any],
         allowed_citations: set[tuple[str, str]],
+        contract: AnswerContract | None = None,
     ) -> EvidenceAnswer:
+        valid_topics = (
+            {item.topic for item in contract.items} if contract is not None else set()
+        )
         bullets = [
             EvidenceBullet(
                 text=str(item.get("text", "")).strip(),
@@ -352,6 +360,11 @@ class EvidenceAnswerSynthesizer:
                     for citation in parse_citations(item.get("citations"))
                     if (citation.source_id, citation.section) in allowed_citations
                 ],
+                topic=(
+                    str(item.get("topic")).strip()
+                    if str(item.get("topic") or "").strip() in valid_topics
+                    else None
+                ),
             )
             for item in list_value(data.get("bullets"))
             if str(item.get("text", "")).strip()
