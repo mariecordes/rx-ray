@@ -55,6 +55,7 @@ Optionally [A4](#a4--live-demo-deployment) live demo if hosting is straightforwa
 | [C4](#c4--context-targeted-retrieval-tuning) | Context-targeted tuning | Evidence | M | Low–Med | todo | — |
 | [D1](#d1--guardrails-v2) | Guardrails V2 | Safety | M | High | ✅ done | — |
 | [D2](#d2--guardrails-v3) | Guardrails V3 | Safety | L | High | todo | D1 |
+| [D2c](#d2c--fix-evidence-packet-truncation-starving-later-label-sections) | Fix evidence-packet truncation | Safety | S–M | High | in progress | D1, D2 |
 | [D3](#d3--evaluation-harness--curated-question-set) | Evaluation harness | Safety | L | High | todo | — |
 | [D4](#d4--neural-vs-symbolic-vs-combined) | Neural vs symbolic vs combined | Safety | L | High | todo | D3 |
 | [D5](#d5--reasoning--execution-traces) | Reasoning/execution traces | Safety | M | Med | todo | — |
@@ -372,6 +373,21 @@ The differentiator. This turns "careful prompting" into a measurable, layered sa
 - Confidence language: strong / partial / limited / no retrieved coverage.
 
 **Done when:** Answers carry per-claim support status and a critic pass with bounded regeneration.
+
+---
+
+### D2c — Fix evidence-packet truncation starving later label sections
+
+**Effort:** S–M · **Impact:** High · **Status:** in progress · **Depends on:** D1, D2
+
+**Goal:** Fix a retrieval/packet-construction bug found while investigating D2b: `EvidenceAnswerSynthesizer.label_section_payloads()` truncates per drug to `MAX_LABEL_SECTIONS = 16` entries, walking sections in a fixed priority order (`boxed_warning`, `contraindications`, `warnings`, `drug_interactions`, ...) with no per-section sub-limit and no deduplication. For drugs with many OTC label-record variants, near-duplicate boilerplate in the earlier sections alone can exceed the cap before later sections — including `drug_interactions` — are ever reached, even though the deterministic coverage layer (which runs on the untruncated dossier data) already confirmed that evidence exists and told the LLM to address it via the contract. Confirmed live with *"Can I take ibuprofen for my migraine if I'm allergic to aspirin?"*: ibuprofen has 2 boxed_warning + 2 contraindications + 13 warnings (10 of which are near-identical "allergy alert" boilerplate from different manufacturer records) = 17 non-empty entries before `drug_interactions` (2 real entries) is reached, so zero `drug_interactions` text ever reaches the LLM, despite `interaction_check` being marked "addressed." Aspirin shows the same pattern (24 entries before `drug_interactions`, 6 real entries dropped).
+
+**Scope:**
+- Cap entries **per section**, not just per drug overall, so one bloated section (typically `warnings`) can't crowd out every later section in the priority order.
+- Make the cap **contract-aware**: guarantee at least one representative entry from any section the contract already marked `addressed`/required, since that's exactly the evidence the LLM is being instructed to address.
+- Deduplicate near-identical boilerplate text across label records (same drug, same section) before applying any cap, so redundant manufacturer copies don't consume slots that could carry distinct information.
+
+**Done when:** The reported query's evidence packet includes `drug_interactions` text for both ibuprofen and aspirin, and the synthesized answer no longer reports missing `drug_interactions` evidence that was actually retrieved but previously dropped before reaching the prompt.
 
 ---
 
