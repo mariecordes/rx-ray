@@ -83,13 +83,18 @@ def contract_with_addressed_warnings() -> AnswerContract:
     )
 
 
-def bullet(text: str, source_id: str | None, section: str | None) -> EvidenceBullet:
+def bullet(
+    text: str,
+    source_id: str | None,
+    section: str | None,
+    topic: str | None = None,
+) -> EvidenceBullet:
     citations = (
         [EvidenceCitation(source_id=source_id, section=section)]
         if source_id and section
         else []
     )
-    return EvidenceBullet(text=text, citations=citations)
+    return EvidenceBullet(text=text, citations=citations, topic=topic)
 
 
 def answer_with_bullets(bullets: list[EvidenceBullet]) -> EvidenceAnswer:
@@ -104,7 +109,9 @@ def answer_with_bullets(bullets: list[EvidenceBullet]) -> EvidenceAnswer:
 
 
 def test_deterministic_support_status_none_without_citations() -> None:
-    status = deterministic_support_status(set(), False, AnswerContract())
+    status = deterministic_support_status(
+        bullet("No citation.", None, None), AnswerContract()
+    )
     assert status == "none"
 
 
@@ -112,13 +119,17 @@ def test_deterministic_support_status_limited_when_citation_section_not_addresse
     None
 ):
     contract = contract_with_addressed_warnings()
-    status = deterministic_support_status({"adverse_reactions"}, True, contract)
+    status = deterministic_support_status(
+        bullet("Weakly cited.", "label-1", "adverse_reactions"), contract
+    )
     assert status == "limited"
 
 
 def test_deterministic_support_status_strong_when_addressed_and_no_gap() -> None:
     contract = contract_with_addressed_warnings()
-    status = deterministic_support_status({"warnings"}, True, contract)
+    status = deterministic_support_status(
+        bullet("Cited.", "label-1", "warnings"), contract
+    )
     assert status == "strong"
 
 
@@ -136,7 +147,9 @@ def test_deterministic_support_status_partial_when_unresolved_gap_present() -> N
             ]
         }
     )
-    status = deterministic_support_status({"warnings"}, True, contract)
+    status = deterministic_support_status(
+        bullet("Cited.", "label-1", "warnings"), contract
+    )
     assert status == "partial"
 
 
@@ -168,7 +181,82 @@ def test_deterministic_support_status_ignores_structural_interaction_caveat() ->
         ],
         coverage_level="direct",
     )
-    status = deterministic_support_status({"drug_interactions"}, True, contract)
+    status = deterministic_support_status(
+        bullet("Cited.", "label-1", "drug_interactions"), contract
+    )
+    assert status == "strong"
+
+
+def _ibuprofen_aspirin_allergy_contract() -> AnswerContract:
+    """Reproduces the reported cross-intent leakage scenario.
+
+    interaction_check is addressed via drug_interactions text; separately,
+    allergy_context_check is addressed via a "warnings" section match. Before
+    the topic-aware fix, a bullet about the interaction claim that happened to
+    cite "warnings" (instead of "drug_interactions") was incorrectly scored
+    "strong" because "warnings" was pooled in from the unrelated allergy
+    intent.
+    """
+
+    return AnswerContract(
+        items=[
+            AnswerContractItem(
+                kind="must_mention",
+                topic="interaction_check",
+                intent="interaction_check",
+                statement="Address what the retrieved drug interaction sections say.",
+                evidence_available=True,
+                required_sections=["drug_interactions"],
+                coverage_category="intent",
+                coverage_label="interaction_check",
+            ),
+            AnswerContractItem(
+                kind="must_mention",
+                topic="allergy_context_check",
+                intent="allergy_context_check",
+                statement="Address what the retrieved allergy label sections say.",
+                evidence_available=True,
+                required_sections=["warnings"],
+                coverage_category="intent",
+                coverage_label="allergy_context_check",
+            ),
+        ],
+        coverage_level="direct",
+    )
+
+
+def test_deterministic_support_status_topic_scopes_to_matching_intent() -> None:
+    contract = _ibuprofen_aspirin_allergy_contract()
+    interaction_bullet = bullet(
+        "No interaction-specific evidence was retrieved.",
+        "label-1",
+        "warnings",
+        topic="interaction_check",
+    )
+    status = deterministic_support_status(interaction_bullet, contract)
+    assert status == "limited"
+
+
+def test_deterministic_support_status_topic_unaffected_for_matching_intent() -> None:
+    contract = _ibuprofen_aspirin_allergy_contract()
+    allergy_bullet = bullet(
+        "Allergy warnings were retrieved.",
+        "label-1",
+        "warnings",
+        topic="allergy_context_check",
+    )
+    status = deterministic_support_status(allergy_bullet, contract)
+    assert status == "strong"
+
+
+def test_deterministic_support_status_without_topic_falls_back_to_pooled_check() -> (
+    None
+):
+    contract = _ibuprofen_aspirin_allergy_contract()
+    untagged_bullet = bullet(
+        "No topic was assigned to this claim.", "label-1", "warnings"
+    )
+    status = deterministic_support_status(untagged_bullet, contract)
     assert status == "strong"
 
 

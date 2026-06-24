@@ -616,6 +616,54 @@ def test_answer_synthesis_filters_citations_to_supplied_evidence() -> None:
     assert answer.safety_note == STANDARD_SAFETY_NOTE
 
 
+def test_answer_synthesis_whitelists_bullet_topic_against_contract() -> None:
+    from src.query_answer.models import AnswerContract, AnswerContractItem
+
+    packet = EvidenceAnswerSynthesizer.build_evidence_packet(
+        response_with_label_evidence(),
+        secondary_evidence=[secondary_evidence_fixture()],
+    )
+    contract = AnswerContract(
+        items=[
+            AnswerContractItem(
+                kind="must_mention",
+                topic="allergy_context_check",
+                intent="allergy_context_check",
+                statement="Address what the retrieved allergy label sections say.",
+                evidence_available=True,
+                required_sections=["warnings"],
+                coverage_category="intent",
+                coverage_label="allergy_context_check",
+            )
+        ]
+    )
+    answer = EvidenceAnswerSynthesizer.parse_answer_data(
+        {
+            "bullets": [
+                {
+                    "text": "A claim with a topic that exists on the contract.",
+                    "topic": "allergy_context_check",
+                    "citations": [
+                        {"source_id": "label-1", "section": "warnings"}
+                    ],
+                },
+                {
+                    "text": "A claim with an invented topic.",
+                    "topic": "not_a_real_contract_topic",
+                    "citations": [
+                        {"source_id": "label-1", "section": "warnings"}
+                    ],
+                },
+            ],
+        },
+        EvidenceAnswerSynthesizer.allowed_citations(packet),
+        contract,
+    )
+
+    assert answer.bullets[0].topic == "allergy_context_check"
+    assert answer.bullets[1].topic is None
+
+
 def test_query_answer_parameters_load_from_yaml() -> None:
     parameters = load_parameters()
 
