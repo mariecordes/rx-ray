@@ -6,15 +6,13 @@ from dataclasses import dataclass, field
 from typing import Any, Protocol
 
 from src.query_answer.config import QueryAnswerParameters
-from src.query_answer.contract import required_label_sections
 from src.query_answer.models import (
     AnswerContract,
     AnswerCritique,
-    ClaimCritique,
-    ClaimSupportStatus,
+    CitationCritique,
+    CitationSupportStatus,
     ContextTargetedEvidence,
     EvidenceAnswer,
-    EvidenceBullet,
     SecondaryDrugEvidence,
     ValidationFinding,
 )
@@ -31,17 +29,17 @@ ANSWER_SYNTHESIS_API_KEY_ENV = "ANSWER_SYNTHESIS_OPENAI_API_KEY"
 ANSWER_SYNTHESIS_MODEL_ENV = "ANSWER_SYNTHESIS_OPENAI_MODEL"
 ANSWER_CRITIC_PROMPT_KEY = "evidence_answer_critic"
 
-# Caveats that are emitted structurally whenever an intent is present (e.g. the
-# interaction-terminology caveat applies to every interaction question
-# regardless of evidence quality) and should not by themselves downgrade a
-# well-cited claim from "strong" to "partial".
-STRUCTURAL_CAVEAT_TOPICS = {"interaction_terminology"}
+# Bullets are already hard-capped to 5 upstream (parse_answer_data); these are
+# a defensive backstop so a misbehaving model can't blow up the critic prompt.
+MAX_CRITIC_BULLETS = 7
+MAX_CRITIC_CITATIONS = 10
 
-VALID_SUPPORT_STATUSES: tuple[ClaimSupportStatus, ...] = (
-    "strong",
-    "partial",
-    "limited",
-    "none",
+VALID_SUPPORT_STATUSES: tuple[CitationSupportStatus, ...] = (
+    "accurate",
+    "not_reflected",
+    "contradicted",
+    "misrepresented",
+    "misrepresented_used",
 )
 
 
@@ -62,76 +60,27 @@ class CritiqueOutcome:
     notes: list[str] = field(default_factory=list)
 
 
-def deterministic_support_status(
-    bullet: EvidenceBullet,
-    contract: AnswerContract,
-) -> ClaimSupportStatus:
-    """Classify one bullet's support status from its citations and the contract.
-
-    This is the always-on floor: it never needs the LLM critic, so every bullet
-    has a status even when the critic is disabled (e.g. in demo mode).
-
-    When the bullet is tagged with a topic that matches a section-bearing
-    intent item on the contract, the check is scoped to *that* item's
-    required_sections only — this avoids a citation that genuinely supports
-    one intent (e.g. an allergy caveat citing "warnings") from spuriously
-    "supporting" an unrelated bullet (e.g. an interaction claim) just because
-    both intents happen to share a section name. Untagged bullets, or topics
-    that don't resolve to a section-bearing item, fall back to the legacy
-    pooled-sections check across all addressed intents.
-
-    The same topic-scoping applies to the unresolved-gap check: an addressed,
-    topic-matched intent item can't have its own open caveat (the contract
-    only ever records one or the other per intent), so a gap elsewhere in the
-    contract — e.g. a patient-stated allergy term that wasn't found in any
-    label text — should not cap *this* claim's status. Only untagged bullets
-    fall back to the global, pooled gap check, since we don't know what
-    they're about and hedging broadly is the safer default for them.
-    """
-
-    if not bullet.citations:
-        return "none"
-    bullet_citation_sections = {citation.section for citation in bullet.citations}
-    topic_sections = _topic_required_sections(bullet.topic, contract)
-    if topic_sections is not None:
-        addressed_sections = topic_sections
-        has_unresolved_gap = False
-    else:
-        addressed_sections = _addressed_intent_sections(contract)
-        has_unresolved_gap = _has_unresolved_gap(contract)
-    if not bullet_citation_sections & addressed_sections:
-        return "limited"
-    return "partial" if has_unresolved_gap else "strong"
-
-
-def apply_deterministic_statuses(
-    answer: EvidenceAnswer,
-    contract: AnswerContract,
-) -> EvidenceAnswer:
-    bullets = [
-        bullet.model_copy(
-            update={
-                "support_status": deterministic_support_status(bullet, contract)
-            }
-        )
-        for bullet in answer.bullets
-    ]
-    return answer.model_copy(update={"bullets": bullets})
-
-
-def apply_critique_statuses(
+def apply_citation_statuses(
     answer: EvidenceAnswer,
     critique: AnswerCritique,
 ) -> EvidenceAnswer:
-    overrides = {claim.bullet_index: claim.support_status for claim in critique.claims}
+    overrides = {
+        (citation.bullet_index, citation.citation_index): citation.support_status
+        for citation in critique.citations
+    }
     if not overrides:
         return answer
-    bullets = [
-        bullet.model_copy(update={"support_status": overrides[index]})
-        if index in overrides
-        else bullet
-        for index, bullet in enumerate(answer.bullets)
-    ]
+    bullets = []
+    for bullet_index, bullet in enumerate(answer.bullets):
+        citations = [
+            citation.model_copy(
+                update={"support_status": overrides[(bullet_index, citation_index)]}
+            )
+            if (bullet_index, citation_index) in overrides
+            else citation
+            for citation_index, citation in enumerate(bullet.citations)
+        ]
+        bullets.append(bullet.model_copy(update={"citations": citations}))
     return answer.model_copy(update={"bullets": bullets})
 
 
@@ -142,12 +91,12 @@ def critique_answer(
     evidence_packet: dict[str, Any],
     json_requester: CriticJsonRequester | None = None,
 ) -> CritiqueOutcome:
-    """Run the optional LLM critic over a generated answer's claims.
+    """Run the optional LLM critic over a generated answer's citations.
 
-    The critic may only assign a support_status the supplied evidence backs;
-    it cannot invent citations or facts. It overlays statuses onto the
-    deterministic floor and signals whether one bounded regeneration is
-    warranted.
+    For each citation actually used in the answer, the critic checks whether
+    the claim text faithfully reflects the real cited label-section text, and
+    whether the final response correctly uses that information. It may only
+    judge against the supplied cited_text; it cannot invent citations or facts.
     """
 
     prompt_config = EvidenceAnswerSynthesizer._load_prompt_config(
@@ -156,8 +105,7 @@ def critique_answer(
     messages = EvidenceAnswerSynthesizer._format_messages(
         prompt_config.get("messages", []),
         query=query,
-        evidence_packet=json.dumps(evidence_packet, indent=2),
-        generated_answer=json.dumps(_answer_for_critic(answer), indent=2),
+        generated_answer=json.dumps(_critic_input(answer, evidence_packet), indent=2),
     )
     data = _request_critic_json(
         messages=messages,
@@ -180,37 +128,21 @@ def finalize_answer_critique(
     parameters: QueryAnswerParameters,
     critic_json_requester: CriticJsonRequester | None = None,
 ) -> tuple[EvidenceAnswer | None, AnswerCritique, Any]:
-    """Apply the deterministic support-status floor and, if enabled, the
-    optional LLM critic with one bounded regeneration.
+    """Run the optional LLM critic, with one bounded regeneration if needed.
 
-    The deterministic floor always runs so every bullet has a support_status.
-    The critic is opt-in (parameters.enable_answer_critic) and off by default
-    (and in demo mode, where no synthesis LLM is configured).
+    The critic is the only source of citation support_status (opt-in via
+    parameters.enable_answer_critic, on by default; off in demo mode, where no
+    synthesis LLM is configured). When it's off or unavailable, citations
+    simply carry no support_status rather than falling back to a structural
+    guess.
     """
 
     if answer is None:
         return None, AnswerCritique(), validation
 
-    answer = apply_deterministic_statuses(answer, contract)
-    deterministic_claims = [
-        ClaimCritique(
-            bullet_index=index,
-            support_status=bullet.support_status or "none",
-        )
-        for index, bullet in enumerate(answer.bullets)
-    ]
-
     critic_available = critic_json_requester is not None or _critic_llm_configured()
     if not parameters.enable_answer_critic or not critic_available:
-        return (
-            answer,
-            AnswerCritique(
-                enabled=False,
-                source="deterministic",
-                claims=deterministic_claims,
-            ),
-            validation,
-        )
+        return answer, AnswerCritique(enabled=False, source="none"), validation
 
     evidence_packet = synthesizer.build_evidence_packet(
         understanding,
@@ -224,7 +156,7 @@ def finalize_answer_critique(
         evidence_packet=evidence_packet,
         json_requester=critic_json_requester,
     )
-    answer = apply_critique_statuses(answer, outcome.critique)
+    answer = apply_citation_statuses(answer, outcome.critique)
     critique = outcome.critique
 
     if outcome.needs_regeneration and parameters.critic_max_regenerations > 0:
@@ -241,69 +173,59 @@ def finalize_answer_critique(
             regenerated_answer, regenerated_validation = validate_and_enforce(
                 regen_result.answer, contract
             )
-            regenerated_answer = apply_deterministic_statuses(
-                regenerated_answer, contract
-            )
             recheck = critique_answer(
                 query=query,
                 answer=regenerated_answer,
                 evidence_packet=evidence_packet,
                 json_requester=critic_json_requester,
             )
-            answer = apply_critique_statuses(regenerated_answer, recheck.critique)
+            answer = apply_citation_statuses(regenerated_answer, recheck.critique)
             validation = regenerated_validation
             critique = recheck.critique.model_copy(update={"regenerated": True})
 
     return answer, critique, validation
 
 
-def _topic_required_sections(
-    topic: str | None,
-    contract: AnswerContract,
-) -> set[str] | None:
-    """Required sections for the contract item matching ``topic``, if any.
+def _critic_input(
+    answer: EvidenceAnswer,
+    evidence_packet: dict[str, Any],
+) -> dict[str, Any]:
+    """Build the minimal critic payload: response, limitations, and -- for each
+    citation actually used -- its claim text and the real cited label-section
+    text (the same text, same truncation, the synthesis model was shown).
 
-    Returns None when there's no topic, or the topic doesn't resolve to a
-    section-bearing intent item, so the caller can fall back to the pooled
-    legacy check instead of incorrectly treating it as "no sections required."
+    Deliberately excludes the full evidence_packet, label_product_context, and
+    answer_contract: the critic only needs enough to judge whether a claim and
+    the response are faithful to what was actually retrieved and cited.
     """
 
-    if not topic:
-        return None
-    for item in contract.items:
-        if (
-            item.topic == topic
-            and item.coverage_category == "intent"
-            and item.evidence_available
-            and item.required_sections
-        ):
-            return set(item.required_sections)
-    return None
-
-
-def _addressed_intent_sections(contract: AnswerContract) -> set[str]:
-    return required_label_sections(contract)
-
-
-def _has_unresolved_gap(contract: AnswerContract) -> bool:
-    return any(
-        item.kind == "must_caveat" and item.topic not in STRUCTURAL_CAVEAT_TOPICS
-        for item in contract.items
-    )
-
-
-def _answer_for_critic(answer: EvidenceAnswer) -> dict[str, Any]:
+    cited_text_by_key = {
+        (section.get("source_id"), section.get("section")): section.get("text", "")
+        for section in evidence_packet.get("label_sections", [])
+    }
+    rows: list[dict[str, Any]] = []
+    for bullet_index, bullet in enumerate(answer.bullets[:MAX_CRITIC_BULLETS]):
+        for citation_index, citation in enumerate(bullet.citations):
+            if len(rows) >= MAX_CRITIC_CITATIONS:
+                break
+            rows.append(
+                {
+                    "bullet_index": bullet_index,
+                    "citation_index": citation_index,
+                    "claim_text": bullet.text,
+                    "source_id": citation.source_id,
+                    "section": citation.section,
+                    "cited_text": cited_text_by_key.get(
+                        (citation.source_id, citation.section), ""
+                    ),
+                }
+            )
+        if len(rows) >= MAX_CRITIC_CITATIONS:
+            break
     return {
         "response": answer.response,
         "limitations": answer.limitations,
-        "claims": [
-            {
-                "index": index,
-                "text": bullet.text,
-                "citations": [citation.model_dump() for citation in bullet.citations],
-            }
-            for index, bullet in enumerate(answer.bullets)
-        ],
+        "citations": rows,
     }
 
 
@@ -333,17 +255,24 @@ def _request_critic_json(
 
 
 def _parse_critique(data: dict[str, Any], answer: EvidenceAnswer) -> CritiqueOutcome:
-    claims: list[ClaimCritique] = []
-    for item in list_value(data.get("claims")):
-        index = _parse_index(item.get("index"))
-        if index is None or index < 0 or index >= len(answer.bullets):
+    citations: list[CitationCritique] = []
+    for item in list_value(data.get("citations")):
+        bullet_index = _parse_index(item.get("bullet_index"))
+        citation_index = _parse_index(item.get("citation_index"))
+        if bullet_index is None or citation_index is None:
+            continue
+        if bullet_index < 0 or bullet_index >= len(answer.bullets):
+            continue
+        bullet_citations = answer.bullets[bullet_index].citations
+        if citation_index < 0 or citation_index >= len(bullet_citations):
             continue
         status = str(item.get("support_status", "")).strip()
         if status not in VALID_SUPPORT_STATUSES:
             continue
-        claims.append(
-            ClaimCritique(
-                bullet_index=index,
+        citations.append(
+            CitationCritique(
+                bullet_index=bullet_index,
+                citation_index=citation_index,
                 support_status=status,  # type: ignore[arg-type]
                 rationale=str(item.get("rationale", "")).strip(),
                 issues=[
@@ -371,7 +300,7 @@ def _parse_critique(data: dict[str, Any], answer: EvidenceAnswer) -> CritiqueOut
     critique = AnswerCritique(
         enabled=True,
         source="llm",
-        claims=claims,
+        citations=citations,
         global_findings=global_findings,
     )
     return CritiqueOutcome(
@@ -389,18 +318,21 @@ def _parse_index(value: Any) -> int | None:
 
 def _format_critic_feedback(critique: AnswerCritique) -> str:
     lines: list[str] = []
-    for claim in critique.claims:
-        if claim.support_status not in {"limited", "none"} and not claim.issues:
+    for citation in critique.citations:
+        if citation.support_status == "accurate" and not citation.issues:
             continue
-        detail = f"- Claim {claim.bullet_index}: support={claim.support_status}"
-        if claim.issues:
-            detail += f"; issues={', '.join(claim.issues)}"
-        if claim.rationale:
-            detail += f"; {claim.rationale}"
+        detail = (
+            f"- Bullet {citation.bullet_index}, citation {citation.citation_index}: "
+            f"support={citation.support_status}"
+        )
+        if citation.issues:
+            detail += f"; issues={', '.join(citation.issues)}"
+        if citation.rationale:
+            detail += f"; {citation.rationale}"
         lines.append(detail)
     for finding in critique.global_findings:
         lines.append(f"- {finding.kind}: {finding.message}")
-    return "\n".join(lines) if lines else "No specific claim issues were flagged."
+    return "\n".join(lines) if lines else "No specific citation issues were flagged."
 
 
 def _critic_api_key() -> str | None:
@@ -420,9 +352,7 @@ def _critic_llm_configured() -> bool:
 __all__ = [
     "CriticJsonRequester",
     "CritiqueOutcome",
-    "apply_critique_statuses",
-    "apply_deterministic_statuses",
+    "apply_citation_statuses",
     "critique_answer",
-    "deterministic_support_status",
     "finalize_answer_critique",
 ]

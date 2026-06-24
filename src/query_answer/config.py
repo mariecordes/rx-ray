@@ -20,7 +20,7 @@ class QueryAnswerParameters:
     network_secondary_depth: int = 2
     network_max_edges_per_center: int = 200
     network_max_total_edges: int = 600
-    enable_answer_critic: bool = False
+    enable_answer_critic: bool = True
     critic_max_regenerations: int = 1
 
 
@@ -98,7 +98,7 @@ def load_query_answer_parameters() -> QueryAnswerParameters:
             maximum=1200,
         ),
         enable_answer_critic=bool(
-            query_answer.get("enable_answer_critic", False)
+            query_answer.get("enable_answer_critic", True)
         ),
         critic_max_regenerations=bounded_int(
             query_answer.get("critic_max_regenerations"),

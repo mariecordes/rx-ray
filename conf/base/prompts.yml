@@ -113,7 +113,6 @@ evidence_answer_synthesis:
           "bullets": [
             {
               "text": "one evidence point grounded in the packet",
-              "topic": "the answer_contract item topic this bullet primarily addresses, or null",
               "citations": [
                 {
                   "source_id": "source_id from a supplied label section",
@@ -131,10 +130,6 @@ evidence_answer_synthesis:
         - Cite only source_id and section pairs that appear in label_sections.
         - Satisfy every answer_contract item: address must_mention topics, and include
           every must_caveat statement in limitations.
-        - Set each bullet's "topic" to the exact "topic" value of the single
-          answer_contract item it primarily addresses. Use null if the bullet is
-          general or doesn't map cleanly to one specific item. Never invent a topic
-          that isn't in answer_contract.
         - Do not invent citations, labels, studies, contraindications, interactions, or patient-specific advice.
         - Do not treat RxNorm terminology relationships as clinical interaction evidence.
         - When secondary-drug evidence is supplied, cite primary and secondary label sections as appropriate.
@@ -181,52 +176,52 @@ evidence_answer_critic:
     - role: system
       content: |
         You are an automated critic auditing a generated medication answer for rx-ray.
-        You are given the user query, the same evidence packet used to generate the
-        answer (including label_sections, label_product_context, and answer_contract),
-        and the generated answer with its claims numbered, each with the label_sections
-        entry (or entries) it cites as its source.
+        You are given the user query, the final response, its limitations, and a
+        list of citations actually used in the answer. Each citation includes the
+        claim text that cited it and cited_text -- the real retrieved label-section
+        text for that citation, the same text the answer-writing model saw.
 
-        For each numbered claim, judge support_status by checking whether the claim
-        text faithfully reflects what its cited source(s) actually say in label_sections
-        (the citable evidence) — never from label_product_context or general knowledge.
-        You are rating how well the claim represents its cited source, not the source
-        itself (a retrieved label section is never "partial" or "limited" on its own):
-        - "strong": the cited source(s) are present in label_sections and the claim
-          accurately reflects what they say.
-        - "partial": the claim has valid citations, but they only partially or loosely
-          support what the claim says, or the answer_contract still has an unresolved
-          gap related to this claim's topic.
-        - "limited": the claim has citations, but the cited source(s) do not say what
-          the claim says.
-        - "none": the claim has no valid citations, or the cited evidence does not
-          appear in label_sections.
+        For each citation, judge two things against cited_text only (never general
+        medical knowledge):
+        1. Does the claim text faithfully represent what cited_text says?
+        2. Does the response correctly reflect that same information, omit it, or
+           say something that conflicts with it?
 
-        Flag issues per claim from this set: "unsupported", "overconfident",
-        "missing_caveat", "yes_no_framing", "invented_citation". Do not invent new
-        citations or facts; only assess what is supplied.
+        Assign exactly one support_status per citation:
+        - "accurate": cited_text supports the claim, and the response reflects it.
+        - "not_reflected": cited_text supports the claim, but the response doesn't
+          mention or use it.
+        - "contradicted": cited_text supports the claim, but the response says
+          something that conflicts with it.
+        - "misrepresented": cited_text does not say what the claim says, and the
+          response does not repeat the incorrect claim.
+        - "misrepresented_used": cited_text does not say what the claim says, and
+          the response repeats or relies on it anyway.
 
-        Also review the answer as a whole for global_findings: for example, a
-        must_caveat from answer_contract that is missing from limitations, or
-        yes/no medical-advice framing anywhere in the answer. Use kind values like
-        "missing_caveat" or "yes_no_framing", severity "warning" for issues that
-        should block release and "info" otherwise.
+        Flag issues per citation from this set: "overconfident", "invented_detail".
+        Base every judgment only on the supplied cited_text; never invent facts.
 
-        Set needs_regeneration to true only when at least one claim is "none" or
-        "limited" despite citable evidence existing in label_sections, or a required
-        answer_contract must_caveat is missing from limitations. Otherwise false.
+        Separately, if you notice anything else worth flagging as a limitation
+        based only on what you found while checking citations -- not on outside
+        knowledge -- add it to global_findings. Don't re-flag a limitation already
+        listed.
+
+        Set needs_regeneration to true only when at least one citation is
+        "contradicted", "misrepresented", or "misrepresented_used". Otherwise false.
 
         Return JSON only with this exact shape:
         {
-          "claims": [
+          "citations": [
             {
-              "index": 0,
-              "support_status": "strong",
+              "bullet_index": 0,
+              "citation_index": 0,
+              "support_status": "accurate",
               "rationale": "short reason",
               "issues": []
             }
           ],
           "global_findings": [
-            {"kind": "missing_caveat", "severity": "warning", "message": "...", "topic": null}
+            {"kind": "...", "severity": "info", "message": "...", "topic": null}
           ],
           "needs_regeneration": false
         }
@@ -235,10 +230,7 @@ evidence_answer_critic:
         Query:
         {query}
 
-        Evidence packet:
-        {evidence_packet}
-
-        Generated answer (claims numbered):
+        Response and cited sources to review:
         {generated_answer}
 
 evidence_answer_critic_regen:

@@ -16,15 +16,22 @@ EvidenceCoverageStatus = Literal[
 ]
 
 
+CitationSupportStatus = Literal[
+    "accurate",
+    "not_reflected",
+    "contradicted",
+    "misrepresented",
+    "misrepresented_used",
+]
+
+
 class EvidenceCitation(BaseModel):
     """Reference to evidence supplied to the answer synthesis prompt."""
 
     source_id: str
     section: str
     snippet: str | None = None
-
-
-ClaimSupportStatus = Literal["strong", "partial", "limited", "none"]
+    support_status: CitationSupportStatus | None = None
 
 
 class EvidenceBullet(BaseModel):
@@ -32,8 +39,6 @@ class EvidenceBullet(BaseModel):
 
     text: str
     citations: list[EvidenceCitation] = Field(default_factory=list)
-    support_status: ClaimSupportStatus | None = None
-    topic: str | None = None
 
 
 class EvidenceAnswer(BaseModel):
@@ -113,29 +118,31 @@ class AnswerValidationReport(BaseModel):
     passed: bool = True
 
 
-class ClaimCritique(BaseModel):
-    """Per-claim support assessment for one generated bullet (Guardrails V3)."""
+class CitationCritique(BaseModel):
+    """Per-citation faithfulness assessment from the optional LLM critic."""
 
     bullet_index: int
-    support_status: ClaimSupportStatus
+    citation_index: int
+    support_status: CitationSupportStatus
     rationale: str = ""
     issues: list[str] = Field(default_factory=list)
 
 
-CritiqueSource = Literal["llm", "deterministic"]
+CritiqueSource = Literal["llm", "none"]
 
 
 class AnswerCritique(BaseModel):
-    """Outcome of the optional post-generation critic pass (Guardrails V3).
+    """Outcome of the optional post-generation critic pass.
 
-    The deterministic classifier always runs as a floor so every bullet has a
-    support_status even when the LLM critic is disabled; the critic, when
-    enabled, may override those statuses but never the other way around.
+    The critic is the only source of citation support_status -- there is no
+    deterministic fallback. When disabled or unavailable (e.g. no LLM
+    configured, or in demo mode), citations simply carry no support_status
+    and no badge is shown, rather than a structural guess.
     """
 
     enabled: bool = False
-    source: CritiqueSource = "deterministic"
-    claims: list[ClaimCritique] = Field(default_factory=list)
+    source: CritiqueSource = "none"
+    citations: list[CitationCritique] = Field(default_factory=list)
     global_findings: list[ValidationFinding] = Field(default_factory=list)
     regenerated: bool = False
     notes: list[str] = Field(default_factory=list)
