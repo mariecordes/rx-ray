@@ -52,10 +52,13 @@ from src.query_answer.secondary import build_secondary_evidence
 from src.query_answer.service import QueryAnswerService
 from src.query_answer.synthesizer import (
     ANSWER_CITATION_RETRY_PROMPT_KEY,
+    MAX_LABEL_SECTIONS,
+    MAX_SECTION_ENTRIES,
     AnswerSynthesisResult,
     EvidenceAnswerSynthesizer,
     SOURCE_LINK_LIMITATION,
     STANDARD_SAFETY_NOTE,
+    label_section_payloads,
 )
 from src.query_understanding.extractor import ExtractionResult, HybridQueryExtractor
 from src.query_understanding.models import (
@@ -713,6 +716,141 @@ def test_evidence_packet_includes_secondary_evidence() -> None:
     )
     assert ("label-2", "warnings") in EvidenceAnswerSynthesizer.allowed_citations(
         packet
+    )
+
+
+def _label_sections(count: int, *, section: str) -> dict:
+    return {
+        section: [
+            LabelSection(
+                section=section,
+                text=f"Distinct {section} text for record {index}.",
+                source_id=f"{section}-{index}",
+            )
+            for index in range(count)
+        ]
+    }
+
+
+def test_label_section_payloads_caps_entries_per_section() -> None:
+    sections = _label_sections(13, section="warnings")
+
+    payloads = label_section_payloads(sections, evidence_scope="primary")
+
+    assert len(payloads) == MAX_SECTION_ENTRIES
+
+
+def test_label_section_payloads_deduplicates_near_identical_boilerplate() -> None:
+    sections = {
+        "warnings": [
+            LabelSection(
+                section="warnings",
+                text="Allergy alert: this drug may cause a severe allergic reaction.",
+                source_id=f"warnings-{index}",
+            )
+            for index in range(5)
+        ]
+        + [
+            LabelSection(
+                section="warnings",
+                text="Cardiovascular thrombotic events have been reported.",
+                source_id="warnings-distinct",
+            )
+        ]
+    }
+
+    payloads = label_section_payloads(sections, evidence_scope="primary")
+
+    texts = {payload["text"] for payload in payloads}
+    assert len(payloads) == 2
+    assert "Allergy alert" in next(t for t in texts if "Allergy" in t)
+    assert any("Cardiovascular" in text for text in texts)
+
+
+def test_label_section_payloads_guarantees_required_section_survives_truncation() -> (
+    None
+):
+    # Per-section capping alone isn't always enough: a drug with several
+    # distinct, well-populated sections ahead of a required one in priority
+    # order can still exhaust MAX_LABEL_SECTIONS before reaching it.
+    earlier_sections = (
+        "boxed_warning",
+        "contraindications",
+        "warnings",
+        "drug_interactions",
+        "pregnancy",
+        "lactation",
+        "pregnancy_or_breast_feeding",
+        "indications_and_usage",
+        "adverse_reactions",
+    )
+    sections: dict = {}
+    for name in earlier_sections:
+        sections.update(_label_sections(MAX_SECTION_ENTRIES, section=name))
+    sections.update(_label_sections(2, section="use_in_specific_populations"))
+
+    without_guarantee = label_section_payloads(sections, evidence_scope="primary")
+    with_guarantee = label_section_payloads(
+        sections,
+        evidence_scope="primary",
+        required_sections={"use_in_specific_populations"},
+    )
+
+    assert not any(
+        p["section"] == "use_in_specific_populations" for p in without_guarantee
+    )
+    assert any(
+        p["section"] == "use_in_specific_populations" for p in with_guarantee
+    )
+    assert len(with_guarantee) <= MAX_LABEL_SECTIONS
+
+
+def test_evidence_packet_keeps_drug_interactions_when_contract_requires_it() -> None:
+    sections = {
+        **_label_sections(2, section="boxed_warning"),
+        **_label_sections(2, section="contraindications"),
+        **_label_sections(13, section="warnings"),
+        **_label_sections(2, section="drug_interactions"),
+    }
+    dossier = DrugDossier(
+        query="ibuprofen",
+        resolved_drug=RxNormConcept(rxcui="5640", name="ibuprofen", tty="IN"),
+        label_evidence=OpenFDALabelEvidence(
+            rxcui="5640",
+            labels_found=1,
+            label_limit=1,
+            label_records=[OpenFDALabelRecord(source_id="boxed_warning-0")],
+            sections=sections,
+        ),
+    )
+    understanding_with_dossier = QueryUnderstandingResponse(
+        query="Can I take ibuprofen if I'm allergic to aspirin?",
+        state=QueryState(primary_drug="ibuprofen", all_drugs_mentioned=["ibuprofen"]),
+        primary_dossier=dossier,
+    )
+    contract = AnswerContract(
+        items=[
+            AnswerContractItem(
+                kind="must_mention",
+                topic="interaction_check",
+                intent="interaction_check",
+                statement="Address what the retrieved drug interaction sections say.",
+                evidence_available=True,
+                required_sections=["drug_interactions"],
+                coverage_category="intent",
+                coverage_label="interaction_check",
+            )
+        ]
+    )
+
+    packet = EvidenceAnswerSynthesizer.build_evidence_packet(
+        understanding_with_dossier,
+        contract=contract,
+    )
+
+    assert any(
+        section["section"] == "drug_interactions"
+        for section in packet["label_sections"]
     )
 
 
