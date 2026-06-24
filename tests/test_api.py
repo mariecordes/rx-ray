@@ -571,8 +571,6 @@ def test_answer_synthesis_filters_citations_to_supplied_evidence() -> None:
     answer = EvidenceAnswerSynthesizer.parse_answer_data(
         {
             "response": "Retrieved labels raise caution about the question.",
-            "evidence_summary": "The warning evidence is relevant to the query.",
-            "summary": "Retrieved label evidence mentions aspirin warnings.",
             "bullets": [
                 {
                     "text": "The warning evidence comes from the supplied label.",
@@ -602,8 +600,6 @@ def test_answer_synthesis_filters_citations_to_supplied_evidence() -> None:
     )
 
     assert answer.response == "Retrieved labels raise caution about the question."
-    assert answer.evidence_summary == "The warning evidence is relevant to the query."
-    assert answer.summary == "The warning evidence is relevant to the query."
     assert [citation.model_dump() for citation in answer.bullets[0].citations] == [
         {
             "source_id": "label-1",
@@ -1985,8 +1981,6 @@ def test_coverage_flags_ingredient_fallback_broadening() -> None:
 
     answer = EvidenceAnswer(
         response="Summary.",
-        evidence_summary="Summary.",
-        summary="Summary.",
         bullets=[],
         limitations=[],
         safety_note="note",
@@ -2256,8 +2250,6 @@ def test_validate_and_enforce_appends_missing_caveat_and_flags_yes_no_framing() 
     )
     answer = EvidenceAnswer(
         response="You can take both medications together.",
-        evidence_summary="Summary.",
-        summary="Summary.",
         bullets=[],
         limitations=[],
         safety_note="note",
@@ -2297,8 +2289,6 @@ def test_validate_and_enforce_does_not_duplicate_existing_caveat() -> None:
     )
     answer = EvidenceAnswer(
         response="Evidence-based response.",
-        evidence_summary="Summary.",
-        summary="Summary.",
         bullets=[],
         limitations=[statement],
         safety_note="note",
@@ -2327,8 +2317,6 @@ def test_validate_and_enforce_flags_unaddressed_must_mention() -> None:
     )
     answer = EvidenceAnswer(
         response="This medication has several uses.",
-        evidence_summary="Summary.",
-        summary="Summary.",
         bullets=[
             EvidenceBullet(
                 text="See warnings.",

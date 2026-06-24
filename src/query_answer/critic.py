@@ -283,7 +283,6 @@ def _has_unresolved_gap(contract: AnswerContract) -> bool:
 def _answer_for_critic(answer: EvidenceAnswer) -> dict[str, Any]:
     return {
         "response": answer.response,
-        "evidence_summary": answer.evidence_summary,
         "limitations": answer.limitations,
         "claims": [
             {

@@ -110,7 +110,6 @@ evidence_answer_synthesis:
         Return JSON only with this exact shape:
         {
           "response": "1-3 sentences that directly respond to the user's question without making a medical-advice yes/no decision",
-          "evidence_summary": "2-4 sentences summarizing the retrieved evidence with respect to the original query, including any important missing evidence if it affects interpretation",
           "bullets": [
             {
               "text": "one evidence point grounded in the packet",
@@ -143,7 +142,11 @@ evidence_answer_synthesis:
         - Keep snippets short and quote-like, but do not copy long passages.
         - If no relevant label text exists, return an empty bullets array and explain the limitation.
         - The response field should feel connected to the user's actual question.
-        - The evidence_summary field should not merely list all evidence; it should prioritize evidence relevant to the query.
+        - response and bullets should together cover the relevant retrieved evidence;
+          do not summarize or restate that evidence again outside of these fields. If a
+          nuance about the evidence isn't captured by response or an existing bullet, add
+          it as its own cited bullet, or as a limitation if it reflects a gap — never as
+          an uncited addition.
     - role: user
       content: |
         Query:

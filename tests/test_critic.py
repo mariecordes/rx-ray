@@ -100,8 +100,6 @@ def bullet(
 def answer_with_bullets(bullets: list[EvidenceBullet]) -> EvidenceAnswer:
     return EvidenceAnswer(
         response="Some response.",
-        evidence_summary="Some summary.",
-        summary="Some summary.",
         bullets=bullets,
         limitations=[],
         safety_note=STANDARD_SAFETY_NOTE,
@@ -471,7 +469,6 @@ def test_finalize_answer_critique_regenerates_exactly_once(
         synth_calls.append(messages)
         return {
             "response": "Regenerated.",
-            "evidence_summary": "Regenerated summary.",
             "bullets": [
                 {
                     "text": "Regenerated bullet.",

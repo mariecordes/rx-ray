@@ -281,10 +281,6 @@ export const demoQueryAnswer: QueryAnswerResponse = {
   answer: {
     response:
       "**The demo evidence does not provide a yes/no safety decision**, but it shows how retrieved label-style evidence can frame the question about cetirizine, ibuprofen, aspirin, pollen allergy, and swollen eyes.",
-    evidence_summary:
-      "This local fixture includes ibuprofen, aspirin, and cetirizine label-style evidence relevant to the example query. It is intentionally compact, so missing or limited evidence should be treated as a demo limitation rather than a complete public-label review.",
-    summary:
-      "This demo response is loaded from a local fixture. It shows how rx-ray would ground a question about cetirizine, ibuprofen, aspirin, pollen allergy, and swollen eyes in retrieved label-style evidence without making a live LLM request.",
     bullets: [
       {
         text: "The fixture includes ibuprofen label evidence that explicitly mentions aspirin in a drug-interaction-style section.",

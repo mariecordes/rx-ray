@@ -63,7 +63,7 @@ def validate_and_enforce(
         )
 
     combined_text = " ".join(
-        [answer.response, answer.evidence_summary, *(b.text for b in answer.bullets)]
+        [answer.response, *(b.text for b in answer.bullets)]
     )
     if _has_yes_no_framing(combined_text) and YES_NO_FRAMING_CAVEAT not in limitations:
         limitations.append(YES_NO_FRAMING_CAVEAT)
