@@ -25,7 +25,7 @@ import { citationDisplayLabel } from "@/components/dossier/display";
 import { EvidenceCoverageTarget } from "@/components/dossier/evidence-model";
 import {
   AnswerCritique,
-  ClaimSupportStatus,
+  CitationSupportStatus,
   EvidenceAnswer,
   EvidenceBullet,
   EvidenceCitation,
@@ -321,7 +321,7 @@ function EvidenceAnswerCard({
       {citedBullets.length ? (
         <AnswerSection
           title="Sources"
-          infoText="Each source's badge rates how faithfully the text next to it reflects what that retrieved label section actually says — not the quality of the source itself. Strong: the cited section matches what this point is about and says what's claimed. Limited: it's cited, but doesn't say what's claimed. Partial: the point isn't tied to one specific topic and the answer still has an open gap elsewhere. This is a structural check, not a full read of the cited text — enable the optional answer critic for a deeper semantic check."
+          infoText="Each source's badge comes from an automated critic that reads the real retrieved label text for that citation and checks two things: does the claim next to it faithfully represent that text, and does the final answer above correctly use it. Accurate: faithful claim, correctly used. Not reflected: faithful claim, but the answer doesn't mention it. Contradicted: faithful claim, but the answer says something that conflicts with it. Misrepresented: the claim doesn't match the cited text. Misrepresented & used: the claim doesn't match the cited text, and the answer relies on it anyway. No badge means the critic didn't run for this answer."
           headerExtra={<ClaimSupportChips counts={claimSupportCounts} />}
         >
           <div className="space-y-2">
@@ -346,14 +346,14 @@ function EvidenceAnswerCard({
                     >
                       <FileText className="mt-0.5 size-4 shrink-0 text-slate-700" />
                       <span>{citationDisplayLabel(citation, sourceById)}</span>
-                      {bullet.support_status ? (
+                      {citation.support_status ? (
                         <span
                           className={cn(
                             "ml-1 w-fit shrink-0 rounded-md border px-1.5 py-0.5 text-[11px] font-medium",
-                            claimSupportClasses[bullet.support_status]
+                            claimSupportClasses[citation.support_status]
                           )}
                         >
-                          {claimSupportLabels[bullet.support_status]}
+                          {claimSupportLabels[citation.support_status]}
                         </span>
                       ) : null}
                     </div>
@@ -406,7 +406,7 @@ function AnswerCritiqueSection({ critique }: { critique: AnswerCritique }) {
   return (
     <AnswerSection
       title="Answer critique"
-      infoText="An automated self-check: a second LLM pass reviews each claim above against the same retrieved evidence and flags anything unsupported, overconfident, or missing a required caveat. This is not a clinical review."
+      infoText="An automated self-check: a second LLM pass checks each citation above against its real retrieved label text and the final answer (see the Sources badges for the per-citation result), then flags anything else worth noting here. This is not a clinical review."
       tone="audit"
       badgeCount={critique.global_findings.length || undefined}
     >
@@ -765,10 +765,14 @@ const coverageStatusClasses: Record<EvidenceCoverageStatus, string> = {
 };
 
 function claimSupportStatusCounts(bullets: EvidenceBullet[]) {
-  const counts: Partial<Record<ClaimSupportStatus, number>> = {};
+  const counts: Partial<Record<CitationSupportStatus, number>> = {};
   for (const bullet of bullets) {
-    const status = bullet.support_status ?? "none";
-    counts[status] = (counts[status] ?? 0) + 1;
+    for (const citation of bullet.citations) {
+      if (!citation.support_status) {
+        continue;
+      }
+      counts[citation.support_status] = (counts[citation.support_status] ?? 0) + 1;
+    }
   }
   return counts;
 }
@@ -776,7 +780,7 @@ function claimSupportStatusCounts(bullets: EvidenceBullet[]) {
 function ClaimSupportChips({
   counts,
 }: {
-  counts: Partial<Record<ClaimSupportStatus, number>>;
+  counts: Partial<Record<CitationSupportStatus, number>>;
 }) {
   return (
     <>
@@ -801,25 +805,28 @@ function ClaimSupportChips({
   );
 }
 
-const claimSupportStatusOrder: ClaimSupportStatus[] = [
-  "strong",
-  "partial",
-  "limited",
-  "none",
+const claimSupportStatusOrder: CitationSupportStatus[] = [
+  "accurate",
+  "not_reflected",
+  "contradicted",
+  "misrepresented",
+  "misrepresented_used",
 ];
 
-const claimSupportLabels: Record<ClaimSupportStatus, string> = {
-  strong: "Strong support",
-  partial: "Partial support",
-  limited: "Limited support",
-  none: "No citation",
+const claimSupportLabels: Record<CitationSupportStatus, string> = {
+  accurate: "Accurate",
+  not_reflected: "Not reflected",
+  contradicted: "Contradicted",
+  misrepresented: "Misrepresented",
+  misrepresented_used: "Misrepresented & used",
 };
 
-const claimSupportClasses: Record<ClaimSupportStatus, string> = {
-  strong: "border-emerald-200 bg-emerald-50 text-emerald-800",
-  partial: "border-sky-200 bg-sky-50 text-sky-800",
-  limited: "border-amber-200 bg-amber-50 text-amber-900",
-  none: "border-slate-200 bg-slate-50 text-slate-700",
+const claimSupportClasses: Record<CitationSupportStatus, string> = {
+  accurate: "border-emerald-200 bg-emerald-50 text-emerald-800",
+  not_reflected: "border-sky-200 bg-sky-50 text-sky-800",
+  contradicted: "border-red-200 bg-red-50 text-red-800",
+  misrepresented: "border-amber-200 bg-amber-50 text-amber-900",
+  misrepresented_used: "border-rose-300 bg-rose-100 text-rose-900",
 };
 
 function isLowSignalCoverageItem(item: EvidenceCoverageItem) {

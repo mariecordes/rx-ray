@@ -151,20 +151,24 @@ export type QueryUnderstandingResponse = {
   errors: string[];
 };
 
+export type CitationSupportStatus =
+  | "accurate"
+  | "not_reflected"
+  | "contradicted"
+  | "misrepresented"
+  | "misrepresented_used";
+
 export type EvidenceCitation = {
   source_id: string;
   section: string;
   snippet?: string | null;
   rxcui?: string | null;
+  support_status?: CitationSupportStatus | null;
 };
-
-export type ClaimSupportStatus = "strong" | "partial" | "limited" | "none";
 
 export type EvidenceBullet = {
   text: string;
   citations: EvidenceCitation[];
-  support_status?: ClaimSupportStatus | null;
-  topic?: string | null;
 };
 
 export type EvidenceAnswer = {
@@ -232,19 +236,20 @@ export type AnswerValidationReport = {
   passed: boolean;
 };
 
-export type ClaimCritique = {
+export type CitationCritique = {
   bullet_index: number;
-  support_status: ClaimSupportStatus;
+  citation_index: number;
+  support_status: CitationSupportStatus;
   rationale: string;
   issues: string[];
 };
 
-export type CritiqueSource = "llm" | "deterministic";
+export type CritiqueSource = "llm" | "none";
 
 export type AnswerCritique = {
   enabled: boolean;
   source: CritiqueSource;
-  claims: ClaimCritique[];
+  citations: CitationCritique[];
   global_findings: ValidationFinding[];
   regenerated: boolean;
   notes: string[];

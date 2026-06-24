@@ -292,7 +292,6 @@ export const demoQueryAnswer: QueryAnswerResponse = {
               "ask a doctor or pharmacist before use if taking aspirin...",
           },
         ],
-        support_status: "strong",
       },
       {
         text: "The fixture includes separate medication-specific label evidence for aspirin and cetirizine so the multi-drug tabs and evidence map can be tested.",
@@ -308,7 +307,6 @@ export const demoQueryAnswer: QueryAnswerResponse = {
             snippet: "cetirizine labels can include drowsiness warnings...",
           },
         ],
-        support_status: "limited",
       },
     ],
     limitations: [
@@ -971,11 +969,8 @@ export const demoQueryAnswer: QueryAnswerResponse = {
   },
   critique: {
     enabled: false,
-    source: "deterministic",
-    claims: [
-      { bullet_index: 0, support_status: "strong", rationale: "", issues: [] },
-      { bullet_index: 1, support_status: "limited", rationale: "", issues: [] },
-    ],
+    source: "none",
+    citations: [],
     global_findings: [],
     regenerated: false,
     notes: [],
