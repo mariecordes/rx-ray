@@ -164,6 +164,7 @@ export type EvidenceBullet = {
   text: string;
   citations: EvidenceCitation[];
   support_status?: ClaimSupportStatus | null;
+  topic?: string | null;
 };
 
 export type EvidenceAnswer = {
