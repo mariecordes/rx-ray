@@ -288,7 +288,18 @@ function EvidenceAnswerCard({
       {hasVisibleCoverage ? (
         <AnswerSection
           title="Find out what the retrieved evidence covers"
-          infoText="This is a deterministic, pre-answer check: did we retrieve label text that would normally cover what was extracted from your question and what intent it was tagged with? It does not assess whether the generated answer below actually used or correctly interpreted that evidence — it only confirms whether matching evidence exists in what was retrieved. Hover over a reason when available to inspect the matching evidence snippet."
+          infoContent={
+            <div className="w-72">
+              <p>
+                This is a deterministic, pre-answer check: did we retrieve label text that
+                would normally cover what was extracted from your question and what intent
+                it was tagged with? It does not assess whether the generated answer below
+                actually used or correctly interpreted that evidence - it only confirms
+                whether matching evidence exists in what was retrieved.
+              </p><br />
+              <p>Hover over a reason when available to inspect the matching evidence snippet.</p>
+            </div>
+          }
           tone="audit"
           headerExtra={<CoverageStatusChips counts={visibleCoverageStatusCounts} />}
         >
@@ -849,45 +860,30 @@ function ClaimSupportChips({
 }
 
 function CitationSupportMatrix() {
-  const cellClasses = "px-2 py-1 text-center";
-  const headerClasses = "px-2 py-1 text-left font-semibold text-slate-600";
   return (
-    <div className="space-y-2">
+    <div className="w-72">
       <p>
-        Each cited source gets two automatic checks: does the claim{" "}
-        <strong>match the label text it cites</strong>, and how the{" "}
-        <strong>final answer uses</strong> it.
+        Each cited source gets two automatic checks:
       </p>
-      <table className="w-full border-collapse text-[11px]">
-        <thead>
-          <tr>
-            <th className={headerClasses}></th>
-            <th className={headerClasses}>Reflected</th>
-            <th className={headerClasses}>Not reflected</th>
-            <th className={headerClasses}>Contradicted</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr className="border-t border-slate-100">
-            <th className={cn(headerClasses, "whitespace-nowrap")}>
-              Matches source
-            </th>
-            <td className={cn(cellClasses, "text-emerald-700")}>
-              ✅ Verified
-            </td>
-            <td className={cellClasses}>not reflected</td>
-            <td className={cn(cellClasses, "text-red-700")}>contradicted</td>
-          </tr>
-          <tr className="border-t border-slate-100">
-            <th className={cn(headerClasses, "whitespace-nowrap")}>
-              Misreads source
-            </th>
-            <td className={cellClasses}>misread &amp; used</td>
-            <td className={cellClasses}>misread</td>
-            <td className={cellClasses}>—</td>
-          </tr>
-        </tbody>
-      </table>
+      <ul className="list-disc pl-4">
+        <li>
+          does the claim <strong>match the label text it cites</strong>, and
+        </li>
+        <li>
+          does the <strong>final generated answer reflect</strong> that.
+        </li>
+      </ul><br />
+      <p>
+        If the cited source matches and is accurately reflected in the answer, it gets a single <strong>Verified</strong> badge. Otherwise, two badges explain what went wrong:
+      </p>
+      <ul className="list-disc pl-4">
+        <li>
+          whether the source was <strong>matched or misread</strong>, and
+        </li>
+        <li>
+          whether the answer <strong>reflects, doesn&apos;t reflect, or contradicts</strong> it.
+        </li>
+      </ul><br />
       <p className="text-slate-500">
         No badge means the critic didn&apos;t run for this answer.
       </p>
