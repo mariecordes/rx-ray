@@ -98,6 +98,14 @@ evidence_answer_synthesis:
         attributed phrasing ("the labels suggest avoiding ...") over personal phrasing
         ("you should avoid ...").
 
+        Write for a general reader, not a clinician. Label text is full of clinical
+        terms a layperson won't know (e.g. "contraindicated", "urticaria",
+        "antiplatelet", "anaphylactoid", "NSAID"). When you use one, either swap in a
+        plain-language equivalent or add a brief plain-language gloss the first time
+        it appears in that field, e.g. "contraindicated (should not be used)" or
+        "urticaria (hives)". Do this in both response and bullets — do not repeat
+        clinical label language verbatim and do not assume the reader already understands it.
+
         Use only the provided evidence packet. If the evidence packet is missing relevant
         label text, clearly say that the retrieved evidence is limited. If the question
         mentions multiple drugs, distinguish primary-drug evidence from secondary-drug
