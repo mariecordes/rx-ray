@@ -43,6 +43,8 @@ def build_answer_contract(
             continue
         if intent == "interaction_check":
             required_sections = ["drug_interactions"]
+        elif item.matched_sections:
+            required_sections = list(item.matched_sections)
         else:
             required_sections = list(INTENT_REQUIRED_SECTIONS.get(intent, ()))
         if item.status == "addressed":
@@ -165,6 +167,26 @@ def build_answer_contract(
     sections = primary_label_sections(understanding)
     coverage_level = _coverage_level(items, has_primary_label_text(sections))
     return AnswerContract(items=items, coverage_level=coverage_level)
+
+
+def required_label_sections(contract: AnswerContract) -> set[str]:
+    """All label sections required by intents the contract marked addressed.
+
+    Used both by the deterministic support-status floor (critic.py) and by
+    evidence-packet construction (synthesizer.py) to make sure a section the
+    contract is relying on isn't silently truncated out of what the LLM
+    actually sees.
+    """
+
+    sections: set[str] = set()
+    for item in contract.items:
+        if (
+            item.coverage_category == "intent"
+            and item.evidence_available
+            and item.required_sections
+        ):
+            sections.update(item.required_sections)
+    return sections
 
 
 def _coverage_level(

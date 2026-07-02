@@ -8,6 +8,7 @@ from typing import Any, Protocol
 
 from src.dossier.models import DrugDossier, LabelSection, OpenFDALabelRecord, RxNormEdge
 from src.query_answer.config import QueryAnswerParameters, load_query_answer_parameters
+from src.query_answer.contract import required_label_sections
 from src.query_answer.models import (
     AnswerContract,
     ContextTargetedEvidence,
@@ -23,6 +24,7 @@ ANSWER_SYNTHESIS_API_KEY_ENV = "ANSWER_SYNTHESIS_OPENAI_API_KEY"
 ANSWER_SYNTHESIS_MODEL_ENV = "ANSWER_SYNTHESIS_OPENAI_MODEL"
 ANSWER_SYNTHESIS_PROMPT_KEY = "evidence_answer_synthesis"
 ANSWER_CITATION_RETRY_PROMPT_KEY = "evidence_answer_citation_retry"
+ANSWER_CRITIC_REGEN_PROMPT_KEY = "evidence_answer_critic_regen"
 STANDARD_SAFETY_NOTE = (
     "This is an educational summary of retrieved public evidence, not medical advice."
 )
@@ -44,6 +46,8 @@ PRIORITIZED_SECTIONS = (
 )
 MAX_LABEL_TEXT_CHARS = 1000
 MAX_LABEL_SECTIONS = 16
+MAX_SECTION_ENTRIES = 3
+DEDUPE_PREFIX_CHARS = 200
 MAX_RXNORM_RELATIONSHIPS = 40
 MAX_PRODUCT_CONTEXT_ENTRIES = 12
 MAX_PRODUCT_CONTEXT_TEXT_CHARS = 600
@@ -84,6 +88,7 @@ class EvidenceAnswerSynthesizer:
         secondary_evidence: list[SecondaryDrugEvidence] | None = None,
         context_evidence: list[ContextTargetedEvidence] | None = None,
         contract: AnswerContract | None = None,
+        critic_feedback: str | None = None,
     ) -> AnswerSynthesisResult:
         if understanding.primary_dossier is None:
             return AnswerSynthesisResult(
@@ -107,11 +112,18 @@ class EvidenceAnswerSynthesizer:
             context_evidence=context_evidence or [],
             contract=contract,
         )
+        allowed_citations = self.allowed_citations(evidence_packet)
         messages = self._format_messages(
             prompt_config.get("messages", []),
             query=query,
             evidence_packet=json.dumps(evidence_packet, indent=2),
         )
+        if critic_feedback:
+            messages.append(
+                self._format_critic_feedback_message(
+                    critic_feedback, allowed_citations
+                )
+            )
 
         try:
             data = self._request_answer_json(
@@ -128,7 +140,6 @@ class EvidenceAnswerSynthesizer:
         except Exception as exc:  # pragma: no cover - requires live LLM config
             return AnswerSynthesisResult(errors=[f"Answer synthesis failed: {exc}"])
 
-        allowed_citations = self.allowed_citations(evidence_packet)
         answer = self.parse_answer_data(data, allowed_citations)
         if self._needs_source_retry(answer, allowed_citations):
             try:
@@ -257,9 +268,13 @@ class EvidenceAnswerSynthesizer:
                 item.label_evidence.label_records if item.label_evidence else []
             )
         ]
+        required_sections = (
+            required_label_sections(contract) if contract is not None else set()
+        )
         primary_sections = label_section_payloads(
             label_evidence.sections if label_evidence else {},
             evidence_scope="primary",
+            required_sections=required_sections,
         )
         secondary_sections = [
             payload
@@ -270,6 +285,7 @@ class EvidenceAnswerSynthesizer:
                 drug_name=item.resolved_concept.name,
                 rxcui=item.resolved_concept.rxcui,
                 retrieval_modes=item.retrieval_modes,
+                required_sections=required_sections,
             )
         ]
         primary_product_context = [
@@ -348,14 +364,9 @@ class EvidenceAnswerSynthesizer:
             for item in list_value(data.get("bullets"))
             if str(item.get("text", "")).strip()
         ]
-        response = str(data.get("response") or data.get("summary") or "").strip()
-        evidence_summary = str(
-            data.get("evidence_summary") or data.get("summary") or ""
-        ).strip()
+        response = str(data.get("response", "")).strip()
         return EvidenceAnswer(
             response=response,
-            evidence_summary=evidence_summary,
-            summary=evidence_summary or response,
             bullets=bullets[:5],
             limitations=string_list(data.get("limitations")),
             safety_note=STANDARD_SAFETY_NOTE,
@@ -408,6 +419,36 @@ class EvidenceAnswerSynthesizer:
                 {
                     "allowed_citations": json.dumps(allowed, indent=2),
                     "previous_response": json.dumps(previous_response, indent=2),
+                },
+            ),
+        }
+
+    @staticmethod
+    def _format_critic_feedback_message(
+        critic_feedback: str,
+        allowed_citations: set[tuple[str, str]],
+    ) -> dict[str, str]:
+        prompt_config = EvidenceAnswerSynthesizer._load_prompt_config(
+            ANSWER_CRITIC_REGEN_PROMPT_KEY
+        )
+        message = prompt_config.get("message")
+        if not isinstance(message, dict):
+            raise ValueError(
+                f"Missing prompt message: {ANSWER_CRITIC_REGEN_PROMPT_KEY}"
+            )
+        role = str(message.get("role", "user"))
+        content = str(message.get("content", ""))
+        allowed = [
+            {"source_id": source_id, "section": section}
+            for source_id, section in sorted(allowed_citations)
+        ]
+        return {
+            "role": role,
+            "content": EvidenceAnswerSynthesizer._replace_prompt_placeholders(
+                content,
+                {
+                    "critic_feedback": critic_feedback,
+                    "allowed_citations": json.dumps(allowed, indent=2),
                 },
             ),
         }
@@ -534,25 +575,81 @@ def label_section_payloads(
     drug_name: str | None = None,
     rxcui: str | None = None,
     retrieval_modes: list[str] | None = None,
+    required_sections: set[str] | None = None,
 ) -> list[dict[str, Any]]:
+    """Build the citable label-section payload for one drug, bounded for the prompt.
+
+    Walks PRIORITIZED_SECTIONS in order, deduplicating near-identical
+    boilerplate repeated across a drug's many label records and capping each
+    section to MAX_SECTION_ENTRIES so one bloated section (typically
+    `warnings`) can't consume the whole MAX_LABEL_SECTIONS budget before
+    later sections are ever reached. Any section in `required_sections` that
+    the contract already relied on is then guaranteed at least one entry,
+    evicting from the lowest-priority tail if the cap was already hit — the
+    LLM should never be missing evidence the contract told it to address.
+    """
+
+    required_sections = required_sections or set()
+
+    def build_payload(section_name: str, label_section: LabelSection) -> dict[str, Any]:
+        return {
+            "evidence_scope": evidence_scope,
+            "drug_name": drug_name,
+            "rxcui": rxcui,
+            "retrieval_modes": retrieval_modes or [],
+            "section": section_name,
+            "source_id": label_section.source_id,
+            "text": truncate_text(label_section.text, MAX_LABEL_TEXT_CHARS),
+            "provenance_tags": label_section.provenance_tags,
+        }
+
     payloads: list[dict[str, Any]] = []
+    included_sections: set[str] = set()
     for section_name in PRIORITIZED_SECTIONS:
-        for label_section in sections.get(section_name, []):
+        entries = deduplicated_label_sections(sections.get(section_name, []))
+        entries = entries[:MAX_SECTION_ENTRIES]
+        if not entries:
+            continue
+        for label_section in entries:
             if len(payloads) >= MAX_LABEL_SECTIONS:
-                return payloads
-            payloads.append(
-                {
-                    "evidence_scope": evidence_scope,
-                    "drug_name": drug_name,
-                    "rxcui": rxcui,
-                    "retrieval_modes": retrieval_modes or [],
-                    "section": section_name,
-                    "source_id": label_section.source_id,
-                    "text": truncate_text(label_section.text, MAX_LABEL_TEXT_CHARS),
-                    "provenance_tags": label_section.provenance_tags,
-                }
-            )
+                break
+            payloads.append(build_payload(section_name, label_section))
+            included_sections.add(section_name)
+
+    for section_name in sorted(required_sections - included_sections):
+        entries = deduplicated_label_sections(sections.get(section_name, []))
+        entries = entries[:MAX_SECTION_ENTRIES]
+        if not entries:
+            continue
+        overflow = len(payloads) + len(entries) - MAX_LABEL_SECTIONS
+        if overflow > 0:
+            payloads = payloads[:-overflow]
+        payloads.extend(build_payload(section_name, entry) for entry in entries)
+
     return payloads
+
+
+def deduplicated_label_sections(entries: list[LabelSection]) -> list[LabelSection]:
+    """Collapse near-identical boilerplate repeated across label records.
+
+    OTC generics often have many manufacturer-specific label records that
+    repeat near-identical FDA-mandated section text (e.g. the same allergy
+    alert paragraph). Comparing normalized text prefixes is enough to catch
+    these without needing exact-match text, while still letting genuinely
+    different content for the same section through.
+    """
+
+    seen: set[str] = set()
+    deduped: list[LabelSection] = []
+    for entry in entries:
+        if not entry.text.strip():
+            continue
+        key = " ".join(entry.text.split()).lower()[:DEDUPE_PREFIX_CHARS]
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(entry)
+    return deduped
 
 
 def secondary_evidence_payload(item: SecondaryDrugEvidence) -> dict[str, Any]:

@@ -151,11 +151,19 @@ export type QueryUnderstandingResponse = {
   errors: string[];
 };
 
+export type CitationSupportStatus =
+  | "accurate"
+  | "not_reflected"
+  | "contradicted"
+  | "misrepresented"
+  | "misrepresented_used";
+
 export type EvidenceCitation = {
   source_id: string;
   section: string;
   snippet?: string | null;
   rxcui?: string | null;
+  support_status?: CitationSupportStatus | null;
 };
 
 export type EvidenceBullet = {
@@ -165,8 +173,6 @@ export type EvidenceBullet = {
 
 export type EvidenceAnswer = {
   response?: string | null;
-  evidence_summary?: string | null;
-  summary: string;
   bullets: EvidenceBullet[];
   limitations: string[];
   safety_note: string;
@@ -228,6 +234,25 @@ export type AnswerValidationReport = {
   findings: ValidationFinding[];
   enforced_caveats: string[];
   passed: boolean;
+};
+
+export type CitationCritique = {
+  bullet_index: number;
+  citation_index: number;
+  support_status: CitationSupportStatus;
+  rationale: string;
+  issues: string[];
+};
+
+export type CritiqueSource = "llm" | "none";
+
+export type AnswerCritique = {
+  enabled: boolean;
+  source: CritiqueSource;
+  citations: CitationCritique[];
+  global_findings: ValidationFinding[];
+  regenerated: boolean;
+  notes: string[];
 };
 
 export type RxNormNetworkCenter = {
@@ -319,6 +344,7 @@ export type QueryAnswerResponse = {
   coverage: EvidenceCoverageReport;
   contract: AnswerContract;
   validation: AnswerValidationReport;
+  critique: AnswerCritique;
   warnings: string[];
   errors: string[];
 };

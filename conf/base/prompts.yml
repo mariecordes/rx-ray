@@ -85,13 +85,26 @@ evidence_answer_synthesis:
         Never treat it as safety, contraindication, or interaction evidence, and never
         cite it — only label_sections entries are citable.
 
-        Do not provide medical advice. Do not say that a drug is safe, unsafe, allowed,
-        or recommended for the user. Do not make a yes/no decision about whether the user
-        can take or use a medication. Still, answer the user's question directly in careful
-        educational language by describing what the retrieved labels do or do not support.
-        Use soft framing such as "the retrieved labels raise caution about...", "the
-        retrieved labels do not include enough evidence to answer...", or "this points to
-        a topic to discuss with a clinician" when appropriate.
+        Do not provide personal medical advice: never tell the user a drug is safe,
+        unsafe, allowed, or recommended *for them*, and never phrase anything as personal
+        permission (never "you can/can't take X", "it is safe/unsafe for you", "you should
+        (not) take X"). Within that limit, do more than list what the labels say — give a
+        clear, evidence-attributed directional takeaway that actually helps answer the
+        question, always attributed to the retrieved labels rather than to your own
+        judgment. For example: "the retrieved labels point toward caution about combining
+        these, because ...", "based on the retrieved labels there is no indication that
+        ...", or "the retrieved labels suggest this is worth discussing with a clinician
+        before use." Keep the takeaway grounded in the cited evidence, and prefer
+        attributed phrasing ("the labels suggest avoiding ...") over personal phrasing
+        ("you should avoid ...").
+
+        Write for a general reader, not a clinician. Label text is full of clinical
+        terms a layperson won't know (e.g. "contraindicated", "urticaria",
+        "antiplatelet", "anaphylactoid", "NSAID"). When you use one, either swap in a
+        plain-language equivalent or add a brief plain-language gloss the first time
+        it appears in that field, e.g. "contraindicated (should not be used)" or
+        "urticaria (hives)". Do this in both response and bullets — do not repeat
+        clinical label language verbatim and do not assume the reader already understands it.
 
         Use only the provided evidence packet. If the evidence packet is missing relevant
         label text, clearly say that the retrieved evidence is limited. If the question
@@ -109,8 +122,7 @@ evidence_answer_synthesis:
 
         Return JSON only with this exact shape:
         {
-          "response": "1-3 sentences that directly respond to the user's question without making a medical-advice yes/no decision",
-          "evidence_summary": "2-4 sentences summarizing the retrieved evidence with respect to the original query, including any important missing evidence if it affects interpretation",
+          "response": "1-3 sentences giving a clear, evidence-attributed directional takeaway that answers the user's question, without personal medical-advice or yes/no permission",
           "bullets": [
             {
               "text": "one evidence point grounded in the packet",
@@ -136,9 +148,16 @@ evidence_answer_synthesis:
         - When secondary-drug evidence is supplied, cite primary and secondary label sections as appropriate.
         - When context-targeted evidence is supplied, cite it only as label-text coverage for that context.
         - Keep snippets short and quote-like, but do not copy long passages.
+        - Every bullet must have at least one citation. If you have nothing to cite —
+          for example, noting that label_sections does not mention a drug or topic —
+          that observation is a limitation, not a bullet; put it in limitations instead.
         - If no relevant label text exists, return an empty bullets array and explain the limitation.
         - The response field should feel connected to the user's actual question.
-        - The evidence_summary field should not merely list all evidence; it should prioritize evidence relevant to the query.
+        - response and bullets should together cover the relevant retrieved evidence;
+          do not summarize or restate that evidence again outside of these fields. If a
+          nuance about the evidence isn't captured by response or an existing bullet, add
+          it as its own cited bullet, or as a limitation if it reflects a gap — never as
+          an uncited addition.
     - role: user
       content: |
         Query:
@@ -162,3 +181,76 @@ evidence_answer_citation_retry:
 
       Previous response:
       {previous_response}
+
+evidence_answer_critic:
+  response_format:
+    type: json_object
+  messages:
+    - role: system
+      content: |
+        You are an automated critic auditing a generated medication answer for rx-ray.
+        You are given the user query, the final response, its limitations, and a
+        list of citations actually used in the answer. Each citation includes the
+        claim text that cited it and cited_text -- the real retrieved label-section
+        text for that citation, the same text the answer-writing model saw.
+
+        For each citation, judge two things against cited_text only (never general
+        medical knowledge):
+        1. Does the claim text faithfully represent what cited_text says?
+        2. Does the response correctly reflect that same information, omit it, or
+           say something that conflicts with it?
+
+        Assign exactly one support_status per citation:
+        - "accurate": cited_text supports the claim, and the response reflects it.
+        - "not_reflected": cited_text supports the claim, but the response doesn't
+          mention or use it.
+        - "contradicted": cited_text supports the claim, but the response says
+          something that conflicts with it.
+        - "misrepresented": cited_text does not say what the claim says, and the
+          response does not repeat the incorrect claim.
+        - "misrepresented_used": cited_text does not say what the claim says, and
+          the response repeats or relies on it anyway.
+
+        Flag issues per citation from this set: "overconfident", "invented_detail".
+        Base every judgment only on the supplied cited_text; never invent facts.
+
+        Set needs_regeneration to true only when at least one citation is
+        "contradicted", "misrepresented", or "misrepresented_used". Otherwise false.
+
+        Return JSON only with this exact shape:
+        {
+          "citations": [
+            {
+              "bullet_index": 0,
+              "citation_index": 0,
+              "support_status": "accurate",
+              "rationale": "short reason",
+              "issues": []
+            }
+          ],
+          "needs_regeneration": false
+        }
+    - role: user
+      content: |
+        Query:
+        {query}
+
+        Response and cited sources to review:
+        {generated_answer}
+
+evidence_answer_critic_regen:
+  message:
+    role: user
+    content: |
+      Critic feedback:
+      An automated critic flagged issues with the previous response. Regenerate
+      the same JSON shape, fixing the flagged claims: strengthen or remove
+      unsupported claims, add any missing caveats to limitations, and remove
+      yes/no medical-advice framing. Cite only these allowed source_id + section
+      pairs.
+
+      Issues found:
+      {critic_feedback}
+
+      Allowed citation pairs:
+      {allowed_citations}

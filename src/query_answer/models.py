@@ -16,12 +16,22 @@ EvidenceCoverageStatus = Literal[
 ]
 
 
+CitationSupportStatus = Literal[
+    "accurate",
+    "not_reflected",
+    "contradicted",
+    "misrepresented",
+    "misrepresented_used",
+]
+
+
 class EvidenceCitation(BaseModel):
     """Reference to evidence supplied to the answer synthesis prompt."""
 
     source_id: str
     section: str
     snippet: str | None = None
+    support_status: CitationSupportStatus | None = None
 
 
 class EvidenceBullet(BaseModel):
@@ -35,8 +45,6 @@ class EvidenceAnswer(BaseModel):
     """LLM-generated educational answer grounded in retrieved evidence."""
 
     response: str = ""
-    evidence_summary: str = ""
-    summary: str = ""
     bullets: list[EvidenceBullet] = Field(default_factory=list)
     limitations: list[str] = Field(default_factory=list)
     safety_note: str
@@ -52,6 +60,7 @@ class EvidenceCoverageItem(BaseModel):
     matched_evidence: str | None = None
     source_id: str | None = None
     section: str | None = None
+    matched_sections: list[str] = Field(default_factory=list)
     target_rxcui: str | None = None
 
 
@@ -107,6 +116,36 @@ class AnswerValidationReport(BaseModel):
     findings: list[ValidationFinding] = Field(default_factory=list)
     enforced_caveats: list[str] = Field(default_factory=list)
     passed: bool = True
+
+
+class CitationCritique(BaseModel):
+    """Per-citation faithfulness assessment from the optional LLM critic."""
+
+    bullet_index: int
+    citation_index: int
+    support_status: CitationSupportStatus
+    rationale: str = ""
+    issues: list[str] = Field(default_factory=list)
+
+
+CritiqueSource = Literal["llm", "none"]
+
+
+class AnswerCritique(BaseModel):
+    """Outcome of the optional post-generation critic pass.
+
+    The critic is the only source of citation support_status -- there is no
+    deterministic fallback. When disabled or unavailable (e.g. no LLM
+    configured, or in demo mode), citations simply carry no support_status
+    and no badge is shown, rather than a structural guess.
+    """
+
+    enabled: bool = False
+    source: CritiqueSource = "none"
+    citations: list[CitationCritique] = Field(default_factory=list)
+    global_findings: list[ValidationFinding] = Field(default_factory=list)
+    regenerated: bool = False
+    notes: list[str] = Field(default_factory=list)
 
 
 class RxNormPairContext(BaseModel):
@@ -226,5 +265,6 @@ class QueryAnswerResponse(BaseModel):
     coverage: EvidenceCoverageReport = Field(default_factory=EvidenceCoverageReport)
     contract: AnswerContract = Field(default_factory=AnswerContract)
     validation: AnswerValidationReport = Field(default_factory=AnswerValidationReport)
+    critique: AnswerCritique = Field(default_factory=AnswerCritique)
     warnings: list[str] = Field(default_factory=list)
     errors: list[str] = Field(default_factory=list)

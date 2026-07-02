@@ -281,10 +281,6 @@ export const demoQueryAnswer: QueryAnswerResponse = {
   answer: {
     response:
       "**The demo evidence does not provide a yes/no safety decision**, but it shows how retrieved label-style evidence can frame the question about cetirizine, ibuprofen, aspirin, pollen allergy, and swollen eyes.",
-    evidence_summary:
-      "This local fixture includes ibuprofen, aspirin, and cetirizine label-style evidence relevant to the example query. It is intentionally compact, so missing or limited evidence should be treated as a demo limitation rather than a complete public-label review.",
-    summary:
-      "This demo response is loaded from a local fixture. It shows how rx-ray would ground a question about cetirizine, ibuprofen, aspirin, pollen allergy, and swollen eyes in retrieved label-style evidence without making a live LLM request.",
     bullets: [
       {
         text: "The fixture includes ibuprofen label evidence that explicitly mentions aspirin in a drug-interaction-style section.",
@@ -873,7 +869,7 @@ export const demoQueryAnswer: QueryAnswerResponse = {
         category: "primary_drug",
         label: "ibuprofen",
         status: "addressed",
-        reason: "Demo primary medication evidence is available.",
+        reason: "Demo drug label evidence is available for ibuprofen.",
         matched_evidence: "ibuprofen label evidence",
         source_id: "fixture-ibuprofen-1",
         section: "drug_interactions",
@@ -883,7 +879,7 @@ export const demoQueryAnswer: QueryAnswerResponse = {
         category: "mentioned_drug",
         label: "aspirin",
         status: "addressed",
-        reason: "Demo secondary medication evidence is available.",
+        reason: "Demo drug label evidence is available for aspirin.",
         matched_evidence: "aspirin label evidence",
         source_id: "fixture-aspirin-1",
         section: "warnings",
@@ -893,7 +889,8 @@ export const demoQueryAnswer: QueryAnswerResponse = {
         category: "current_medication",
         label: "cetirizine",
         status: "addressed",
-        reason: "Demo current-medication evidence is available.",
+        reason:
+          "Demo drug label evidence is available for the current medication cetirizine.",
         matched_evidence: "cetirizine label evidence",
         source_id: "fixture-cetirizine-1",
         section: "warnings",
@@ -969,6 +966,14 @@ export const demoQueryAnswer: QueryAnswerResponse = {
       "RxNorm terminology overlap is not evidence of a clinical interaction.",
     ],
     passed: false,
+  },
+  critique: {
+    enabled: false,
+    source: "none",
+    citations: [],
+    global_findings: [],
+    regenerated: false,
+    notes: [],
   },
   warnings: ["Demo fixture loaded; no LLM or live API calls were made."],
   errors: [],

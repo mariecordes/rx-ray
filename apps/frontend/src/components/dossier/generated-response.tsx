@@ -24,13 +24,17 @@ import { InfoTooltip } from "@/components/ui/info-tooltip";
 import { citationDisplayLabel } from "@/components/dossier/display";
 import { EvidenceCoverageTarget } from "@/components/dossier/evidence-model";
 import {
+  AnswerCritique,
+  CitationSupportStatus,
   EvidenceAnswer,
+  EvidenceBullet,
   EvidenceCitation,
   EvidenceCoverageItem,
   EvidenceCoverageReport,
   EvidenceCoverageStatus,
   OpenFDALabelRecord,
   QueryAnswerResponse,
+  QueryState,
   QueryUnderstandingResponse,
   SecondaryDrugEvidence,
 } from "@/lib/types";
@@ -218,6 +222,7 @@ function EvidenceAnswerResult({
     <EvidenceAnswerCard
       answer={answer}
       coverage={response.coverage ?? { items: [], summary_counts: {} }}
+      critique={response.critique}
       onCitationClick={onCitationClick}
       onCoverageTargetClick={onCoverageTargetClick}
       secondaryEvidence={response.secondary_evidence ?? []}
@@ -229,6 +234,7 @@ function EvidenceAnswerResult({
 function EvidenceAnswerCard({
   answer,
   coverage,
+  critique,
   onCitationClick,
   onCoverageTargetClick,
   secondaryEvidence,
@@ -236,6 +242,7 @@ function EvidenceAnswerCard({
 }: {
   answer: EvidenceAnswer;
   coverage: EvidenceCoverageReport;
+  critique?: AnswerCritique;
   onCitationClick: (citation: EvidenceCitation) => void;
   onCoverageTargetClick: (target: EvidenceCoverageTarget) => void;
   secondaryEvidence: SecondaryDrugEvidence[];
@@ -266,17 +273,33 @@ function EvidenceAnswerCard({
     () => coverageStatusCounts(coverage),
     [coverage]
   );
-  const directResponse = (answer.response || answer.summary || "").trim();
-  const evidenceSummary = (answer.evidence_summary || "").trim();
-  const shouldShowEvidenceSummary =
-    evidenceSummary.length > 0 && evidenceSummary !== directResponse;
+  const citedBullets = useMemo(
+    () => answer.bullets.filter((bullet) => bullet.citations.length > 0),
+    [answer.bullets]
+  );
+  const claimSupportCounts = useMemo(
+    () => claimSupportStatusCounts(citedBullets),
+    [citedBullets]
+  );
+  const directResponse = (answer.response || "").trim();
 
   return (
     <div className="space-y-3">
       {hasVisibleCoverage ? (
         <AnswerSection
           title="Find out what the retrieved evidence covers"
-          infoText="This is a deterministic, pre-answer check: did we retrieve label text that would normally cover what was extracted from your question and what intent it was tagged with? It does not assess whether the generated answer below actually used or correctly interpreted that evidence — it only confirms whether matching evidence exists in what was retrieved. Hover over a reason when available to inspect the matching evidence snippet."
+          infoContent={
+            <div className="w-72">
+              <p>
+                This is a deterministic, pre-answer check: did we retrieve label text that
+                would normally cover what was extracted from your question and what intent
+                it was tagged with? It does not assess whether the generated answer below
+                actually used or correctly interpreted that evidence - it only confirms
+                whether matching evidence exists in what was retrieved.
+              </p><br />
+              <p>Hover over a reason when available to inspect the matching evidence snippet.</p>
+            </div>
+          }
           tone="audit"
           headerExtra={<CoverageStatusChips counts={visibleCoverageStatusCounts} />}
         >
@@ -304,30 +327,16 @@ function EvidenceAnswerCard({
             <InlineBoldMarkdown text={directResponse} />
           </p>
         </section>
-
-        {shouldShowEvidenceSummary ? (
-          <section className="mt-4 border-t border-slate-200 pt-4">
-            <h3
-              className="mb-2 font-semibold text-slate-800"
-              style={{ fontSize: "15px", lineHeight: "24px" }}
-            >
-              Evidence summary
-            </h3>
-
-            <p
-              className="text-slate-700"
-              style={{ fontSize: "15px", lineHeight: "26px" }}
-            >
-              <InlineBoldMarkdown text={evidenceSummary} />
-            </p>
-          </section>
-        ) : null}
       </div>
 
-      {answer.bullets.length ? (
-        <AnswerSection title="Sources">
+      {citedBullets.length ? (
+        <AnswerSection
+          title="Sources"
+          infoContent={<CitationSupportMatrix />}
+          headerExtra={<ClaimSupportChips counts={claimSupportCounts} />}
+        >
           <div className="space-y-2">
-            {answer.bullets.map((bullet, index) => (
+            {citedBullets.map((bullet, index) => (
               <button
                 key={`${bullet.text}-${index}`}
                 type="button"
@@ -337,32 +346,23 @@ function EvidenceAnswerCard({
                     onCitationClick(firstCitation);
                   }
                 }}
-                className={cn(
-                  "w-full rounded-md border border-[#D7C8F4] bg-white px-3 py-3 text-left transition",
-                  bullet.citations.length
-                    ? "hover:border-[#C7B4EF] hover:bg-[#F8F4FC]"
-                    : ""
-                )}
+                className="w-full rounded-md border border-[#D7C8F4] bg-white px-3 py-3 text-left transition hover:border-[#C7B4EF] hover:bg-[#F8F4FC]"
               >
-                {bullet.citations.length ? (
-                  <div className="mb-1.5 flex flex-col gap-1">
-                    {bullet.citations.map((citation, citationIndex) => (
-                      <div
-                        key={`${citation.source_id}-${citation.section}-${citationIndex}`}
-                        className="flex items-start gap-2 font-semibold leading-5 text-slate-800"
-                        style={{ fontSize: "14px" }}
-                      >
-                        <FileText className="mt-0.5 size-4 shrink-0 text-slate-700" />
-                        <span>{citationDisplayLabel(citation, sourceById)}</span>
-                      </div>
-                    ))}
-                  </div>
-                ) : null}
+                <div className="mb-1.5 flex flex-col gap-1">
+                  {bullet.citations.map((citation, citationIndex) => (
+                    <div
+                      key={`${citation.source_id}-${citation.section}-${citationIndex}`}
+                      className="flex items-start gap-2 font-semibold leading-5 text-slate-800"
+                      style={{ fontSize: "14px" }}
+                    >
+                      <FileText className="mt-0.5 size-4 shrink-0 text-slate-700" />
+                      <span>{citationDisplayLabel(citation, sourceById)}</span>
+                      <CitationSupportBadges status={citation.support_status} />
+                    </div>
+                  ))}
+                </div>
                 <p
-                  className={cn(
-                    "leading-6 text-slate-800",
-                    bullet.citations.length ? "pl-6" : ""
-                  )}
+                  className="pl-6 leading-6 text-slate-800"
                   style={{ fontSize: "14px" }}
                 >
                   <InlineBoldMarkdown text={bullet.text} />
@@ -393,6 +393,13 @@ function EvidenceAnswerCard({
             ))}
           </div>
         </AnswerSection>
+      ) : null}
+
+      {critique?.regenerated ? (
+        <p className="text-center text-xs leading-5 text-slate-500">
+          This answer was automatically revised once after an evidence
+          self-check.
+        </p>
       ) : null}
 
       <p className="text-center text-xs leading-5 text-slate-500">
@@ -620,6 +627,7 @@ function AnswerSection({
   children,
   headerExtra,
   icon,
+  infoContent,
   infoText,
   title,
   tone = "synthesis",
@@ -628,6 +636,7 @@ function AnswerSection({
   children: ReactNode;
   headerExtra?: ReactNode;
   icon?: ReactNode;
+  infoContent?: ReactNode;
   infoText?: string;
   title: string;
   tone?: "synthesis" | "audit";
@@ -650,7 +659,11 @@ function AnswerSection({
         )}
         {icon ? <span className="shrink-0">{icon}</span> : null}
         <span className="text-xs font-medium uppercase">{title}</span>
-        {infoText ? <InfoTooltip text={infoText} /> : null}
+        {infoContent ? (
+          <InfoTooltip content={infoContent} />
+        ) : infoText ? (
+          <InfoTooltip text={infoText} />
+        ) : null}
         {badgeCount ? (
           <span className="rounded-full border border-slate-300 bg-white px-1.5 py-0.5 text-[10px] font-semibold text-slate-700">
             {badgeCount}
@@ -728,6 +741,155 @@ const coverageStatusClasses: Record<EvidenceCoverageStatus, string> = {
   not_retrieved: "border-slate-200 bg-slate-50 text-slate-700",
   out_of_scope: "border-slate-200 bg-slate-50 text-slate-700",
 };
+
+// The critic returns one 5-tier status per citation; for display we split it
+// back into the two axes it encodes (does the claim match the cited source,
+// and does the final answer reflect it) rather than showing the raw tier.
+// The backend keeps returning a single support_status -- this is a
+// display-only derivation.
+type CitationSourceMatch = "matches" | "misreads";
+type CitationAnswerUse = "reflected" | "not_reflected" | "contradicted";
+
+const citationSupportAxes: Record<
+  CitationSupportStatus,
+  { source: CitationSourceMatch; answer: CitationAnswerUse }
+> = {
+  accurate: { source: "matches", answer: "reflected" },
+  not_reflected: { source: "matches", answer: "not_reflected" },
+  contradicted: { source: "matches", answer: "contradicted" },
+  misrepresented: { source: "misreads", answer: "not_reflected" },
+  misrepresented_used: { source: "misreads", answer: "reflected" },
+};
+
+const sourceMatchLabels: Record<CitationSourceMatch, string> = {
+  matches: "Matches source",
+  misreads: "Misreads source",
+};
+
+const sourceMatchClasses: Record<CitationSourceMatch, string> = {
+  matches: "border-emerald-200 bg-emerald-50 text-emerald-800",
+  misreads: "border-red-200 bg-red-50 text-red-800",
+};
+
+const answerUseLabels: Record<CitationAnswerUse, string> = {
+  reflected: "Reflected in answer",
+  not_reflected: "Not reflected in answer",
+  contradicted: "Contradicted in answer",
+};
+
+const answerUseClasses: Record<CitationAnswerUse, string> = {
+  reflected: "border-slate-200 bg-slate-50 text-slate-700",
+  not_reflected: "border-slate-200 bg-slate-50 text-slate-700",
+  contradicted: "border-red-200 bg-red-50 text-red-800",
+};
+
+const VERIFIED_CLASSES = "border-emerald-200 bg-emerald-50 text-emerald-800";
+
+function CitationSupportBadges({
+  status,
+}: {
+  status: CitationSupportStatus | null | undefined;
+}) {
+  if (!status) {
+    return null;
+  }
+  const badgeClasses =
+    "w-fit shrink-0 rounded-md border px-1.5 py-0.5 text-[11px] font-medium";
+  if (status === "accurate") {
+    return (
+      <span className={cn("ml-1", badgeClasses, VERIFIED_CLASSES)}>
+        Verified
+      </span>
+    );
+  }
+  const axes = citationSupportAxes[status];
+  return (
+    <span className="ml-1 flex flex-wrap items-center gap-1">
+      <span className={cn(badgeClasses, sourceMatchClasses[axes.source])}>
+        {sourceMatchLabels[axes.source]}
+      </span>
+      <span className={cn(badgeClasses, answerUseClasses[axes.answer])}>
+        {answerUseLabels[axes.answer]}
+      </span>
+    </span>
+  );
+}
+
+function claimSupportStatusCounts(bullets: EvidenceBullet[]) {
+  let verified = 0;
+  let flagged = 0;
+  for (const bullet of bullets) {
+    for (const citation of bullet.citations) {
+      if (!citation.support_status) {
+        continue;
+      }
+      if (citation.support_status === "accurate") {
+        verified += 1;
+      } else {
+        flagged += 1;
+      }
+    }
+  }
+  return { verified, flagged };
+}
+
+function ClaimSupportChips({
+  counts,
+}: {
+  counts: { verified: number; flagged: number };
+}) {
+  return (
+    <>
+      {counts.verified ? (
+        <span
+          className={cn(
+            "inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium",
+            VERIFIED_CLASSES
+          )}
+        >
+          Verified {counts.verified}
+        </span>
+      ) : null}
+      {counts.flagged ? (
+        <span className="inline-flex items-center rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-900">
+          Flagged {counts.flagged}
+        </span>
+      ) : null}
+    </>
+  );
+}
+
+function CitationSupportMatrix() {
+  return (
+    <div className="w-72">
+      <p>
+        Each cited source gets two automatic checks:
+      </p>
+      <ul className="list-disc pl-4">
+        <li>
+          does the claim <strong>match the label text it cites</strong>, and
+        </li>
+        <li>
+          does the <strong>final generated answer reflect</strong> that.
+        </li>
+      </ul><br />
+      <p>
+        If the cited source matches and is accurately reflected in the answer, it gets a single <strong>Verified</strong> badge. Otherwise, two badges explain what went wrong:
+      </p>
+      <ul className="list-disc pl-4">
+        <li>
+          whether the source was <strong>matched or misread</strong>, and
+        </li>
+        <li>
+          whether the answer <strong>reflects, doesn&apos;t reflect, or contradicts</strong> it.
+        </li>
+      </ul><br />
+      <p className="text-slate-500">
+        No badge means the critic didn&apos;t run for this answer.
+      </p>
+    </div>
+  );
+}
 
 function isLowSignalCoverageItem(item: EvidenceCoverageItem) {
   // "out_of_scope" only ever comes from intents the system has no
@@ -816,6 +978,23 @@ function AnswerSynthesisLoadingState() {
   );
 }
 
+function allDrugsMentionedWithPrimary(state: QueryState) {
+  const primary = state.primary_drug;
+  if (!primary) {
+    return state.all_drugs_mentioned;
+  }
+  const seen = new Set([primary.toLowerCase()]);
+  const rest = state.all_drugs_mentioned.filter((drug) => {
+    const key = drug.toLowerCase();
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
+  return [primary, ...rest];
+}
+
 function QueryUnderstandingResult({
   result,
 }: {
@@ -853,16 +1032,12 @@ function QueryUnderstandingResult({
         <div className="space-y-3 border-t border-slate-200 p-3">
           <ParameterGroup title="Medication concepts">
             <ParameterRow
-              label="Primary medication"
-              values={result.state.primary_drug ? [result.state.primary_drug] : []}
-            />
-            <ParameterRow
               label="Current medications"
               values={result.state.current_medications}
             />
             <ParameterRow
               label="All drugs mentioned"
-              values={result.state.all_drugs_mentioned}
+              values={allDrugsMentionedWithPrimary(result.state)}
             />
           </ParameterGroup>
 

@@ -11,3 +11,5 @@ query_answer:
   network_secondary_depth: 2
   network_max_edges_per_center: 200
   network_max_total_edges: 600
+  enable_answer_critic: true
+  critic_max_regenerations: 1

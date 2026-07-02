@@ -54,7 +54,13 @@ Optionally [A4](#a4--live-demo-deployment) live demo if hosting is straightforwa
 | [C3](#c3--question-level-provenance-graph-maturation) | Provenance graph maturation | Evidence | L | High | todo | — |
 | [C4](#c4--context-targeted-retrieval-tuning) | Context-targeted tuning | Evidence | M | Low–Med | todo | — |
 | [D1](#d1--guardrails-v2) | Guardrails V2 | Safety | M | High | ✅ done | — |
-| [D2](#d2--guardrails-v3) | Guardrails V3 | Safety | L | High | todo | D1 |
+| [D2](#d2--guardrails-v3) | Guardrails V3 | Safety | L | High | ✅ done | D1 |
+| [D2b](#d2b--fix-cross-intent-leakage-in-the-deterministic-support-status-floor) | Fix cross-intent support-status leakage | Safety | S | High | ✅ done | D2 |
+| [D2c](#d2c--fix-evidence-packet-truncation-starving-later-label-sections) | Fix evidence-packet truncation | Safety | S–M | High | ✅ done | D1, D2 |
+| [D2d](#d2d--fix-uncited-sources-scope-the-support-status-gap-check-and-reframe-the-critic) | Fix uncited "sources", scope the gap check, reframe critic as source-faithfulness | Safety | M | High | ✅ done | D1, D2 |
+| [D2e](#d2e--replace-the-deterministic-support-status-floor-with-a-source-faithfulness-critic) | Replace the deterministic floor with a source-faithfulness LLM critic | Safety | M | High | ✅ done | D1, D2 |
+| [D2f](#d2f--more-direct-answer-tone-two-axis-support-badges-remove-critique-clutter) | More direct answer tone, two-axis support badges, remove critique clutter | Safety | S–M | Med | ✅ done | D2e |
+| [D2g](#d2g--cover-the-misreads-source--contradicted-gap-in-the-critic-taxonomy) | Cover the "misreads + contradicted" gap in the critic taxonomy | Safety | S | Low | todo | D2e, D2f |
 | [D3](#d3--evaluation-harness--curated-question-set) | Evaluation harness | Safety | L | High | todo | — |
 | [D4](#d4--neural-vs-symbolic-vs-combined) | Neural vs symbolic vs combined | Safety | L | High | todo | D3 |
 | [D5](#d5--reasoning--execution-traces) | Reasoning/execution traces | Safety | M | Med | todo | — |
@@ -359,9 +365,9 @@ The differentiator. This turns "careful prompting" into a measurable, layered sa
 
 ---
 
-### D2 — Guardrails V3
+### ✅ D2 — Guardrails V3
 
-**Effort:** L · **Impact:** High · **Status:** todo · **Depends on:** D1
+**Effort:** L · **Impact:** High · **Status:** done · **Depends on:** D1
 
 **Goal:** Extract each generated claim, map it to supporting citations, and run an optional LLM critic that flags unsupported claims, missing caveats, or overconfident wording — regenerating once on important issues.
 
@@ -372,6 +378,261 @@ The differentiator. This turns "careful prompting" into a measurable, layered sa
 - Confidence language: strong / partial / limited / no retrieved coverage.
 
 **Done when:** Answers carry per-claim support status and a critic pass with bounded regeneration.
+
+> **Done.** Every generated bullet now carries a `support_status`
+> (`strong`/`partial`/`limited`/`none`). A deterministic classifier
+> (`src/query_answer/critic.py`) always runs as the floor — it checks each
+> bullet's cited sections against the D1 answer_contract's addressed intents,
+> so support status is populated even with no LLM critic configured (e.g. demo
+> mode). An optional LLM critic (`enable_answer_critic`, off by default) reads
+> each numbered claim against the same evidence packet and may override the
+> deterministic status, flag issues (unsupported, overconfident, missing
+> caveat, yes/no framing), and request regeneration; `finalize_answer_critique`
+> performs at most one feedback-driven regeneration before re-validating and
+> re-critiquing the new answer. The synthesizer gained a `critic_feedback`
+> path that reuses its existing prompt/citation machinery. Per-claim support
+> badges and a collapsible "Answer critique" audit section (shown only when
+> the critic actually ran) are wired into the Generated response UI.
+>
+> Also as part of this package: removed the redundant `evidence_summary`
+> field (and the `summary` field, which had become a pure duplicate of
+> `response`). It was a second LLM-written paragraph largely restating the
+> same evidence as `response`, with no citations of its own — the
+> citation-backed bullets already do that job better. The synthesis prompt
+> now directs any nuance not captured by `response` or an existing bullet
+> into its own cited bullet (or a limitation, if it reflects a gap) instead
+> of a freeform summary, so removing the field didn't open a path for
+> unsourced claims.
+
+---
+
+### ✅ D2b — Fix cross-intent leakage in the deterministic support-status floor
+
+**Effort:** S · **Impact:** High · **Status:** done · **Depends on:** D2
+
+**Goal:** Fix a bug found while reviewing D2: the deterministic support-status
+floor pooled `required_sections` across *every* addressed intent into one flat
+set, so a citation that genuinely backed one intent (e.g. an allergy caveat
+citing `warnings`) could spuriously "support" an unrelated bullet (e.g. an
+interaction claim) just because both intents happened to share a section
+name. Reproduced with *"Can I take ibuprofen for my migraine if I'm allergic
+to aspirin?"*: a bullet stating no `drug_interactions` text was retrieved was
+labeled "Strong support" in one run and "limited" in another, purely
+depending on which section the LLM happened to cite — directly undercutting
+the "I don't have evidence for that is a first-class output" invariant.
+
+**Scope:**
+- Tag each generated bullet with the `answer_contract` topic it primarily
+  addresses (whitelisted against the contract's own topics, same pattern as
+  citation whitelisting).
+- Score `deterministic_support_status` against *that topic's* required
+  sections when a match exists, falling back to the legacy pooled check for
+  untagged bullets.
+- Use each intent's actually-matched section(s) in the contract instead of
+  the full static `INTENT_REQUIRED_SECTIONS` allow-list.
+
+**Done when:** The reported query consistently scores the interaction-gap
+bullet as `none`/`limited` regardless of which section the LLM cites, with no
+regression to legitimate same-intent matches.
+
+> **Done.** `EvidenceBullet.topic` is now parsed from synthesis output and
+> whitelisted against the contract (`synthesizer.py`). `critic.py`'s
+> `deterministic_support_status` scopes its section check to the matching
+> contract item when a bullet's topic resolves to one, instead of pooling
+> sections from every addressed intent (`_topic_required_sections`,
+> falling back to `_addressed_intent_sections` for untagged bullets).
+> `contract.py` also now uses each intent's actually-matched section(s)
+> (`EvidenceCoverageItem.matched_sections`) instead of the static
+> `INTENT_REQUIRED_SECTIONS` tuple. Verified against two live re-runs of the
+> reported query: the interaction-gap bullet is now consistently tagged
+> `topic="interaction_check"` and scored `none`/`limited`, while allergy
+> bullets citing `warnings`/`contraindications` remain correctly `strong`.
+
+---
+
+### ✅ D2c — Fix evidence-packet truncation starving later label sections
+
+**Effort:** S–M · **Impact:** High · **Status:** done · **Depends on:** D1, D2
+
+**Goal:** Fix a retrieval/packet-construction bug found while investigating D2b: `EvidenceAnswerSynthesizer.label_section_payloads()` truncates per drug to `MAX_LABEL_SECTIONS = 16` entries, walking sections in a fixed priority order (`boxed_warning`, `contraindications`, `warnings`, `drug_interactions`, ...) with no per-section sub-limit and no deduplication. For drugs with many OTC label-record variants, near-duplicate boilerplate in the earlier sections alone can exceed the cap before later sections — including `drug_interactions` — are ever reached, even though the deterministic coverage layer (which runs on the untruncated dossier data) already confirmed that evidence exists and told the LLM to address it via the contract. Confirmed live with *"Can I take ibuprofen for my migraine if I'm allergic to aspirin?"*: ibuprofen has 2 boxed_warning + 2 contraindications + 13 warnings (10 of which are near-identical "allergy alert" boilerplate from different manufacturer records) = 17 non-empty entries before `drug_interactions` (2 real entries) is reached, so zero `drug_interactions` text ever reaches the LLM, despite `interaction_check` being marked "addressed." Aspirin shows the same pattern (24 entries before `drug_interactions`, 6 real entries dropped).
+
+**Scope:**
+- Cap entries **per section**, not just per drug overall, so one bloated section (typically `warnings`) can't crowd out every later section in the priority order.
+- Make the cap **contract-aware**: guarantee at least one representative entry from any section the contract already marked `addressed`/required, since that's exactly the evidence the LLM is being instructed to address.
+- Deduplicate near-identical boilerplate text across label records (same drug, same section) before applying any cap, so redundant manufacturer copies don't consume slots that could carry distinct information.
+
+**Done when:** The reported query's evidence packet includes `drug_interactions` text for both ibuprofen and aspirin, and the synthesized answer no longer reports missing `drug_interactions` evidence that was actually retrieved but previously dropped before reaching the prompt.
+
+> **Done.** `label_section_payloads()` now deduplicates near-identical
+> boilerplate per section (normalized-text-prefix comparison) before
+> counting it against any cap, caps each section to `MAX_SECTION_ENTRIES`
+> so one bloated section can't crowd out the rest, and guarantees any
+> section the contract relies on (`required_label_sections(contract)`, a
+> new shared helper in `contract.py` also used by `critic.py`'s
+> deterministic floor, replacing duplicated logic) survives the overall
+> `MAX_LABEL_SECTIONS` cap by evicting from the lowest-priority tail.
+> Verified against two live re-runs of the reported query: the evidence
+> packet now includes `drug_interactions` text for both ibuprofen and
+> aspirin, and the synthesized answer cites the real retrieved interaction
+> text (`topic="interaction_check"`, `strong`) instead of falsely
+> reporting that no interaction evidence was retrieved.
+
+---
+
+### ✅ D2d — Fix uncited sources, scope the support-status gap check, and reframe the critic
+
+**Effort:** M · **Impact:** High · **Status:** done · **Depends on:** D1, D2
+
+**Goal:** Found while reviewing the cetirizine/ibuprofen/aspirin query: the Sources list showed a "No citation" entry (a bullet with zero citations, displayed as if it were a retrieved source) and two well-matched bullets were rated "Partial support" despite directly reflecting their cited sections. Both traced to real bugs, plus a third, conceptual issue raised in review of the critic prompt:
+1. A bullet with no citations isn't a source — it's the model noting an absence of evidence, which is a caveat. The prompt didn't forbid this, and nothing deterministic caught it before display.
+2. `_has_unresolved_gap()` checks the *whole contract* for any open `must_caveat`, not just ones related to the bullet's own topic — so an unrelated gap (e.g. the patient's stated allergy term not found in any label text) capped every bullet's status at "partial," even ones whose own topic was cleanly addressed.
+3. The critic prompt asks the LLM to judge "claims" in the abstract, but the UI displays the resulting status next to a *source* citation — a conceptual mismatch, since a retrieved source isn't itself "partial" or "limited." The judgment is really about whether the generated text faithfully reflects what its cited source says.
+
+**Scope:**
+- Relocate any citation-less bullet's text into `limitations` deterministically (`validate_and_enforce`), regardless of why it ended up uncited; tighten the synthesis prompt to forbid uncited bullets in the first place.
+- Scope the unresolved-gap check to the bullet's own topic: a bullet whose topic resolves to a confirmed, addressed, section-bearing contract item can't have its own open caveat by construction, so it's no longer capped by gaps elsewhere in the contract. Untagged bullets keep the legacy pooled/global check.
+- Reframe the `evidence_answer_critic` prompt's instructions around source-faithfulness ("does this claim accurately reflect what its cited source says") rather than abstract claim support.
+- Show a bullet's support-status badge on *every* citation it has, not just the first, and add an info icon next to "Sources" explaining what each status means and that it's a structural check, not a full semantic read.
+
+**Done when:** The Sources list never shows a citation-less entry, a bullet's status reflects only gaps related to its own topic, and the critic prompt's framing matches what's actually displayed.
+
+> **Done.** `validate_and_enforce` now relocates any citation-less bullet's
+> text into `limitations` (deduplicated against existing entries) and
+> records an `uncited_bullet_relocated` finding; the synthesis prompt
+> explicitly forbids uncited bullets. `deterministic_support_status` skips
+> the global gap check entirely for topic-tagged bullets that resolve to a
+> confirmed addressed intent (only untagged bullets keep the pooled,
+> contract-wide fallback). The `evidence_answer_critic` prompt now frames
+> its per-claim judgment as source-faithfulness rather than abstract claim
+> support. The frontend filters citation-less bullets out of the Sources
+> render as a defensive backstop, shows the support badge on every citation
+> in a bullet (not just the first), and an info icon on "Sources" explains
+> the status semantics. Verified live against the cetirizine/ibuprofen/
+> aspirin query: all topic-tagged bullets scored `strong` despite the
+> contract still carrying its own unrelated context gap, zero uncited
+> bullets reached the answer, and cetirizine ended up addressed via an
+> actual cited bullet instead of an uncited "no evidence" statement.
+
+---
+
+### ✅ D2e — Replace the deterministic support-status floor with a source-faithfulness critic
+
+**Effort:** M · **Impact:** High · **Status:** done · **Depends on:** D1, D2
+
+**Goal:** The deterministic floor from D2 (topic-scoped since D2b, gap-check scoped since D2d) measured something real but narrow: does a citation's section *category* belong to a contract-confirmed intent for the topic it's about. It never read the cited label text or the final response, and since the same model call that writes a bullet also picks its citation, that check was almost always trivially satisfied — it produced a badge that looked like a quality signal without reliably being one. Raised and discussed in review: is it more useful to check whether a citation actually supports what's claimed, and whether the response uses it correctly?
+
+**Scope:**
+- Delete the deterministic floor entirely (`deterministic_support_status`, `apply_deterministic_statuses`, `_topic_required_sections`, `_addressed_intent_sections`, `_has_unresolved_gap`) and the bullet-level `topic` field that only existed to feed it. The contract-level `topic` on `AnswerContractItem` (used by `validate_and_enforce`'s deterministic caveat enforcement) is untouched.
+- Make the LLM critic — turned **on by default** (`enable_answer_critic: true`) — the only source of a support-status badge; when it's off or unavailable (no LLM configured, demo mode), citations simply carry no status and no badge renders, rather than falling back to a structural guess.
+- Re-scope the critic from per-bullet to per-citation (`EvidenceCitation.support_status`, not `EvidenceBullet.support_status`), since a bullet can carry more than one citation and each should be judged independently.
+- New two-axis, five-tier taxonomy (`accurate`, `not_reflected`, `contradicted`, `misrepresented`, `misrepresented_used`) judging each citation against (1) does the claim faithfully represent the real cited label text, and (2) does the response correctly reflect that.
+- Keep the critic's prompt input minimal: query, response, limitations, and — per citation actually used — its claim text and the real cited label-section text (the same text, same D2c truncation, the synthesis model saw). Never the full evidence packet, `label_product_context`, or `answer_contract`. Defensive caps (`MAX_CRITIC_BULLETS`, `MAX_CRITIC_CITATIONS`) bound the prompt size.
+
+**Done when:** Every citation actually used in an answer can carry its own independent support status from the critic, no structural floor exists as a fallback, and the critic's input is limited to what's strictly needed to judge faithfulness.
+
+> **Done.** `src/query_answer/models.py`/`critic.py` rewritten per scope;
+> `enable_answer_critic` defaults to `true` in both `QueryAnswerParameters`
+> and `conf/base/parameters.yml`. Verified live against a multi-citation
+> cetirizine/ibuprofen/aspirin query: the critic caught a citation that
+> faithfully reflected its source's GI-bleeding warning but whose claim
+> never actually appeared in the final response text (scored
+> `not_reflected`) — exactly the kind of faithfulness gap the deleted
+> structural floor could never detect. Frontend badges now read per-citation
+> status across five tiers; demo mode (critic disabled) correctly renders no
+> badges at all. Backend (103 tests) and frontend (`tsc`/`eslint`)
+> verification clean; `notebooks/05_guardrails_v2_v3_walkthrough.ipynb`
+> updated and re-executed end to end with the new design.
+
+---
+
+### ✅ D2f — More direct answer tone, two-axis support badges, remove critique clutter
+
+**Effort:** S–M · **Impact:** Med · **Status:** done · **Depends on:** D2e
+
+**Goal:** Three product/UX refinements found reviewing D2e's live output, addressed
+together since two of them share a root cause:
+1. The evidence-based answer narrated what the labels said but never offered a
+   directional takeaway, even a hedged one — reads as evasive rather than careful.
+2. The five one-word `support_status` labels (`accurate`, `contradicted`, ...) aren't
+   intuitive; each secretly encodes two facts (does the claim match the source, does
+   the answer reflect it), forcing readers back to a long info-tooltip paragraph to
+   decode a single word.
+3. The "Answer critique" section — present since the original D2 but only now
+   rendering on every answer because D2e turned the critic on by default — is mostly
+   clutter, and its open-ended `global_findings` output actively contradicted the
+   synthesis prompt: it flagged a response for not giving a direct yes/no, which is
+   exactly what the prompt forbids.
+
+**Scope:**
+- Loosen `evidence_answer_synthesis`'s framing paragraph to require a clear,
+  evidence-attributed directional takeaway ("the retrieved labels point toward
+  caution about combining these, because ...") instead of pure narration, while
+  keeping the same hard prohibition on personal-permission phrasing ("you can/can't
+  take X"). The deterministic `YES_NO_FRAMING_PATTERNS` regex backstop in
+  `validation.py` is untouched — it remains the hard floor under the loosened tone.
+- Frontend-only: derive two self-describing tags from each citation's existing
+  single `support_status` (source-match axis + answer-use axis), collapsing the
+  all-good case to a single "Verified" chip, and replace the Sources info-tooltip
+  paragraph with a compact 2×3 matrix. No backend, type, or API change — this is a
+  display-only derivation of D2e's existing status.
+- Remove `global_findings` from the `evidence_answer_critic` prompt entirely (the
+  critic now does only its per-citation faithfulness job) and delete the "Answer
+  critique" section from the UI; keep only a one-line inline note when a
+  regeneration happened.
+
+**Done when:** the evidence-based answer gives a hedged but real directional
+takeaway; each citation's badge is self-explanatory without the info tooltip; the
+critic no longer produces or the UI no longer shows open-ended findings that can
+contradict the synthesis prompt.
+
+> **Done.** `conf/base/prompts.yml`'s synthesis framing paragraph rewritten per
+> scope; `validation.py`'s yes/no regex left untouched as the hard floor. Frontend
+> `generated-response.tsx` now derives `Verified` / `Matches source` + `Misreads
+> source` / `Reflected in answer` + `Not reflected in answer` + `Contradicted in
+> answer` tags from the existing `support_status`, with a matrix in `InfoTooltip`
+> (extended to accept `ReactNode` content); header chips simplified to
+> `Verified N` / `Flagged M`. `evidence_answer_critic` prompt no longer requests
+> `global_findings`; `AnswerCritiqueSection` removed, replaced by a one-line
+> regeneration note. Verified live against the cetirizine/ibuprofen/aspirin query:
+> response now gives a hedged directional takeaway ("this is a 'discuss with a
+> clinician/pharmacist' situation based on the label cautions") instead of pure
+> narration; critic returns empty `global_findings` and correctly caught a citation
+> whose cardiovascular-risk claim was never reflected in the response
+> (`not_reflected`). Backend (103 tests, ruff) and frontend (`tsc`/`eslint`) clean;
+> demo mode (critic disabled) browser-verified showing zero badges and no critique
+> section; all 5 badge tiers spot-checked via a temporary demo-fixture edit,
+> reverted before commit. `notebooks/05_guardrails_v2_v3_walkthrough.ipynb` updated
+> and re-executed end to end, 0 errors.
+
+---
+
+### D2g — Cover the "misreads source + contradicted" gap in the critic taxonomy
+
+**Effort:** S · **Impact:** Low · **Status:** todo · **Depends on:** D2e, D2f
+
+**Goal:** D2f's two-axis badge display (source-match: matches/misreads; answer-use:
+reflected/not_reflected/contradicted) exposed that the critic's 5-tier
+`support_status` doesn't actually cover all 6 cells of that 2×3 matrix. The
+uncovered cell is "the cited text doesn't say what the claim says, **and** the
+final response says something that actively conflicts with it" — a citation that's
+both misread *and* whose (incorrect) claim is then contradicted by the response.
+Today the critic has no tier for this; it would presumably fall into whichever of
+`misrepresented` / `misrepresented_used` the model picks, silently losing the
+"contradicted" signal.
+
+**Why it matters:** Low priority — this is a narrow edge case (the response would
+have to actively conflict with something the citation never said in the first
+place), not a common failure mode. Documented here mainly so the gap is a known,
+deliberate trade-off rather than something rediscovered as a surprise later.
+
+**Scope:** If ever pursued, this likely means asking the critic to report the two
+axes independently (`source_match` + `answer_use` as separate enum fields) rather
+than one collapsed 5-tier `support_status` — a prompt/schema change, not just a
+display tweak, since the frontend's two-axis badges are currently *derived from*
+the single backend status, not sourced independently.
+
+**Done when:** Either explicitly decided not worth pursuing, or the critic reports
+both axes independently and all 6 matrix cells are reachable.
 
 ---
 
@@ -519,6 +780,145 @@ Do these opportunistically, when a concrete query exposes a problem — not pree
 ## Shipped
 
 A record of completed work.
+
+**D2 — Guardrails V3 (per-claim support + LLM critic)**
+- Every generated bullet carries a `support_status`
+  (`strong`/`partial`/`limited`/`none`) via a new `src/query_answer/critic.py`.
+- A deterministic classifier always runs as the floor: it checks each bullet's
+  cited sections against the D1 answer_contract's addressed intents, so
+  support status is populated even with no LLM critic configured (e.g. demo
+  mode); structural caveats that apply regardless of evidence quality (e.g.
+  the interaction-terminology note) don't by themselves downgrade a
+  well-cited claim.
+- An optional LLM critic (`enable_answer_critic`, off by default, off in
+  demo) reads each numbered claim against the same evidence packet used for
+  synthesis and may override the deterministic status, flag issues
+  (unsupported, overconfident, missing caveat, yes/no framing), and request
+  regeneration.
+- `finalize_answer_critique` performs at most one feedback-driven regeneration when
+  the critic flags important issues, then re-validates and re-critiques the
+  regenerated answer; `EvidenceAnswerSynthesizer.synthesize()` gained a
+  `critic_feedback` path that reuses the existing prompt/citation machinery
+  (new `evidence_answer_critic` / `evidence_answer_critic_regen` prompts).
+- `QueryAnswerResponse.critique` (`AnswerCritique`) carries the outcome:
+  whether the critic ran, its source, per-claim assessments, global findings,
+  and whether a regeneration occurred.
+- Frontend: per-claim support badges next to citations on each bullet, and a
+  collapsible "Answer critique" audit section (shown only when the critic
+  actually ran) below limitations.
+- Removed the `evidence_summary`/`summary` fields: a second LLM-written
+  paragraph largely restating `response` with no citations of its own, while
+  the citation-backed bullets already did that job better. The synthesis
+  prompt now directs any nuance not captured by `response` or an existing
+  bullet into its own cited bullet, or a limitation if it reflects a gap.
+
+**D2b — Fix cross-intent leakage in the deterministic support-status floor**
+- Found while reviewing D2: the deterministic floor pooled `required_sections`
+  across every addressed intent into one flat set, so a citation backing one
+  intent (e.g. an allergy caveat citing `warnings`) could spuriously "support"
+  an unrelated bullet (e.g. an interaction claim) on section-name overlap
+  alone — reproduced with a query where an honest "no interaction evidence
+  retrieved" bullet was inconsistently scored `strong` vs `limited` purely
+  depending on which section the LLM happened to cite.
+- Each generated bullet now carries a `topic` (`EvidenceBullet.topic`),
+  parsed from synthesis output and whitelisted against the answer_contract's
+  own topics, same pattern as citation whitelisting.
+- `deterministic_support_status` scopes its section check to the matching
+  contract item's `required_sections` when a bullet's topic resolves to one,
+  falling back to the legacy pooled check for untagged bullets — a strict
+  tightening with no regression risk.
+- `build_answer_contract` now uses each intent's actually-matched section(s)
+  (`EvidenceCoverageItem.matched_sections`) instead of the static
+  `INTENT_REQUIRED_SECTIONS` allow-list.
+
+**D2c — Fix evidence-packet truncation starving later label sections**
+- Found while investigating D2b: even after that fix, the same query kept
+  reporting missing `drug_interactions` text for ibuprofen despite the
+  contract marking `interaction_check` "addressed" — because
+  `label_section_payloads()` truncated per drug to a flat 16-entry cap in a
+  fixed section priority order, with no per-section sub-limit and no
+  deduplication, so near-duplicate boilerplate in earlier sections
+  (`boxed_warning`/`contraindications`/`warnings`) exhausted the cap before
+  `drug_interactions` was ever reached.
+- `label_section_payloads()` now deduplicates near-identical boilerplate per
+  section, caps each section to `MAX_SECTION_ENTRIES`, and guarantees any
+  section the contract relies on survives the overall cap by evicting from
+  the lowest-priority tail if needed.
+- `required_label_sections(contract)` is a new shared helper in
+  `contract.py`, used by both `build_evidence_packet` (to know which
+  sections to guarantee) and `critic.py`'s deterministic floor (replacing
+  duplicated logic).
+
+**D2d — Fix uncited sources, scope the support-status gap check, and reframe the critic**
+- A bullet with no citations isn't a retrieved source; `validate_and_enforce`
+  now relocates its text into `limitations` (deduplicated) and the synthesis
+  prompt forbids uncited bullets outright, so "No citation" entries no
+  longer show up in the Sources list.
+- `deterministic_support_status` no longer lets a gap unrelated to a
+  bullet's own topic cap its status at "partial" — a topic-tagged bullet
+  resolving to a confirmed addressed intent skips the global gap check
+  entirely (only untagged bullets keep the legacy pooled fallback).
+- The `evidence_answer_critic` prompt now frames its per-claim judgment as
+  source-faithfulness ("does this claim accurately reflect what its cited
+  source says") rather than abstract claim support, matching what the UI
+  actually displays.
+- Frontend: citation-less bullets are filtered out of the Sources render as
+  a defensive backstop, every citation in a bullet shows its support badge
+  (not just the first), and an info icon on "Sources" explains the status
+  semantics and that it's a structural, not semantic, check.
+
+**D2e — Replace the deterministic support-status floor with a source-faithfulness critic**
+- Deleted the deterministic floor outright (`deterministic_support_status`,
+  `apply_deterministic_statuses`, `_topic_required_sections`,
+  `_addressed_intent_sections`, `_has_unresolved_gap`) along with the
+  bullet-level `topic` field that only existed to feed it — the floor only
+  ever checked a citation's section *category* against the topic it was
+  about, never the cited text or the response, and that check was almost
+  always trivially satisfied.
+- The LLM critic — now **on by default** (`enable_answer_critic: true`) — is
+  the only source of a support-status badge; when it's off or unavailable,
+  citations simply carry no status and no badge renders.
+- Re-scoped the critic from per-bullet to per-citation
+  (`EvidenceCitation.support_status`), with a new two-axis, five-tier
+  taxonomy (`accurate`, `not_reflected`, `contradicted`, `misrepresented`,
+  `misrepresented_used`) judging each citation against the real cited label
+  text and whether the response correctly reflects it.
+- The critic's prompt input is deliberately minimal — query, response,
+  limitations, and per-citation claim text + real cited label-section text —
+  never the full evidence packet, `label_product_context`, or
+  `answer_contract`; `MAX_CRITIC_BULLETS`/`MAX_CRITIC_CITATIONS` bound the
+  prompt size defensively.
+
+**D2f — More direct answer tone, two-axis support badges, remove critique clutter**
+- The synthesis prompt now asks for a hedged, evidence-attributed directional
+  takeaway ("the retrieved labels point toward caution...") instead of pure
+  label narration, while keeping the same hard prohibition on personal
+  yes/no permission phrasing and the deterministic `YES_NO_FRAMING_PATTERNS`
+  regex backstop in `validation.py`, both untouched.
+- The Sources badges now render each citation's existing `support_status` as
+  two self-describing tags (source-match axis + answer-use axis) instead of
+  one five-tier word, collapsing to a single "Verified" chip for the all-good
+  case; the info tooltip is now a compact matrix instead of a paragraph. This
+  is a display-only derivation — no backend, type, or API change.
+- Removed the "Answer critique" section and the critic's open-ended
+  `global_findings` output entirely — it rendered on every answer once D2e
+  turned the critic on by default, and its advisory findings sometimes
+  contradicted the synthesis prompt's own instructions (e.g. flagging a
+  response for not giving a direct yes/no). Only a one-line inline note now
+  surfaces when a regeneration happened.
+
+**D1 — Guardrails V2**
+- Each intent (`patient_context_check`, `allergy_context_check`,
+  `interaction_check`, `side_effect_check`, `indication_check`,
+  `label_context_check`) has a deterministic coverage check
+  (`intent_evidence_status`) against the actual retrieved label sections,
+  with matched evidence linked back into Supporting evidence in the UI.
+- `build_answer_contract` turns coverage into a must-mention/must-caveat
+  checklist built before synthesis and fed into the prompt, alongside a
+  bounded, non-citable `label_product_context` block.
+- `validate_and_enforce` runs post-generation: deterministically appends any
+  must-caveat the model dropped, flags yes/no medical-advice framing, and
+  records unaddressed must-mention topics as validation findings.
 
 **F6 — Richer drug-label cards & medication overview**
 - Normalizes additional OpenFDA product-context fields into label records:

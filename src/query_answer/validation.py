@@ -8,6 +8,7 @@ from src.query_answer.models import (
     AnswerContractItem,
     AnswerValidationReport,
     EvidenceAnswer,
+    EvidenceBullet,
     ValidationFinding,
 )
 
@@ -42,8 +43,23 @@ def validate_and_enforce(
         return None, AnswerValidationReport()
 
     findings: list[ValidationFinding] = []
-    limitations = list(answer.limitations)
     enforced: list[str] = []
+
+    cited_bullets, limitations, relocated = _relocate_uncited_bullets(answer)
+    answer = answer.model_copy(
+        update={"bullets": cited_bullets, "limitations": limitations}
+    )
+    for _ in relocated:
+        findings.append(
+            ValidationFinding(
+                kind="uncited_bullet_relocated",
+                severity="warning",
+                message=(
+                    "Generated answer included a bullet with no citations; it "
+                    "was moved to limitations since it isn't a retrieved source."
+                ),
+            )
+        )
 
     for item in contract.items:
         if item.kind != "must_caveat" or _already_covered(item.statement, limitations):
@@ -63,7 +79,7 @@ def validate_and_enforce(
         )
 
     combined_text = " ".join(
-        [answer.response, answer.evidence_summary, *(b.text for b in answer.bullets)]
+        [answer.response, *(b.text for b in answer.bullets)]
     )
     if _has_yes_no_framing(combined_text) and YES_NO_FRAMING_CAVEAT not in limitations:
         limitations.append(YES_NO_FRAMING_CAVEAT)
@@ -99,6 +115,31 @@ def validate_and_enforce(
         passed=not any(finding.severity == "warning" for finding in findings),
     )
     return updated_answer, report
+
+
+def _relocate_uncited_bullets(
+    answer: EvidenceAnswer,
+) -> tuple[list[EvidenceBullet], list[str], list[str]]:
+    """Move bullets with no citations out of bullets and into limitations.
+
+    A bullet with no citations isn't a retrieved source — it's typically the
+    model noting an absence of evidence, which is a caveat, not a claim. This
+    keeps the Sources list free of citation-less entries regardless of why a
+    bullet ended up uncited (the model wrote it that way, or its only citation
+    was dropped by the allowed-citations whitelist).
+    """
+
+    cited_bullets = [bullet for bullet in answer.bullets if bullet.citations]
+    limitations = list(answer.limitations)
+    relocated: list[str] = []
+    for bullet in answer.bullets:
+        if bullet.citations or not bullet.text:
+            continue
+        if _already_covered(bullet.text, limitations):
+            continue
+        limitations.append(bullet.text)
+        relocated.append(bullet.text)
+    return cited_bullets, limitations, relocated
 
 
 def _already_covered(statement: str, limitations: list[str]) -> bool:

@@ -124,6 +124,11 @@ def build_evidence_coverage(
                             "but no label text was retrieved."
                         )
                     ),
+                    target_rxcui=(
+                        dossier.resolved_drug.rxcui
+                        if dossier and dossier.resolved_drug
+                        else None
+                    ),
                 )
             )
         else:
@@ -153,7 +158,7 @@ def build_evidence_coverage(
                     label=drug,
                     status="addressed",
                     reason=(
-                        "Secondary label evidence was retrieved for "
+                        "Drug label evidence was retrieved for "
                         f"{secondary.resolved_concept.name}."
                     ),
                     target_rxcui=secondary.resolved_concept.rxcui,
@@ -165,9 +170,7 @@ def build_evidence_coverage(
                 category="mentioned_drug",
                 label=drug,
                 status="not_retrieved",
-                reason=(
-                    "Secondary label evidence was not retrieved."
-                ),
+                reason="Drug label evidence was not retrieved.",
             )
         )
 
@@ -184,8 +187,8 @@ def build_evidence_coverage(
                     label=drug,
                     status="addressed",
                     reason=(
-                        "Secondary label evidence was retrieved for the "
-                        f"current medication {secondary.resolved_concept.name}."
+                        "Drug label evidence was retrieved for the current "
+                        f"medication {secondary.resolved_concept.name}."
                     ),
                     target_rxcui=secondary.resolved_concept.rxcui,
                 )
@@ -289,6 +292,7 @@ def build_evidence_coverage(
                 section=(
                     intent_result.match.section if intent_result.match else None
                 ),
+                matched_sections=intent_result.matched_sections,
                 target_rxcui=intent_result.target_rxcui,
             )
         )
@@ -314,10 +318,7 @@ def primary_addressed_reason(
             f"{'s' if len(ingredient_fallback_names) != 1 else ''} "
             f"({format_human_list(ingredient_fallback_names)})."
         )
-    return (
-        "Retrieved evidence is tied to the resolved primary concept: "
-        f"{primary_name}."
-    )
+    return f"Drug label evidence was retrieved for {primary_name}."
 
 
 def find_secondary_evidence(
