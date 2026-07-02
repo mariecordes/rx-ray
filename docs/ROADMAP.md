@@ -17,8 +17,8 @@ rx-ray's most compelling and honest story is **not** "an app that answers drug q
 ## Recommended sequencing
 
 **Phase 0 — Foundation must-haves (days):**
-[A1](#a1--clone-and-run-bootstrap) clone-and-run · [A2](#a2--neuro-symbolic--safety-narrative-about-page) About narrative · [A3](#a3--readme-refresh) README · [A5](#a5--architecture-doc) architecture doc.
-Optionally [A4](#a4--live-demo-deployment) live demo if hosting is straightforward. These determine first impressions.
+[A1](#a1--clone-and-run-bootstrap) clone-and-run · [A2](#a2--neuro-symbolic--safety-narrative-about-page) About narrative · [A3](#a3--readme-refresh) README · [A4](#a4--live-demo-deployment) live demo · [A5](#a5--architecture-doc) architecture doc.
+These determine first impressions.
 
 **Phase 1 — Quality + speed foundation (1–2 weeks):**
 [B1](#b1--rxnorm-resolver-indexing--performance)/[E1](#e1--resolver--neighborhood-performance) resolver perf · [B5](#b5--query-to-concept-matching--display-fidelity) query to concept matching & display fidelity · [B2](#b2--specific-concept-resolution-priority--ingredient-fallback) specific-concept priority + ingredient fallback · [D1](#d1--guardrails-v2) Guardrails V2 ·
@@ -42,7 +42,7 @@ Optionally [A4](#a4--live-demo-deployment) live demo if hosting is straightforwa
 | [A1](#a1--clone-and-run-bootstrap) | Clone-and-run bootstrap | Foundation | M | High | ✅ done | — |
 | [A2](#a2--neuro-symbolic--safety-narrative-about-page) | About narrative | Foundation | S–M | High | ✅ done | — |
 | [A3](#a3--readme-refresh) | README refresh | Foundation | S | Med | ✅ done | A2 |
-| [A4](#a4--live-demo-deployment) | Live demo | Foundation | M | High | todo | A1 |
+| [A4](#a4--live-demo-deployment) | Live demo | Foundation | M | High | ✅ done | A1 |
 | [A5](#a5--architecture-doc) | Architecture doc | Foundation | S | Med | todo | — |
 | [B1](#b1--rxnorm-resolver-indexing--performance) | Resolver indexing/perf | Retrieval | M | Med | todo | — |
 | [B2](#b2--specific-concept-resolution-priority--ingredient-fallback) | Specific-concept priority + ingredient fallback | Retrieval | L | High | ✅ done | B5 |
@@ -132,9 +132,9 @@ The highest-leverage work per hour. Most items here are small but decisive: they
 
 ---
 
-### A4 — Live demo deployment
+### ✅ A4 — Live demo deployment
 
-**Effort:** M · **Impact:** High · **Status:** todo · **Depends on:** A1
+**Effort:** M · **Impact:** High · **Status:** done · **Depends on:** A1
 
 **Goal:** A public URL (or a polished recorded walkthrough) so no local setup is required to see the project working.
 
@@ -145,6 +145,15 @@ The highest-leverage work per hour. Most items here are small but decisive: they
 - Fallback: if hosting the data backend is heavy, ship a recorded 60–90s walkthrough.
 
 **Done when:** A link in the README opens a working demo.
+
+> **Done.** The live app is deployed at
+> [rx-ray.vercel.app](https://rx-ray.vercel.app/) with the FastAPI backend on
+> Railway and the Next.js frontend on Vercel. The frontend calls same-origin
+> `/api/*` proxy routes that forward to the Railway backend via `BACKEND_URL`;
+> Railway builds the backend from the root Dockerfile, installs the LLM-enabled
+> package, serves on the provider `PORT`, and exposes `/health` through the
+> public service domain. README and About now include the live link, deployment
+> stack, and repository link.
 
 ---
 

@@ -1,5 +1,7 @@
 # rx-ray
 
+**Live app:** [https://rx-ray.vercel.app/](https://rx-ray.vercel.app/)
+
 **A neuro-symbolic medication-evidence explorer — where a symbolic layer
 grounds, constrains, and audits an LLM so it can summarize public drug
 information without overclaiming.**
@@ -109,6 +111,9 @@ the safety properties are enforced in code:
   parquet for fast local retrieval) and public drug labels via the OpenFDA
   drug-label API. OpenFDA lookups use live-with-cache behavior, storing raw
   responses under `data/cache/openfda_labels/`.
+- **Deployment:** Railway for the FastAPI backend and Vercel for the Next.js
+  frontend.
+- **Code:** [github.com/mariecordes/rx-ray](https://github.com/mariecordes/rx-ray)
 
 ## Data sources
 
@@ -161,7 +166,7 @@ tests/                     Backend tests
 
 A fresh clone runs end-to-end with no extra data wrangling — the minimal RxNorm
 runtime data is committed, and OpenFDA labels are fetched live (no API key
-needed). Requires Python 3.11+ and Node 18+.
+needed). Requires Python 3.11+ and Node 20.9+.
 
 ```bash
 make setup          # install backend + frontend deps, create .env, verify data
@@ -174,6 +179,10 @@ a venv, `pip install -e ".[dev,llm]"`, `cd apps/frontend && npm install`, copy
 `.env.example` to `.env`). The LLM features are optional — without an OpenAI key
 the pipeline falls back to deterministic behavior. Run `make test` / `make check`
 for tests and linting.
+
+Use `http://localhost:3000` for local frontend work. If you intentionally open
+the dev server through a LAN host, set `NEXT_ALLOWED_DEV_ORIGINS` in
+`apps/frontend/.env.local` to that host and restart `npm run dev`.
 
 ## Safety note
 

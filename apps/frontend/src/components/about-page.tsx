@@ -314,6 +314,10 @@ export function AboutPage() {
                 key is configured. With the critic off, the answer simply carries
                 no faithfulness badges rather than guessing.
               </p>
+              <p className="mb-3">
+                <strong>Deployment:</strong> Railway (backend) and Vercel
+                (frontend).
+              </p>
               <p>
                 <strong>Code:</strong> for a more in-depth look you can check out the full repo here:{" "}
                 <a
