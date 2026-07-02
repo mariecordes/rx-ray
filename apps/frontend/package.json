@@ -2,19 +2,22 @@
   "name": "rx-ray-frontend",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=20.9.0"
+  },
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "next build --webpack",
     "start": "next start",
     "lint": "next lint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "next typegen && tsc --noEmit --incremental false"
   },
   "dependencies": {
     "@types/d3-force": "^3.0.10",
     "clsx": "^2.1.1",
     "d3-force": "^3.0.0",
     "lucide-react": "^0.536.0",
-    "next": "15.4.5",
+    "next": "16.2.10",
     "react": "19.1.0",
     "react-dom": "19.1.0"
   },
@@ -25,7 +28,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "15.4.5",
+    "eslint-config-next": "16.2.10",
     "tailwindcss": "^4",
     "typescript": "^5"
   }
