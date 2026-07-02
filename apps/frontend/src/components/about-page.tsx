@@ -72,7 +72,7 @@ export function AboutPage() {
         <CardHeader>
           <CardTitle>About rx-ray</CardTitle>
           <p className="mt-1 text-sm leading-6 text-slate-500">
-            A neuro-symbolic medication-evidence explorer — where a symbolic
+            A neuro-symbolic medication-evidence explorer: where a symbolic
             layer grounds, constrains, and audits an LLM so it can summarize
             public drug information without overclaiming.
           </p>
@@ -93,9 +93,9 @@ export function AboutPage() {
                 Medication questions are a perfect stress test for that idea. The
                 stakes are real, the data is messy and incomplete, and a
                 confident-sounding wrong answer is worse than no answer at all.
-                It&apos;s exactly the kind of place where a language model on its
-                own is risky — and where pairing it with structured, inspectable
-                evidence becomes genuinely useful.
+                It&apos;s the kind of place where a language model on its
+                own is risky - and where pairing it with structured, inspectable
+                evidence becomes truly useful.
               </p>
               <p className="font-medium">
                 That&apos;s the question <RxRay /> explores: <strong>can the symbolic
@@ -116,7 +116,8 @@ export function AboutPage() {
                 💬 <strong>Ask a Question</strong>: the main experience. Ask a
                 natural-language medication question and get a grounded answer,
                 plus a compact view of what the system understood, what evidence
-                it used, and where it falls short.
+                it used, how faithfully each cited source is reflected, and where
+                it falls short.
               </p>
               <p className="mb-3">
                 Behind every answer you can open the full evidence packet:
@@ -164,22 +165,50 @@ export function AboutPage() {
               <p className="mb-3">
                 🔍 <strong>Symbolic retrieval:</strong> resolved medications are
                 looked up in RxNorm to build a local concept network, and public
-                FDA label text is retrieved from OpenFDA — targeted at the
+                FDA label text is retrieved from OpenFDA, while being targeted at the
                 sections that match the question&apos;s intent.
               </p>
               <p className="mb-3">
-                💬 <strong>Grounded synthesis:</strong> the LLM writes the
-                summary, but it can only cite evidence from a whitelist built out
-                of the retrieved label sections. Citations outside that whitelist
-                are dropped, and an empty-citation answer triggers a bounded
-                retry.
+                ✅ <strong>Coverage audit:</strong> before any answer is written,
+                a deterministic check compares every extracted detail against the
+                retrieved evidence and labels it <em>addressed</em>,{" "}
+                <em>not found in evidence</em>, <em>not retrieved</em>, or{" "}
+                <em>out of scope</em>. Even before an answer is generated, the system hereby says out loud what it could
+                and couldn&apos;t support.
               </p>
               <p className="mb-3">
-                ✅ <strong>Coverage audit:</strong> a deterministic check compares
-                every extracted detail against the evidence and labels it{" "}
-                <em>addressed</em>, <em>not found in evidence</em>,{" "}
-                <em>not retrieved</em>, or <em>out of scope</em> — so the system
-                says out loud what it could and couldn&apos;t support.
+                📋 <strong>Answer contract:</strong> that coverage report is
+                compiled into an explicit contract the answer has to satisfy:
+                which topics it <em>must address</em> (because evidence exists)
+                and which caveats it <em>must include</em>. Expectations are set
+                symbolically, before the model writes a word, so &quot;did the
+                model behave&quot; becomes a checklist the system can enforce
+                rather than hope for.
+              </p>
+              <p className="mb-3">
+                💬 <strong>Grounded synthesis:</strong> the LLM writes the summary
+                against that contract, but it can only cite evidence from a
+                whitelist built out of the retrieved label sections. Citations
+                outside that whitelist are dropped, and an empty-citation answer
+                triggers a bounded retry.
+              </p>
+              <p className="mb-3">
+                🛡️ <strong>Deterministic enforcement:</strong> once the answer is
+                written, a symbolic validation pass checks it against the
+                contract. It may re-append any required caveat the model dropped,
+                flag personal &quot;safe / unsafe&quot; framing, and
+                relocate any claim that lacks a citation out of the sources list
+                and into the stated limitations.
+              </p>
+              <p className="mb-3">
+                🔬 <strong>Faithfulness critic:</strong> finally, a second LLM
+                pass audits each citation on its own, comparing the claim against
+                the exact label text it cites <em>and</em> against the final
+                answer. It scores, per source, whether the claim faithfully
+                represents what the label actually says and whether the answer
+                reflects, omits, or contradicts it. You see that verdict as a
+                badge on every source, and a serious mismatch triggers a single,
+                bounded regeneration of the answer.
               </p>
             </CollapsibleSection>
 
@@ -189,7 +218,7 @@ export function AboutPage() {
               onToggle={() => handleToggle("Goal & impact")}
             >
               <p className="mb-3">
-                The goal of <RxRay /> isn&apos;t to be a medication chatbot —
+                The goal of <RxRay /> isn&apos;t to be a medication chatbot -
                 ask a question, get an answer, done. It&apos;s to demonstrate a
                 pattern I care about: a{" "}
                 <strong>
@@ -208,7 +237,7 @@ export function AboutPage() {
                 exactly which sources were retrieved and which details the system
                 couldn&apos;t find coverage for. Having all of that in one place
                 lets you develop a more grounded sense of what the data actually
-                says — and how much the LLM is doing for you compared to
+                says and how much the LLM is doing for you compared to
                 hunting through raw label text yourself.
               </p>
               <p className="mb-3">
@@ -222,8 +251,8 @@ export function AboutPage() {
                 To be clear about the limits: RxNorm is terminology data and FDA
                 label text is incomplete for things like true drug-interaction
                 discovery. <RxRay /> is an{" "}
-                <strong>educational prototype</strong>, not a clinical tool — it
-                summarizes and visualizes public information, and it does not
+                <strong>educational prototype</strong>, not a clinical tool. While it
+                summarizes and visualizes public information, it does not
                 give medical advice, diagnoses, or treatment recommendations.
                 For medical questions, please talk to a qualified clinician or
                 pharmacist.
@@ -247,8 +276,10 @@ export function AboutPage() {
                 visualizations.
               </p>
               <p className="mb-3">
-                <strong>Backend:</strong> Python FastAPI, with OpenAI
-                API integration for query refinement and grounded synthesis.
+                <strong>Backend:</strong> Python FastAPI, with OpenAI API
+                integration for query refinement, grounded synthesis, and a
+                second-pass faithfulness critic that audits the answer against its
+                own sources.
               </p>
               <p className="mb-3">
                 <strong>Data:</strong> RxNorm{" "}
@@ -275,10 +306,13 @@ export function AboutPage() {
                 so the terminology and the evidence line up.
               </p>
               <p className="mb-3">
-                <strong>Safety design:</strong> deterministic state extraction,
-                a citation whitelist, bounded retries, and a coverage audit —
-                every LLM call falls back to deterministic behavior
-                when no API key is configured.
+                <strong>Safety design:</strong> deterministic state extraction
+                and coverage checks, a coverage-driven answer contract, a citation
+                whitelist, deterministic enforcement of required caveats, and a
+                second-pass LLM faithfulness critic with bounded regeneration.
+                Every LLM call falls back to deterministic behavior when no API
+                key is configured. With the critic off, the answer simply carries
+                no faithfulness badges rather than guessing.
               </p>
               <p>
                 <strong>Code:</strong> for a more in-depth look you can check out the full repo here:{" "}
