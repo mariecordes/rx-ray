@@ -1,6 +1,7 @@
 import pytest
 
 from apps.api.main import (
+    DEFAULT_CORS_ORIGINS,
     DossierRequest,
     LabelEvidenceRequest,
     QueryAnswerRequest,
@@ -9,6 +10,7 @@ from apps.api.main import (
     build_dossier,
     build_label_evidence,
     configure_api_logging,
+    cors_allow_origins,
     health_check,
     understand_query,
 )
@@ -108,6 +110,35 @@ def test_api_logging_setup_is_idempotent() -> None:
 
     assert logger.level == logging.INFO
     assert len(rx_ray_handlers) == 1
+
+
+def test_cors_defaults_to_local_origins(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("ALLOW_ALL_CORS", raising=False)
+    monkeypatch.delenv("EXTRA_CORS_ORIGINS", raising=False)
+
+    assert cors_allow_origins() == list(DEFAULT_CORS_ORIGINS)
+
+
+def test_cors_includes_extra_origins(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("ALLOW_ALL_CORS", raising=False)
+    monkeypatch.setenv(
+        "EXTRA_CORS_ORIGINS",
+        "https://rx-ray.vercel.app, https://preview.vercel.app, "
+        "https://rx-ray.vercel.app",
+    )
+
+    assert cors_allow_origins() == [
+        *DEFAULT_CORS_ORIGINS,
+        "https://rx-ray.vercel.app",
+        "https://preview.vercel.app",
+    ]
+
+
+def test_cors_allow_all_escape_hatch(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("ALLOW_ALL_CORS", "true")
+    monkeypatch.setenv("EXTRA_CORS_ORIGINS", "https://rx-ray.vercel.app")
+
+    assert cors_allow_origins() == ["*"]
 
 
 @pytest.mark.asyncio

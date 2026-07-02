@@ -241,8 +241,6 @@ apps/frontend/node_modules/
 
 # Claude Code local config (kept local, not committed)
 CLAUDE.md
-.claude/settings.json
-.claude/commands/
-.claude/hooks/
+.claude/**/*
 AGENT_GUIDE.md
 AGENTS.md

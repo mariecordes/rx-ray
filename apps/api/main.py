@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import sys
 from functools import lru_cache
 
@@ -20,6 +21,12 @@ from src.query_understanding.models import QueryUnderstandingResponse
 from src.query_understanding.service import QueryUnderstandingService
 
 load_dotenv()
+
+DEFAULT_CORS_ORIGINS = (
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+)
+TRUE_ENV_VALUES = {"1", "true", "yes", "on"}
 
 
 def configure_api_logging() -> None:
@@ -52,6 +59,24 @@ def configure_api_logging() -> None:
 
 
 configure_api_logging()
+
+
+def env_flag(name: str) -> bool:
+    return os.getenv(name, "").strip().lower() in TRUE_ENV_VALUES
+
+
+def cors_allow_origins() -> list[str]:
+    if env_flag("ALLOW_ALL_CORS"):
+        return ["*"]
+
+    origins = list(DEFAULT_CORS_ORIGINS)
+    extra_origins = os.getenv("EXTRA_CORS_ORIGINS", "")
+    origins.extend(
+        origin.strip()
+        for origin in extra_origins.split(",")
+        if origin.strip()
+    )
+    return list(dict.fromkeys(origins))
 
 
 class HealthResponse(BaseModel):
@@ -154,7 +179,7 @@ def create_app() -> FastAPI:
     )
     api.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=cors_allow_origins(),
         allow_methods=["*"],
         allow_headers=["*"],
     )
