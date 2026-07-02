@@ -11,6 +11,6 @@ COPY . .
 RUN python -m pip install --upgrade pip \
     && python -m pip install ".[llm]"
 
-EXPOSE 8000
+EXPOSE 8080
 
 CMD ["sh", "scripts/railway_start.sh"]
