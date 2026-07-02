@@ -321,7 +321,7 @@ function EvidenceAnswerCard({
       {citedBullets.length ? (
         <AnswerSection
           title="Sources"
-          infoText="Each source's badge comes from an automated critic that reads the real retrieved label text for that citation and checks two things: does the claim next to it faithfully represent that text, and does the final answer above correctly use it. Accurate: faithful claim, correctly used. Not reflected: faithful claim, but the answer doesn't mention it. Contradicted: faithful claim, but the answer says something that conflicts with it. Misrepresented: the claim doesn't match the cited text. Misrepresented & used: the claim doesn't match the cited text, and the answer relies on it anyway. No badge means the critic didn't run for this answer."
+          infoContent={<CitationSupportMatrix />}
           headerExtra={<ClaimSupportChips counts={claimSupportCounts} />}
         >
           <div className="space-y-2">
@@ -346,16 +346,7 @@ function EvidenceAnswerCard({
                     >
                       <FileText className="mt-0.5 size-4 shrink-0 text-slate-700" />
                       <span>{citationDisplayLabel(citation, sourceById)}</span>
-                      {citation.support_status ? (
-                        <span
-                          className={cn(
-                            "ml-1 w-fit shrink-0 rounded-md border px-1.5 py-0.5 text-[11px] font-medium",
-                            claimSupportClasses[citation.support_status]
-                          )}
-                        >
-                          {claimSupportLabels[citation.support_status]}
-                        </span>
-                      ) : null}
+                      <CitationSupportBadges status={citation.support_status} />
                     </div>
                   ))}
                 </div>
@@ -393,47 +384,17 @@ function EvidenceAnswerCard({
         </AnswerSection>
       ) : null}
 
-      {critique?.enabled ? <AnswerCritiqueSection critique={critique} /> : null}
+      {critique?.regenerated ? (
+        <p className="text-center text-xs leading-5 text-slate-500">
+          This answer was automatically revised once after an evidence
+          self-check.
+        </p>
+      ) : null}
 
       <p className="text-center text-xs leading-5 text-slate-500">
         {answer.safety_note}
       </p>
     </div>
-  );
-}
-
-function AnswerCritiqueSection({ critique }: { critique: AnswerCritique }) {
-  return (
-    <AnswerSection
-      title="Answer critique"
-      infoText="An automated self-check: a second LLM pass checks each citation above against its real retrieved label text and the final answer (see the Sources badges for the per-citation result), then flags anything else worth noting here. This is not a clinical review."
-      tone="audit"
-      badgeCount={critique.global_findings.length || undefined}
-    >
-      <div className="space-y-2">
-        {critique.regenerated ? (
-          <div className="rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-sm leading-5 text-sky-900">
-            The response above was regenerated once after the critic flagged
-            issues with the first draft.
-          </div>
-        ) : null}
-        {critique.global_findings.length ? (
-          critique.global_findings.map((finding, index) => (
-            <div
-              key={`${finding.kind}-${index}`}
-              className="flex items-start gap-2 rounded-md border border-[#D7C8F4] bg-white px-3 py-2 text-sm leading-5 text-slate-800"
-            >
-              <TriangleAlert className="mt-0.5 size-4 shrink-0 text-slate-700" />
-              <span>{finding.message}</span>
-            </div>
-          ))
-        ) : (
-          <p className="text-sm leading-5 text-slate-600">
-            The critic did not flag any issues with this response.
-          </p>
-        )}
-      </div>
-    </AnswerSection>
   );
 }
 
@@ -655,6 +616,7 @@ function AnswerSection({
   children,
   headerExtra,
   icon,
+  infoContent,
   infoText,
   title,
   tone = "synthesis",
@@ -663,6 +625,7 @@ function AnswerSection({
   children: ReactNode;
   headerExtra?: ReactNode;
   icon?: ReactNode;
+  infoContent?: ReactNode;
   infoText?: string;
   title: string;
   tone?: "synthesis" | "audit";
@@ -685,7 +648,11 @@ function AnswerSection({
         )}
         {icon ? <span className="shrink-0">{icon}</span> : null}
         <span className="text-xs font-medium uppercase">{title}</span>
-        {infoText ? <InfoTooltip text={infoText} /> : null}
+        {infoContent ? (
+          <InfoTooltip content={infoContent} />
+        ) : infoText ? (
+          <InfoTooltip text={infoText} />
+        ) : null}
         {badgeCount ? (
           <span className="rounded-full border border-slate-300 bg-white px-1.5 py-0.5 text-[10px] font-semibold text-slate-700">
             {badgeCount}
@@ -764,70 +731,169 @@ const coverageStatusClasses: Record<EvidenceCoverageStatus, string> = {
   out_of_scope: "border-slate-200 bg-slate-50 text-slate-700",
 };
 
+// The critic returns one 5-tier status per citation; for display we split it
+// back into the two axes it encodes (does the claim match the cited source,
+// and does the final answer reflect it) rather than showing the raw tier.
+// The backend keeps returning a single support_status -- this is a
+// display-only derivation.
+type CitationSourceMatch = "matches" | "misreads";
+type CitationAnswerUse = "reflected" | "not_reflected" | "contradicted";
+
+const citationSupportAxes: Record<
+  CitationSupportStatus,
+  { source: CitationSourceMatch; answer: CitationAnswerUse }
+> = {
+  accurate: { source: "matches", answer: "reflected" },
+  not_reflected: { source: "matches", answer: "not_reflected" },
+  contradicted: { source: "matches", answer: "contradicted" },
+  misrepresented: { source: "misreads", answer: "not_reflected" },
+  misrepresented_used: { source: "misreads", answer: "reflected" },
+};
+
+const sourceMatchLabels: Record<CitationSourceMatch, string> = {
+  matches: "Matches source",
+  misreads: "Misreads source",
+};
+
+const sourceMatchClasses: Record<CitationSourceMatch, string> = {
+  matches: "border-emerald-200 bg-emerald-50 text-emerald-800",
+  misreads: "border-red-200 bg-red-50 text-red-800",
+};
+
+const answerUseLabels: Record<CitationAnswerUse, string> = {
+  reflected: "Reflected in answer",
+  not_reflected: "Not reflected in answer",
+  contradicted: "Contradicted in answer",
+};
+
+const answerUseClasses: Record<CitationAnswerUse, string> = {
+  reflected: "border-slate-200 bg-slate-50 text-slate-700",
+  not_reflected: "border-slate-200 bg-slate-50 text-slate-700",
+  contradicted: "border-red-200 bg-red-50 text-red-800",
+};
+
+const VERIFIED_CLASSES = "border-emerald-200 bg-emerald-50 text-emerald-800";
+
+function CitationSupportBadges({
+  status,
+}: {
+  status: CitationSupportStatus | null | undefined;
+}) {
+  if (!status) {
+    return null;
+  }
+  const badgeClasses =
+    "w-fit shrink-0 rounded-md border px-1.5 py-0.5 text-[11px] font-medium";
+  if (status === "accurate") {
+    return (
+      <span className={cn("ml-1", badgeClasses, VERIFIED_CLASSES)}>
+        Verified
+      </span>
+    );
+  }
+  const axes = citationSupportAxes[status];
+  return (
+    <span className="ml-1 flex flex-wrap items-center gap-1">
+      <span className={cn(badgeClasses, sourceMatchClasses[axes.source])}>
+        {sourceMatchLabels[axes.source]}
+      </span>
+      <span className={cn(badgeClasses, answerUseClasses[axes.answer])}>
+        {answerUseLabels[axes.answer]}
+      </span>
+    </span>
+  );
+}
+
 function claimSupportStatusCounts(bullets: EvidenceBullet[]) {
-  const counts: Partial<Record<CitationSupportStatus, number>> = {};
+  let verified = 0;
+  let flagged = 0;
   for (const bullet of bullets) {
     for (const citation of bullet.citations) {
       if (!citation.support_status) {
         continue;
       }
-      counts[citation.support_status] = (counts[citation.support_status] ?? 0) + 1;
+      if (citation.support_status === "accurate") {
+        verified += 1;
+      } else {
+        flagged += 1;
+      }
     }
   }
-  return counts;
+  return { verified, flagged };
 }
 
 function ClaimSupportChips({
   counts,
 }: {
-  counts: Partial<Record<CitationSupportStatus, number>>;
+  counts: { verified: number; flagged: number };
 }) {
   return (
     <>
-      {claimSupportStatusOrder.map((status) => {
-        const count = counts[status] ?? 0;
-        if (count === 0) {
-          return null;
-        }
-        return (
-          <span
-            key={status}
-            className={cn(
-              "inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium",
-              claimSupportClasses[status]
-            )}
-          >
-            {claimSupportLabels[status]} {count}
-          </span>
-        );
-      })}
+      {counts.verified ? (
+        <span
+          className={cn(
+            "inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium",
+            VERIFIED_CLASSES
+          )}
+        >
+          Verified {counts.verified}
+        </span>
+      ) : null}
+      {counts.flagged ? (
+        <span className="inline-flex items-center rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-900">
+          Flagged {counts.flagged}
+        </span>
+      ) : null}
     </>
   );
 }
 
-const claimSupportStatusOrder: CitationSupportStatus[] = [
-  "accurate",
-  "not_reflected",
-  "contradicted",
-  "misrepresented",
-  "misrepresented_used",
-];
-
-const claimSupportLabels: Record<CitationSupportStatus, string> = {
-  accurate: "Accurate",
-  not_reflected: "Not reflected",
-  contradicted: "Contradicted",
-  misrepresented: "Misrepresented",
-  misrepresented_used: "Misrepresented & used",
-};
-
-const claimSupportClasses: Record<CitationSupportStatus, string> = {
-  accurate: "border-emerald-200 bg-emerald-50 text-emerald-800",
-  not_reflected: "border-sky-200 bg-sky-50 text-sky-800",
-  contradicted: "border-red-200 bg-red-50 text-red-800",
-  misrepresented: "border-amber-200 bg-amber-50 text-amber-900",
-  misrepresented_used: "border-rose-300 bg-rose-100 text-rose-900",
-};
+function CitationSupportMatrix() {
+  const cellClasses = "px-2 py-1 text-center";
+  const headerClasses = "px-2 py-1 text-left font-semibold text-slate-600";
+  return (
+    <div className="space-y-2">
+      <p>
+        Each cited source gets two automatic checks: does the claim{" "}
+        <strong>match the label text it cites</strong>, and how the{" "}
+        <strong>final answer uses</strong> it.
+      </p>
+      <table className="w-full border-collapse text-[11px]">
+        <thead>
+          <tr>
+            <th className={headerClasses}></th>
+            <th className={headerClasses}>Reflected</th>
+            <th className={headerClasses}>Not reflected</th>
+            <th className={headerClasses}>Contradicted</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr className="border-t border-slate-100">
+            <th className={cn(headerClasses, "whitespace-nowrap")}>
+              Matches source
+            </th>
+            <td className={cn(cellClasses, "text-emerald-700")}>
+              ✅ Verified
+            </td>
+            <td className={cellClasses}>not reflected</td>
+            <td className={cn(cellClasses, "text-red-700")}>contradicted</td>
+          </tr>
+          <tr className="border-t border-slate-100">
+            <th className={cn(headerClasses, "whitespace-nowrap")}>
+              Misreads source
+            </th>
+            <td className={cellClasses}>misread &amp; used</td>
+            <td className={cellClasses}>misread</td>
+            <td className={cellClasses}>—</td>
+          </tr>
+        </tbody>
+      </table>
+      <p className="text-slate-500">
+        No badge means the critic didn&apos;t run for this answer.
+      </p>
+    </div>
+  );
+}
 
 function isLowSignalCoverageItem(item: EvidenceCoverageItem) {
   // "out_of_scope" only ever comes from intents the system has no

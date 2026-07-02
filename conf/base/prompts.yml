@@ -206,11 +206,6 @@ evidence_answer_critic:
         Flag issues per citation from this set: "overconfident", "invented_detail".
         Base every judgment only on the supplied cited_text; never invent facts.
 
-        Separately, if you notice anything else worth flagging as a limitation
-        based only on what you found while checking citations -- not on outside
-        knowledge -- add it to global_findings. Don't re-flag a limitation already
-        listed.
-
         Set needs_regeneration to true only when at least one citation is
         "contradicted", "misrepresented", or "misrepresented_used". Otherwise false.
 
@@ -224,9 +219,6 @@ evidence_answer_critic:
               "rationale": "short reason",
               "issues": []
             }
-          ],
-          "global_findings": [
-            {"kind": "...", "severity": "info", "message": "...", "topic": null}
           ],
           "needs_regeneration": false
         }
