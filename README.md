@@ -33,8 +33,11 @@ user question
   -> optional LLM refinement of that state
   -> RxNorm drug resolution + local concept network   (symbolic retrieval)
   -> OpenFDA label evidence, targeted by question intent
-  -> grounded LLM synthesis, citations restricted to a whitelist
   -> deterministic coverage audit        (what was / wasn't supported)
+  -> answer contract                      (topics to address, caveats to include)
+  -> grounded LLM synthesis, citations restricted to a whitelist
+  -> deterministic enforcement           (re-adds dropped caveats, drops uncited claims)
+  -> LLM faithfulness critic             (audits each citation vs its source + the answer)
 ```
 
 ## What it does
@@ -43,8 +46,8 @@ The app has two entry points into the same evidence layer:
 
 1. **Ask a Question** (primary experience): ask a natural-language medication
   question and get a grounded summary, plus a compact view of what the system
-  understood, what evidence it used, and where it falls short. The full evidence
-  packet is one click away.
+  understood, what evidence it used, how faithfully each cited source is
+  reflected, and where it falls short. The full evidence packet is one click away.
 
 Behind every answer, the evidence packet exposes:
 
@@ -74,16 +77,36 @@ FDA label text is retrieved from OpenFDA, targeted at the label sections that
 match the question's intent (e.g. interactions, pregnancy/lactation,
 contraindications, indications).
 
-**3. Grounded synthesis with a citation whitelist.** The LLM writes the summary,
-but it may only cite evidence drawn from a whitelist built out of the retrieved
-label sections. Citations outside the whitelist are dropped, and an answer that
-produces no valid citations (when evidence does exist) triggers a bounded retry.
+**3. Deterministic coverage audit.** Before any answer is written, a non-LLM
+check compares every extracted detail against the retrieved evidence and labels
+it `addressed`, `not_found_in_evidence`, `not_retrieved`, or `out_of_scope` - so
+the system states out loud what it could and couldn't support, rather than
+leaving that to the model's discretion.
 
-**4. Deterministic coverage audit.** A non-LLM check compares every extracted
-detail against the evidence and labels it `addressed`, `not_found_in_evidence`,
-`not_retrieved`, or `out_of_scope`. Deterministic limitations are appended when
-important state is not covered — so the system states out loud what it could not
-support, rather than leaving that to the model's discretion.
+**4. Answer contract.** The coverage report is compiled into an explicit contract
+the answer must satisfy: which topics it *must address* (because evidence exists)
+and which caveats it *must include*. Expectations are set symbolically before the
+model writes anything, so compliance becomes a checklist the system can enforce
+rather than hope for.
+
+**5. Grounded synthesis with a citation whitelist.** The LLM writes the summary
+against that contract, but it may only cite evidence drawn from a whitelist built
+out of the retrieved label sections. Citations outside the whitelist are dropped,
+and an answer that produces no valid citations (when evidence does exist) triggers
+a bounded retry.
+
+**6. Deterministic enforcement.** After synthesis, a non-LLM validation pass
+checks the answer against the contract: it re-appends any required caveat the
+model dropped, flags personal "safe / unsafe" framing, and relocates any claim
+that lacks a citation out of the sources list and into the stated limitations.
+
+**7. Faithfulness critic.** A second LLM pass audits each citation on its own,
+comparing the claim against the exact label text it cites *and* against the final
+answer. It scores, per source, whether the claim faithfully represents the
+label and whether the answer reflects, omits, or contradicts it. Each source
+carries that verdict as a badge, and a serious mismatch triggers a single bounded
+regeneration. With no API key configured the critic is skipped and sources simply
+carry no badge.
 
 ## The guardrail layer
 
@@ -95,6 +118,15 @@ the safety properties are enforced in code:
   nothing valid.
 - **Coverage audit**: a deterministic, "don't overclaim" check that treats
   *"I don't have evidence for that"* as a first-class output.
+- **Answer contract**: coverage is compiled into must-address topics and
+  must-include caveats before synthesis, turning "did the model behave" into an
+  enforceable checklist.
+- **Deterministic enforcement**: a non-LLM pass re-appends any dropped caveat,
+  flags personal safe/unsafe framing, and moves uncited claims out of the sources
+  and into the stated limitations.
+- **Faithfulness critic**: a second LLM pass checks each citation against its
+  real source text and the final answer, surfaces the verdict as a per-source
+  badge, and triggers one bounded regeneration on a serious mismatch.
 - **Careful prompting**: labels are described as *retrieved text mentioning*
   another drug, never as a confirmed clinical interaction; the system never
   declares a drug safe or unsafe.
@@ -106,7 +138,7 @@ the safety properties are enforced in code:
 - **Frontend:** Next.js, React, TypeScript, Tailwind CSS, D3 force layouts for
   the network and evidence-map visualizations.
 - **Backend:** Python FastAPI, with optional OpenAI API integration for query
-  refinement and grounded synthesis.
+  refinement, grounded synthesis, and a second-pass faithfulness critic.
 - **Data:** RxNorm Current Prescribable Content (April 2026 release, exported to
   parquet for fast local retrieval) and public drug labels via the OpenFDA
   drug-label API. OpenFDA lookups use live-with-cache behavior, storing raw
@@ -133,8 +165,9 @@ the safety properties are enforced in code:
   gaps; richer symbolic data would come from RxClass/ATC classes or a dedicated
   interaction source instead.)
 - **OpenFDA drug labels** — public FDA label text via the [OpenFDA API](https://open.fda.gov/apis/drug/label/).
-- **OpenAI API** — query-state refinement and grounded answer
-  synthesis. Never the sole source of factual claims; it summarizes retrieved
+- **OpenAI API** — query-state refinement, grounded answer synthesis, and a
+  second-pass faithfulness critic that audits the answer against its own cited
+  sources. Never the sole source of factual claims; it summarizes retrieved
   evidence under the citation whitelist.
 
 ## Repository layout
@@ -146,9 +179,13 @@ conf/base/prompts.yml      Prompt library for LLM-assisted steps
 conf/base/parameters.yml   Tunable pipeline parameters
 src/dossier/               Dossier builder, RxNorm store, OpenFDA store
 src/query_understanding/   State extraction, LLM revision, RxNorm resolution
-src/query_answer/          Grounded synthesis, citation whitelist, coverage audit
+src/query_answer/          Coverage audit, answer contract, synthesis, enforcement, critic
 scripts/                   Utility scripts, including dossier JSON export
 tests/                     Backend tests
+
+# for deployment in Railway only 
+Dockerfile                 Backend container image for the live Railway service
+railway.json               Railway service config
 ```
 
 ## API endpoints
@@ -157,7 +194,8 @@ tests/                     Backend tests
 - `POST /query-understanding` — extracts state, resolves drug mentions, returns a
   primary dossier when possible.
 - `POST /query-answer` — runs understanding, retrieves evidence, and generates a
-  grounded summary with a coverage report.
+  grounded summary with a coverage report, answer-contract enforcement, and
+  per-source faithfulness critique.
 - `POST /dossier` — builds a dossier for one direct drug search.
 - `POST /label-evidence` — fetches OpenFDA label evidence for a selected RxNorm
   concept.
