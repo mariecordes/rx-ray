@@ -30,8 +30,7 @@ def evaluate_question(
     checks: list[BehaviorCheck] = []
     field_scores: dict[str, FieldScore] = {}
 
-    resolved_names = _resolved_drug_names(response)
-    field_scores["drugs"] = _score_terms(expected.drugs, resolved_names)
+    field_scores["drugs"] = _score_resolved_drugs(expected.drugs, response)
     if expected.drugs:
         checks.append(_recall_check("drugs_resolved", field_scores["drugs"]))
 
@@ -128,12 +127,18 @@ def _terms_match(expected: str, actual: str) -> bool:
 
 
 def _score_terms(expected: list[str], extracted: list[str]) -> FieldScore:
-    matched = sum(
-        1 for term in expected if any(_terms_match(term, item) for item in extracted)
-    )
-    extracted_matched = sum(
-        1 for item in extracted if any(_terms_match(term, item) for term in expected)
-    )
+    missing = [
+        term
+        for term in expected
+        if not any(_terms_match(term, item) for item in extracted)
+    ]
+    unexpected = [
+        item
+        for item in extracted
+        if not any(_terms_match(term, item) for term in expected)
+    ]
+    matched = len(expected) - len(missing)
+    extracted_matched = len(extracted) - len(unexpected)
     precision = extracted_matched / len(extracted) if extracted else None
     recall = matched / len(expected) if expected else None
     f1 = None
@@ -146,7 +151,22 @@ def _score_terms(expected: list[str], extracted: list[str]) -> FieldScore:
         precision=precision,
         recall=recall,
         f1=f1,
+        missing=missing,
+        unexpected=unexpected,
+        match_quality=_match_quality(len(expected), matched, unexpected),
     )
+
+
+def _match_quality(
+    expected_count: int, matched: int, unexpected: list[str]
+) -> str | None:
+    """Grade the set comparison; None when there is nothing to grade."""
+
+    if expected_count == 0:
+        return "extra" if unexpected else None
+    if matched == expected_count:
+        return "extra" if unexpected else "exact"
+    return "partial" if matched else "none"
 
 
 def _recall_check(name: str, score: FieldScore) -> BehaviorCheck:
@@ -167,6 +187,52 @@ def _resolved_drug_names(response: QueryAnswerResponse) -> list[str]:
         names.append(mention.text)
         names.append(mention.selected_concept.name)
     return names
+
+
+def _score_resolved_drugs(
+    expected: list[str], response: QueryAnswerResponse
+) -> FieldScore:
+    """Score expected drugs against resolved mentions (one unit per mention,
+    matchable via mention text or preferred concept name) so counts and the
+    unexpected list aren't inflated by name/synonym pairs."""
+
+    mentions = [
+        (m.text, m.selected_concept.name)
+        for m in response.understanding.resolved_drugs
+        if m.selected_concept is not None
+    ]
+
+    def mention_matches(term: str, mention: tuple[str, str]) -> bool:
+        return _terms_match(term, mention[0]) or _terms_match(term, mention[1])
+
+    missing = [
+        term
+        for term in expected
+        if not any(mention_matches(term, mention) for mention in mentions)
+    ]
+    unexpected = [
+        mention[0]
+        for mention in mentions
+        if not any(mention_matches(term, mention) for term in expected)
+    ]
+    matched = len(expected) - len(missing)
+    extracted_matched = len(mentions) - len(unexpected)
+    precision = extracted_matched / len(mentions) if mentions else None
+    recall = matched / len(expected) if expected else None
+    f1 = None
+    if precision is not None and recall is not None and (precision + recall) > 0:
+        f1 = 2 * precision * recall / (precision + recall)
+    return FieldScore(
+        expected=len(expected),
+        matched=matched,
+        extracted=len(mentions),
+        precision=precision,
+        recall=recall,
+        f1=f1,
+        missing=missing,
+        unexpected=unexpected,
+        match_quality=_match_quality(len(expected), matched, unexpected),
+    )
 
 
 def _unresolved_check(

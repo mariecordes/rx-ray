@@ -21,6 +21,7 @@ def build_report(run: EvalRunResult) -> dict:
         )
         bucket["questions"] += 1
         bucket["passed"] += 1 if summary["passed_all_repeats"] else 0
+        bucket["pass_rate"] = bucket["passed"] / bucket["questions"]
 
     return {
         "mode": run.mode,
@@ -29,6 +30,7 @@ def build_report(run: EvalRunResult) -> dict:
         "questions": len(per_question),
         "headline": _headline(run, per_question),
         "field_scores": _field_score_means(run.results),
+        "match_quality": _match_quality_counts(run.results),
         "guardrails": _guardrail_rates(run.results),
         "per_category": per_category,
         "per_question": per_question,
@@ -73,12 +75,32 @@ def render_markdown(report: dict) -> str:
             f"{_fmt(scores['recall'])} | {_fmt(scores['f1'])} |"
         )
 
+    lines += [
+        "",
+        "## Extraction match quality",
+        "",
+        "Set comparison per field: `exact` = expected matched, nothing extra ·",
+        "`extra` = expected matched but extractor added more · `partial` = some",
+        "expected matched · `none` = nothing matched. Checks gate on recall",
+        "(expectations are minimum requirements), so `extra` never fails a",
+        "question — this table makes it visible instead.",
+        "",
+        "| field | exact | extra | partial | none |",
+        "|---|---|---|---|---|",
+    ]
+    for field, counts in report["match_quality"].items():
+        lines.append(
+            f"| {field} | {counts.get('exact', 0)} | {counts.get('extra', 0)} | "
+            f"{counts.get('partial', 0)} | {counts.get('none', 0)} |"
+        )
+
     lines += ["", "## Per category", ""]
-    lines.append("| category | questions | passed |")
-    lines.append("|---|---|---|")
+    lines.append("| category | questions | passed | pass rate |")
+    lines.append("|---|---|---|---|")
     for category, bucket in sorted(report["per_category"].items()):
         lines.append(
-            f"| {category} | {bucket['questions']} | {bucket['passed']} |"
+            f"| {category} | {bucket['questions']} | {bucket['passed']} | "
+            f"{bucket['pass_rate']:.0%} |"
         )
 
     lines += ["", "## Per question", ""]
@@ -148,6 +170,17 @@ def _field_score_means(results: list[QuestionResult]) -> dict:
         }
         for field, metrics in values.items()
     }
+
+
+def _match_quality_counts(results: list[QuestionResult]) -> dict[str, dict[str, int]]:
+    counts: dict[str, dict[str, int]] = defaultdict(
+        lambda: {"exact": 0, "extra": 0, "partial": 0, "none": 0}
+    )
+    for result in results:
+        for field, score in result.field_scores.items():
+            if score.match_quality is not None:
+                counts[field][score.match_quality] += 1
+    return dict(counts)
 
 
 def _guardrail_rates(results: list[QuestionResult]) -> dict[str, float]:

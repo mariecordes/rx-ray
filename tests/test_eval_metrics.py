@@ -131,6 +131,56 @@ def test_normalized_containment_matches_specific_concepts():
     assert check_names(result)["patient_context_extracted"] is True
 
 
+def test_match_quality_exact_when_nothing_extra():
+    question = make_question(
+        intents=["interaction_check", "allergy_context_check"]
+    )
+    result = evaluate_question(question, make_response())
+    assert result.field_scores["intents"].match_quality == "exact"
+    assert result.field_scores["intents"].unexpected == []
+
+
+def test_match_quality_extra_still_passes_recall_check():
+    question = make_question(intents=["interaction_check"])
+    result = evaluate_question(question, make_response())
+    score = result.field_scores["intents"]
+    assert check_names(result)["intents_extracted"] is True
+    assert score.match_quality == "extra"
+    assert score.unexpected == ["allergy_context_check"]
+
+
+def test_match_quality_partial_and_none():
+    question = make_question(intents=["interaction_check", "indication_check"])
+    result = evaluate_question(question, make_response())
+    assert result.field_scores["intents"].match_quality == "partial"
+    assert result.field_scores["intents"].missing == ["indication_check"]
+
+    question = make_question(allergies=["latex"])
+    result = evaluate_question(question, make_response())
+    assert result.field_scores["allergies"].match_quality == "none"
+
+
+def test_match_quality_extra_for_unexpected_field_extraction():
+    # Nothing expected for conditions, but the extractor produced one: no
+    # check is appended (nothing asserted), but the extra is surfaced.
+    question = make_question()
+    response = make_response()
+    response.understanding.state.conditions = ["headache"]
+    result = evaluate_question(question, response)
+    assert "conditions_extracted" not in check_names(result)
+    assert result.field_scores["conditions"].match_quality == "extra"
+    assert result.field_scores["conditions"].unexpected == ["headache"]
+
+
+def test_drugs_scored_per_mention_not_per_name_alias():
+    question = make_question(drugs=["ibuprofen"])
+    result = evaluate_question(question, make_response())
+    score = result.field_scores["drugs"]
+    assert score.extracted == 2  # two resolved mentions, not four name entries
+    assert score.unexpected == ["aspirin"]
+    assert score.match_quality == "extra"
+
+
 def test_coverage_assertion_checks_status_membership():
     question = make_question(
         coverage=[

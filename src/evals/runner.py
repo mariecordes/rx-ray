@@ -30,16 +30,19 @@ logger = logging.getLogger(__name__)
 
 
 class NullSynthesizer(EvidenceAnswerSynthesizer):
-    """Symbolic-only mode: extraction, retrieval, coverage — no LLM synthesis.
+    """Eval-mode stub: extraction, retrieval, coverage — no LLM synthesis.
 
     Returning answer=None also disables the critic (finalize_answer_critique
-    exits early), so a symbolic run is fully deterministic and keyless.
+    exits early). The warning names the actual eval mode so run outputs don't
+    mislabel e.g. a combined_extraction_only run as symbolic.
     """
 
+    def __init__(self, *args, warning: str | None = None, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self.warning = warning or "eval mode: LLM synthesis disabled"
+
     def synthesize(self, *args, **kwargs) -> AnswerSynthesisResult:
-        return AnswerSynthesisResult(
-            warnings=["symbolic-only eval mode: LLM synthesis disabled"]
-        )
+        return AnswerSynthesisResult(warnings=[self.warning])
 
 
 def load_questions_file(path: Path) -> list[EvalQuestion]:
@@ -56,11 +59,23 @@ def build_service(mode: EvalMode) -> QueryAnswerService:
         # process, so a symbolic run behaves identically with or without keys.
         os.environ.pop("QUERY_EXTRACTION_OPENAI_API_KEY", None)
         os.environ.pop("QUERY_EXTRACTION_OPENAI_MODEL", None)
-        return QueryAnswerService(builder=builder, synthesizer=NullSynthesizer())
-    if mode == "extraction":
+        return QueryAnswerService(
+            builder=builder,
+            synthesizer=NullSynthesizer(
+                warning="symbolic eval mode: LLM synthesis disabled"
+            ),
+        )
+    if mode == "combined_extraction_only":
         # LLM query-state revision only: cheapest LLM mode, one extraction
         # call per question — no synthesis, no critic, no citations.
-        return QueryAnswerService(builder=builder, synthesizer=NullSynthesizer())
+        return QueryAnswerService(
+            builder=builder,
+            synthesizer=NullSynthesizer(
+                warning=(
+                    "combined_extraction_only eval mode: LLM synthesis disabled"
+                )
+            ),
+        )
     if mode == "neural":
         raise NotImplementedError("neural mode lands with roadmap package D4")
     return QueryAnswerService(builder=builder)

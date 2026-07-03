@@ -4,7 +4,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-EvalMode = Literal["combined", "extraction", "symbolic", "neural"]
+EvalMode = Literal["combined", "combined_extraction_only", "symbolic", "neural"]
 
 
 class CoverageAssertion(BaseModel):
@@ -52,8 +52,19 @@ class BehaviorCheck(BaseModel):
     detail: str = ""
 
 
+MatchQuality = Literal["exact", "extra", "partial", "none"]
+
+
 class FieldScore(BaseModel):
-    """Precision/recall/F1 for one extracted-state field vs expectations."""
+    """Precision/recall/F1 for one extracted-state field vs expectations.
+
+    ``match_quality`` grades the set comparison: ``exact`` (all expected
+    matched, nothing unexpected), ``extra`` (all expected matched but the
+    extractor added more), ``partial`` (some expected matched), ``none``
+    (nothing matched). Pass/fail checks gate on recall only — expectations
+    are minimum requirements — so extras never fail a question, but they are
+    surfaced here instead of staying invisible.
+    """
 
     expected: int
     matched: int
@@ -61,6 +72,9 @@ class FieldScore(BaseModel):
     precision: float | None = None
     recall: float | None = None
     f1: float | None = None
+    missing: list[str] = Field(default_factory=list)
+    unexpected: list[str] = Field(default_factory=list)
+    match_quality: MatchQuality | None = None
 
 
 class QuestionResult(BaseModel):
