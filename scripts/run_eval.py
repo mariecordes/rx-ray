@@ -34,7 +34,7 @@ def main() -> int:
     )
     parser.add_argument(
         "--mode",
-        choices=["combined", "symbolic", "neural"],
+        choices=["combined", "extraction", "symbolic", "neural"],
         default="combined",
     )
     parser.add_argument("--repeats", type=int, default=1)

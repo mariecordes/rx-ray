@@ -57,6 +57,10 @@ def build_service(mode: EvalMode) -> QueryAnswerService:
         os.environ.pop("QUERY_EXTRACTION_OPENAI_API_KEY", None)
         os.environ.pop("QUERY_EXTRACTION_OPENAI_MODEL", None)
         return QueryAnswerService(builder=builder, synthesizer=NullSynthesizer())
+    if mode == "extraction":
+        # LLM query-state revision only: cheapest LLM mode, one extraction
+        # call per question — no synthesis, no critic, no citations.
+        return QueryAnswerService(builder=builder, synthesizer=NullSynthesizer())
     if mode == "neural":
         raise NotImplementedError("neural mode lands with roadmap package D4")
     return QueryAnswerService(builder=builder)

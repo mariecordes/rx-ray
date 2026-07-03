@@ -4,7 +4,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-EvalMode = Literal["combined", "symbolic", "neural"]
+EvalMode = Literal["combined", "extraction", "symbolic", "neural"]
 
 
 class CoverageAssertion(BaseModel):
