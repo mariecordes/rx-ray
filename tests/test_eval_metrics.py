@@ -252,6 +252,30 @@ def test_yes_no_framing_check_reads_validation_findings():
     assert check_names(result)["no_yes_no_framing"] is False
 
 
+def test_per_question_match_quality_worst_of_repeats():
+    from src.evals.report import render_markdown
+
+    question = make_question(intents=["interaction_check", "allergy_context_check"])
+    good = evaluate_question(question, make_response(), repeat=0)
+    degraded_response = make_response()
+    degraded_response.understanding.state.intents = ["interaction_check"]
+    degraded = evaluate_question(question, degraded_response, repeat=1)
+    report = build_report(
+        EvalRunResult(
+            mode="combined",
+            questions_file="evals/questions.yml",
+            repeats=2,
+            started_at="2026-07-03T00:00:00+00:00",
+            results=[good, degraded],
+        )
+    )
+    row = report["per_question_match_quality"][0]
+    assert row["fields"]["intents"] == "partial"  # worst across repeats
+    markdown = render_markdown(report)
+    assert "Per-question extraction match quality" in markdown
+    assert "🟡" in markdown  # partial icon rendered in the matrix
+
+
 def test_report_aggregates_pass_rates_and_guardrails():
     question = make_question(drugs=["ibuprofen"])
     results = [

@@ -5,6 +5,27 @@ from collections import defaultdict
 
 from src.evals.models import EvalRunResult, QuestionResult
 
+# Stable column order for the per-question match-quality matrix.
+FIELD_ORDER = (
+    "drugs",
+    "current_medications",
+    "allergies",
+    "conditions",
+    "patient_context",
+    "intents",
+)
+
+# Worst-first severity for aggregating a field's grade across repeats.
+_QUALITY_SEVERITY = {"none": 3, "partial": 2, "extra": 1, "exact": 0}
+
+_QUALITY_ICONS = {
+    "exact": "\U0001f7e2",  # green circle
+    "extra": "\U0001f535",  # blue circle
+    "partial": "\U0001f7e1",  # yellow circle
+    "none": "\U0001f534",  # red circle
+    None: "—",
+}
+
 
 def build_report(run: EvalRunResult) -> dict:
     """Aggregate a run into the JSON report structure."""
@@ -31,6 +52,7 @@ def build_report(run: EvalRunResult) -> dict:
         "headline": _headline(run, per_question),
         "field_scores": _field_score_means(run.results),
         "match_quality": _match_quality_counts(run.results),
+        "per_question_match_quality": _per_question_match_quality(run.results),
         "guardrails": _guardrail_rates(run.results),
         "per_category": per_category,
         "per_question": per_question,
@@ -93,6 +115,32 @@ def render_markdown(report: dict) -> str:
             f"| {field} | {counts.get('exact', 0)} | {counts.get('extra', 0)} | "
             f"{counts.get('partial', 0)} | {counts.get('none', 0)} |"
         )
+
+    matrix_fields = [
+        field
+        for field in FIELD_ORDER
+        if any(
+            field in row["fields"] for row in report["per_question_match_quality"]
+        )
+    ]
+    if matrix_fields:
+        lines += [
+            "",
+            "## Per-question extraction match quality",
+            "",
+            "🟢 exact · 🔵 extra (expected matched, extractor added more) · "
+            "🟡 partial · 🔴 none · — not graded. With repeats, each cell "
+            "shows the worst grade observed.",
+            "",
+            "| question | " + " | ".join(matrix_fields) + " |",
+            "|---" * (len(matrix_fields) + 1) + "|",
+        ]
+        for row in report["per_question_match_quality"]:
+            cells = " | ".join(
+                _QUALITY_ICONS[row["fields"].get(field)]
+                for field in matrix_fields
+            )
+            lines.append(f"| {row['question_id']} | {cells} |")
 
     lines += ["", "## Per category", ""]
     lines.append("| category | questions | passed | pass rate |")
@@ -170,6 +218,38 @@ def _field_score_means(results: list[QuestionResult]) -> dict:
         }
         for field, metrics in values.items()
     }
+
+
+def _per_question_match_quality(
+    results: list[QuestionResult],
+) -> list[dict]:
+    """Per question, the worst match-quality grade per field across repeats.
+
+    Worst-of-repeats is the honest aggregation: a field that flips between
+    exact and none across repeats is a stability problem, not an average.
+    """
+
+    worst: dict[str, dict[str, str]] = {}
+    order: list[str] = []
+    for result in results:
+        if result.question_id not in worst:
+            worst[result.question_id] = {}
+            order.append(result.question_id)
+        fields = worst[result.question_id]
+        for field, score in result.field_scores.items():
+            quality = score.match_quality
+            if quality is None:
+                continue
+            current = fields.get(field)
+            if (
+                current is None
+                or _QUALITY_SEVERITY[quality] > _QUALITY_SEVERITY[current]
+            ):
+                fields[field] = quality
+    return [
+        {"question_id": question_id, "fields": worst[question_id]}
+        for question_id in order
+    ]
 
 
 def _match_quality_counts(results: list[QuestionResult]) -> dict[str, dict[str, int]]:
