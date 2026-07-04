@@ -25,7 +25,7 @@ These determine first impressions.
 [E2](#e2--test-fixtures-fast-suite--ci) fixtures + CI · [E3](#e3--lint-scope--legacy-module-triage) lint cleanup. Makes the system faster, more correct, and protected.
 
 **Phase 2 — Research showcase (1–2 weeks):**
-[D3](#d3--evaluation-harness--curated-question-set) evaluation harness · [D4](#d4--neural-vs-symbolic-vs-combined) neural-vs-symbolic-vs-combined. The most distinctive material; depends on Phase 1 being stable.
+[D3a](#d3a--evaluation-harness--curated-question-set) evaluation harness · [D3b](#d3b--critic-accuracy-labeling-study) critic accuracy study · [D4](#d4--neural-vs-symbolic-vs-combined) neural-vs-symbolic-vs-combined, then [D7](#d7--evaluation-docs--plan-cleanup) turns the working eval plan into `docs/EVALUATION.md`. The most distinctive material; depends on Phase 1 being stable.
 
 **Phase 3 — Deeper evidence + guardrails (multi-week):**
 [C1](#c1--pair-level-interaction-evidence-view) pair-level interactions · [D2](#d2--guardrails-v3) Guardrails V3 · [D5](#d5--reasoning--execution-traces) traces · [C3](#c3--question-level-provenance-graph-maturation) provenance graph.
@@ -61,9 +61,12 @@ These determine first impressions.
 | [D2e](#d2e--replace-the-deterministic-support-status-floor-with-a-source-faithfulness-critic) | Replace the deterministic floor with a source-faithfulness LLM critic | Safety | M | High | ✅ done | D1, D2 |
 | [D2f](#d2f--more-direct-answer-tone-two-axis-support-badges-remove-critique-clutter) | More direct answer tone, two-axis support badges, remove critique clutter | Safety | S–M | Med | ✅ done | D2e |
 | [D2g](#d2g--cover-the-misreads-source--contradicted-gap-in-the-critic-taxonomy) | Cover the "misreads + contradicted" gap in the critic taxonomy | Safety | S | Low | todo | D2e, D2f |
-| [D3](#d3--evaluation-harness--curated-question-set) | Evaluation harness | Safety | L | High | todo | — |
-| [D4](#d4--neural-vs-symbolic-vs-combined) | Neural vs symbolic vs combined | Safety | L | High | todo | D3 |
+| [D3a](#d3a--evaluation-harness--curated-question-set) | Evaluation harness | Safety | L | High | in progress | — |
+| [D3b](#d3b--critic-accuracy-labeling-study) | Critic accuracy labeling study | Safety | S–M | High | in progress | D3a |
+| [D4](#d4--neural-vs-symbolic-vs-combined) | Neural vs symbolic vs combined | Safety | L | High | todo | D3a |
 | [D5](#d5--reasoning--execution-traces) | Reasoning/execution traces | Safety | M | Med | todo | — |
+| [D6](#d6--ablation-studies-on-the-eval-harness) | Ablation studies | Safety | M | Med | todo | D3a |
+| [D7](#d7--evaluation-docs--plan-cleanup) | Evaluation docs & plan cleanup | Safety | S | Med | todo | D3a, D3b, D4 |
 | [E1](#e1--resolver--neighborhood-performance) | Resolver/neighborhood perf | Engineering | M | Med | todo | (=B1) |
 | [E2](#e2--test-fixtures-fast-suite--ci) | Fixtures + fast suite + CI | Engineering | M | Med | todo | — |
 | [E3](#e3--lint-scope--legacy-module-triage) | Lint scope / legacy triage | Engineering | S | Med | todo | — |
@@ -645,38 +648,61 @@ both axes independently and all 6 matrix cells are reachable.
 
 ---
 
-### D3 — Evaluation harness & curated question set
+### D3a — Evaluation harness & curated question set
 
-**Effort:** L · **Impact:** High · **Status:** todo
+**Effort:** L · **Impact:** High · **Status:** in progress
 
 **Goal:** A reproducible eval over a curated question set, tracking citation coverage and state coverage as quality metrics.
 
-**Why it matters:** Makes the guardrails *measurable* and the system auditable. Coverage already exists deterministically; this formalizes it into a trackable metric.
+**Why it matters:** Makes the guardrails *measurable* and the system auditable. Coverage already exists deterministically; this formalizes it into a trackable metric. Every guardrail claim is currently verified against single live queries; this is the package that replaces anecdotes with numbers.
 
 **Scope:**
-- Curate ~20–40 questions spanning pregnancy, breastfeeding, allergy context, current medication, interaction, side-effect, indication, and edge cases.
-- Harness that runs the pipeline and reports state-coverage and citation-coverage per question and in aggregate.
-- Store expected behaviors / regression snapshots so changes are visible.
+- ~32 questions in `evals/questions.yml`, stratified by intent (indication, side-effect, 2- and 3-drug interaction, allergy, pregnancy/lactation, patient context, formulation-specific), reusing the documented D2b/D2c/D2d/D2e and B2/B5 regression queries, plus 5 **trap questions** (fictional drug, false premise, out-of-scope, leading yes/no, no-product-label concept) so abstention correctness is a first-class metric.
+- Expectations are behavioral and structured (what resolved, what coverage said, which guardrails fired) — never golden answer text — so they're robust to LLM nondeterminism.
+- Harness in `src/evals/` consuming the existing `QueryAnswerResponse` (no production changes): extraction P/R/F1 per field, resolution rate, coverage-expectation pass rate, abstention pass rate on traps, guardrail intervention rates (enforced caveats, relocated bullets, yes/no catches, regenerations), critic status distribution, latency, and stability (mean ± std over `--repeats`).
+- `make eval` (full, LLM) and `make eval-offline` (symbolic-only, keyless — later the E2 CI smoke eval); committed headline report at `evals/results/latest.{json,md}`; README gains a **Results** section quoting the numbers.
 
-**Done when:** `make eval` (or similar) produces a metrics report over the question set.
+**Done when:** `make eval` produces the metrics report over the question set, including all-trap abstention results and repeat-stability, and the README Results section quotes it.
+
+> **Progress:** harness (`src/evals/`), 42-question set, run modes
+> (`combined` / `combined_extraction_only` / `symbolic`), metrics with
+> match-quality tiers and the per-question matrix, `make eval` /
+> `make eval-offline`, and 16 unit tests have landed. Remaining to close:
+> the headline combined run (`--repeats 3`) committed to
+> `evals/results/latest.{json,md}` and the README **Results** section.
+
+---
+
+### D3b — Critic accuracy labeling study
+
+**Effort:** S–M · **Impact:** High · **Status:** in progress · **Depends on:** D3a
+
+**Goal:** Measure the LLM critic itself. Since D2e it is the *only* source of citation support-status badges — an LLM judging an LLM, currently unmeasured.
+
+**Scope:**
+- Export ~60–80 citations from eval runs into a **blind** label sheet, stratified by critic status (oversampling flagged ones).
+- Hand-label the two axes the UI already derives (claim-matches-source, answer-reflects-claim).
+- Score script reports per-axis raw agreement, Cohen's κ, precision/recall of "flagged" vs human labels, and a confusion matrix; short error-analysis paragraph in the eval report. Single-annotator limitation stated explicitly.
+
+**Done when:** The eval report carries a critic-accuracy table (κ, precision/recall) with error analysis.
 
 ---
 
 ### D4 — Neural vs symbolic vs combined
 
-**Effort:** L · **Impact:** High · **Status:** todo · **Depends on:** D3
+**Effort:** L · **Impact:** High · **Status:** todo · **Depends on:** D3a
 
 **Goal:** For a given question, compare neural-only, symbolic-only, and combined outputs side by side.
 
-**Why it matters:** Directly demonstrates the neuro-symbolic thesis in concrete, observable terms. Neural-only shows what the LLM does without grounding; symbolic-only shows what deterministic extraction + retrieval + coverage alone produces; combined shows how the two layers work together. Pairs naturally with D3.
+**Why it matters:** Directly demonstrates the neuro-symbolic thesis in concrete, observable terms. Neural-only shows what the LLM does without grounding; symbolic-only shows what deterministic extraction + retrieval + coverage alone produces; combined shows how the two layers work together. Pairs naturally with D3a.
 
 **Scope:**
-- Neural-only: LLM answer with no retrieved evidence/guardrails.
-- Symbolic-only: deterministic extraction + retrieval + coverage, no LLM synthesis.
-- Combined: the current grounded, guarded pipeline.
-- An evaluation view (and/or eval-harness mode from D3) that contrasts them on the same questions, with coverage/citation metrics.
+- Three evaluation-only modes in `src/evals/modes.py` behind `run_eval.py --mode`: neural-only (one neutral, un-sabotaged LLM call, new `neural_only_answer` prompt), symbolic-only (stub synthesizer — the existing graceful-degradation path), combined (production pipeline untouched).
+- No single shared quality score (neural-only has no citations by construction); instead a property table: provenance rate, yes/no personal-advice + definitive-language rate (reusing `YES_NO_FRAMING_PATTERNS`), trap handling (fictional drug, false premise), limitations per answer, safety-note presence.
+- Showcase deliverable: `notebooks/06_neural_symbolic_combined.ipynb` — 6 questions side by side across all three modes with commentary, plus the aggregate table; 2–3 headline contrast numbers in the README Results section.
+- Deferred: UI compare view; automatic LLM-graded hallucination scoring (a second unvalidated judge — apply the D3b pattern first).
 
-**Done when:** The three modes can be contrasted on real questions with coverage metrics.
+**Done when:** The three modes can be contrasted on real questions with the comparison table, the notebook runs end to end, and the README quotes the contrast numbers.
 
 ---
 
@@ -693,6 +719,36 @@ both axes independently and all 6 matrix cells are reachable.
 - Tie trace steps to the provenance graph (C3) where possible.
 
 **Done when:** Each answer can be expanded into a step-by-step processing trace.
+
+---
+
+### D6 — Ablation studies on the eval harness
+
+**Effort:** M · **Impact:** Med · **Status:** todo · **Depends on:** D3a
+
+**Goal:** Quantify what each optional pipeline component actually contributes, reusing the D3a harness unchanged — each ablation is one flag plus one eval run.
+
+**Scope (opportunistic, in rough value order):**
+- LLM state revision on/off: does neural refinement of extracted state earn its latency?
+- Critic on/off: what changes in final answers beyond badges (regenerations, caveats)?
+- `default_openfda_limit` sensitivity: evidence budget vs coverage.
+- Bootstrap CIs for headline metrics once the question set grows beyond ~30; until then, ±std over repeats is the honest granularity.
+
+**Done when:** At least the first two ablations are run and written up in the eval report.
+
+---
+
+### D7 — Evaluation docs & plan cleanup
+
+**Effort:** S · **Impact:** Med · **Status:** todo · **Depends on:** D3a, D3b, D4
+
+**Goal:** Once the evaluation packages have landed and stabilized, turn the working evaluation plan into a permanent `docs/EVALUATION.md` explaining the question set design, metrics, labeling study, and mode comparison — and ensure no committed file references local-only `.claude/` paths.
+
+**Scope:**
+- Write `docs/EVALUATION.md` from the (local) working plan, updated to match what was actually built.
+- Sweep committed docs for `.claude/` references and remove/repoint them.
+
+**Done when:** A reader can understand the whole eval setup from `docs/EVALUATION.md` alone, and no committed file references `.claude/` paths.
 
 ---
 
@@ -789,6 +845,15 @@ Do these opportunistically, when a concrete query exposes a problem — not pree
 ## Shipped
 
 A record of completed work.
+
+**A4 — Live demo deployment**
+- Deployed the live app at [rx-ray.vercel.app](https://rx-ray.vercel.app/).
+- Vercel serves the Next.js frontend from `apps/frontend`; browser requests stay
+  same-origin through `/api/*` route handlers.
+- Railway serves the FastAPI backend from the repo root Dockerfile, installs the
+  LLM-enabled package, listens on the provider `PORT`, and exposes `/health`.
+- `BACKEND_URL` connects the Vercel proxy routes to the Railway backend; the
+  README and About page now show the live link, deployment stack, and repo link.
 
 **D2 — Guardrails V3 (per-claim support + LLM critic)**
 - Every generated bullet carries a `support_status`
