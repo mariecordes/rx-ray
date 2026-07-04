@@ -244,3 +244,4 @@ CLAUDE.md
 .claude/**/*
 AGENT_GUIDE.md
 AGENTS.md
+evals/runs/

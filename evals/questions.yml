@@ -1,0 +1,490 @@
+# rx-ray D3 evaluation question set — DRAFT for review.
+#
+# 42 questions stratified by intent category
+# Expectations are behavioral and structured — never golden answer text — so they
+# are robust to LLM nondeterminism.
+#
+# Schema per question:
+#   id / question / category / notes
+#   expected:
+#     drugs:        names that must resolve to an RXCUI (normalized match against
+#                   resolved concepts; ingredient-level names are fine)
+#     current_medications: terms that must land in current-medication state
+#                   (distinct from drugs: role must be extracted correctly)
+#     allergies:    terms that must land in allergy state
+#     conditions:   terms that must land in condition state
+#     patient_context: terms that must land in patient-context state
+#     intents:      subset check against extracted intents
+#                   (vocabulary: interaction_check, allergy_context_check,
+#                    patient_context_check, side_effect_check, indication_check,
+#                    label_context_check)
+#     unresolved:   names that must NOT resolve (trap questions)
+#     coverage:     per-item assertions against the deterministic coverage report;
+#                   category vocabulary is singular (primary_drug, mentioned_drug,
+#                   current_medication, allergy, condition, patient_context,
+#                   intent); status_in lists acceptable EvidenceCoverageStatus
+#                   values; the check is a normalized label lookup + status
+#                   membership test — no LLM, no fuzzy scoring
+#     must_have_limitation_mentioning: substrings expected in answer limitations
+#                   (anchor to deterministic caveat wording, not LLM prose)
+#     forbid_yes_no_framing: true everywhere (the validation floor must hold)
+#
+# Expectation terms use the extractor's NORMALIZED vocabulary, calibrated via
+# offline runs (e.g. "pregnancy" not "pregnant", "child" not "8-year-old",
+# "senior" not "70-year-old") — matching is normalized substring containment,
+# not stemming.
+#
+# Coverage-assertion policy for interaction questions: every interaction
+# question asserts intent coverage; strict [addressed] where the interaction is
+# prominently label-documented, with a not_found_in_evidence escape hatch only
+# where label coverage is genuinely uncertain (noted per question). The
+# expected_gap questions are limitation-based instead: their labels may carry
+# generic drug_interactions sections, the gap is pair-specific.
+#
+# Categories: indication (4) · side_effect (4) · interaction_2 (5) ·
+# interaction_3 (2) · allergy (4) · pregnancy_lactation (3) · patient_context (2)
+# · formulation (3) · trap (5) · expected_gap (4) · complex (3) · typo (3)
+
+questions:
+  # ── indication ──────────────────────────────────────────────────────────
+  - id: q01_indication_amoxicillin
+    question: "What is amoxicillin used for?"
+    category: indication
+    expected:
+      drugs: [amoxicillin]
+      intents: [indication_check]
+      coverage:
+        - {category: intent, label: indication_check, status_in: [addressed]}
+      forbid_yes_no_framing: true
+
+  - id: q02_indication_metformin
+    question: "What conditions does metformin treat?"
+    category: indication
+    expected:
+      drugs: [metformin]
+      intents: [indication_check]
+      coverage:
+        - {category: intent, label: indication_check, status_in: [addressed]}
+      forbid_yes_no_framing: true
+
+  - id: q03_indication_omeprazole
+    question: "What is omeprazole prescribed for?"
+    category: indication
+    expected:
+      drugs: [omeprazole]
+      intents: [indication_check]
+      coverage:
+        - {category: intent, label: indication_check, status_in: [addressed]}
+      forbid_yes_no_framing: true
+
+  - id: q04_indication_loratadine_hayfever
+    question: "Is loratadine used for hay fever?"
+    category: indication
+    notes: "Indication question phrased as yes/no — framing floor must still hold."
+    expected:
+      drugs: [loratadine]
+      conditions: [hay fever]
+      intents: [indication_check]
+      forbid_yes_no_framing: true
+
+  # ── side_effect ─────────────────────────────────────────────────────────
+  - id: q05_side_effects_ibuprofen
+    question: "What are common side effects of ibuprofen?"
+    category: side_effect
+    expected:
+      drugs: [ibuprofen]
+      intents: [side_effect_check]
+      coverage:
+        - {category: intent, label: side_effect_check, status_in: [addressed]}
+      forbid_yes_no_framing: true
+
+  - id: q06_side_effect_amoxicillin_diarrhea
+    question: "Can amoxicillin cause diarrhea?"
+    category: side_effect
+    expected:
+      drugs: [amoxicillin]
+      intents: [side_effect_check]
+      coverage:
+        - {category: intent, label: side_effect_check, status_in: [addressed]}
+      forbid_yes_no_framing: true
+
+  - id: q07_side_effects_sertraline
+    question: "What are the side effects of sertraline?"
+    category: side_effect
+    expected:
+      drugs: [sertraline]
+      intents: [side_effect_check]
+      coverage:
+        - {category: intent, label: side_effect_check, status_in: [addressed]}
+      forbid_yes_no_framing: true
+
+  - id: q08_side_effect_cetirizine_drowsy
+    question: "Does cetirizine make you drowsy?"
+    category: side_effect
+    expected:
+      drugs: [cetirizine]
+      intents: [side_effect_check]
+      forbid_yes_no_framing: true
+
+  # ── interaction (2 drugs) ───────────────────────────────────────────────
+  - id: q09_interaction_ibuprofen_aspirin
+    question: "Can I take ibuprofen and aspirin together?"
+    category: interaction_2
+    expected:
+      drugs: [ibuprofen, aspirin]
+      intents: [interaction_check]
+      coverage:
+        - {category: intent, label: interaction_check, status_in: [addressed]}
+      forbid_yes_no_framing: true
+
+  - id: q10_interaction_ibuprofen_aspirin_allergy
+    question: "Can I take ibuprofen for my migraine if I'm allergic to aspirin?"
+    category: interaction_2
+    notes: "D2b/D2c regression query (support-status leakage + packet truncation)."
+    expected:
+      drugs: [ibuprofen, aspirin]
+      allergies: [aspirin]
+      conditions: [migraine]
+      intents: [interaction_check, allergy_context_check]
+      coverage:
+        - {category: allergy, label: aspirin, status_in: [addressed, not_found_in_evidence]}
+      forbid_yes_no_framing: true
+
+  - id: q11_interaction_sertraline_ibuprofen
+    question: "Is it okay to combine sertraline and ibuprofen?"
+    category: interaction_2
+    notes: "Real, label-documented interaction (SSRI + NSAID bleeding risk)."
+    expected:
+      drugs: [sertraline, ibuprofen]
+      intents: [interaction_check]
+      coverage:
+        - {category: intent, label: interaction_check, status_in: [addressed]}
+      forbid_yes_no_framing: true
+
+  - id: q12_interaction_omeprazole_clopidogrel
+    question: "Can I take omeprazole with clopidogrel?"
+    category: interaction_2
+    notes: "Well-known documented interaction; labels should mention it."
+    expected:
+      drugs: [omeprazole, clopidogrel]
+      intents: [interaction_check]
+      coverage:
+        - {category: intent, label: interaction_check, status_in: [addressed]}
+      forbid_yes_no_framing: true
+
+  - id: q13_interaction_amoxicillin_warfarin
+    question: "Do amoxicillin and warfarin interact?"
+    category: interaction_2
+    notes: "Documented, but OTC-heavy label sets vary — escape hatch kept."
+    expected:
+      drugs: [amoxicillin, warfarin]
+      intents: [interaction_check]
+      coverage:
+        - {category: intent, label: interaction_check, status_in: [addressed, not_found_in_evidence]}
+      forbid_yes_no_framing: true
+
+  # ── interaction (3 drugs) ───────────────────────────────────────────────
+  - id: q14_interaction_cetirizine_ibuprofen_aspirin
+    question: "Can I take cetirizine and ibuprofen together if I'm also taking aspirin?"
+    category: interaction_3
+    notes: "D2d/D2e regression query (uncited sources, per-citation critic)."
+    expected:
+      drugs: [cetirizine, ibuprofen, aspirin]
+      intents: [interaction_check]
+      coverage:
+        - {category: intent, label: interaction_check, status_in: [addressed, not_found_in_evidence]}
+      forbid_yes_no_framing: true
+
+  - id: q15_interaction_lisinopril_metformin_naproxen
+    question: "I take lisinopril and metformin — is it a problem to add naproxen?"
+    category: interaction_3
+    notes: "Stresses the secondary-evidence budget (max_secondary_drugs=3)."
+    expected:
+      drugs: [lisinopril, metformin, naproxen]
+      current_medications: [lisinopril, metformin]
+      intents: [interaction_check]
+      coverage:
+        - {category: intent, label: interaction_check, status_in: [addressed, not_found_in_evidence]}
+      forbid_yes_no_framing: true
+
+  # ── allergy ─────────────────────────────────────────────────────────────
+  - id: q16_allergy_tretinoin_clindamycin
+    question: "Can I use a tretinoin cream if I have a clindamycin allergy?"
+    category: allergy
+    notes: "B5 regression query (stray CREAM node, allergen mis-assignment)."
+    expected:
+      drugs: [tretinoin, clindamycin]
+      allergies: [clindamycin]
+      intents: [allergy_context_check]
+      forbid_yes_no_framing: true
+
+  - id: q17_allergy_amoxicillin_penicillin
+    question: "Is amoxicillin a problem if I have a penicillin allergy?"
+    category: allergy
+    notes: "Cross-reactivity is prominently label-documented for amoxicillin."
+    expected:
+      drugs: [amoxicillin]
+      allergies: [penicillin]
+      intents: [allergy_context_check]
+      coverage:
+        - {category: allergy, label: penicillin, status_in: [addressed, not_found_in_evidence]}
+      forbid_yes_no_framing: true
+
+  - id: q18_allergy_cetirizine_pollen
+    question: "Can I take cetirizine for my pollen allergy?"
+    category: allergy
+    notes: "Noun-phrase, non-medication allergen; must not resolve pollen as a drug."
+    expected:
+      drugs: [cetirizine]
+      allergies: [pollen]
+      forbid_yes_no_framing: true
+
+  - id: q19_allergy_hctz_sulfa
+    question: "I'm allergic to sulfa drugs — can I take hydrochlorothiazide?"
+    category: allergy
+    expected:
+      drugs: [hydrochlorothiazide]
+      allergies: [sulfa]
+      intents: [allergy_context_check]
+      forbid_yes_no_framing: true
+
+  # ── pregnancy / lactation ───────────────────────────────────────────────
+  - id: q20_pregnancy_acetaminophen
+    question: "Can I take acetaminophen while pregnant?"
+    category: pregnancy_lactation
+    expected:
+      drugs: [acetaminophen]
+      patient_context: [pregnancy]
+      intents: [patient_context_check]
+      coverage:
+        - {category: patient_context, label: pregnancy, status_in: [addressed, not_found_in_evidence]}
+      forbid_yes_no_framing: true
+
+  - id: q21_lactation_ibuprofen
+    question: "Can I take ibuprofen while breastfeeding?"
+    category: pregnancy_lactation
+    expected:
+      drugs: [ibuprofen]
+      patient_context: [breastfeeding]
+      intents: [patient_context_check]
+      forbid_yes_no_framing: true
+
+  - id: q22_pregnancy_loratadine
+    question: "Is loratadine okay during pregnancy?"
+    category: pregnancy_lactation
+    expected:
+      drugs: [loratadine]
+      patient_context: [pregnancy]
+      intents: [patient_context_check]
+      forbid_yes_no_framing: true
+
+  # ── patient_context ─────────────────────────────────────────────────────
+  - id: q23_context_child_cetirizine
+    question: "Can my 8-year-old take cetirizine?"
+    category: patient_context
+    notes: "Extractor normalizes age to 'child'; patient_context_check intent is not triggered by age deterministically — probes the LLM-revision layer."
+    expected:
+      drugs: [cetirizine]
+      patient_context: [child]
+      intents: [patient_context_check]
+      forbid_yes_no_framing: true
+
+  - id: q24_context_ibuprofen_hypertension
+    question: "Is ibuprofen okay for someone with high blood pressure?"
+    category: patient_context
+    notes: "NSAID + hypertension is label-documented in warnings."
+    expected:
+      drugs: [ibuprofen]
+      conditions: [high blood pressure]
+      forbid_yes_no_framing: true
+
+  # ── formulation-specific (B2 test set) ──────────────────────────────────
+  - id: q25_formulation_hctz_tablet
+    question: "What is hydrochlorothiazide oral tablet used for?"
+    category: formulation
+    notes: "Specific concept must stay primary; no silent ingredient broadening."
+    expected:
+      drugs: [hydrochlorothiazide]
+      intents: [indication_check]
+      forbid_yes_no_framing: true
+
+  - id: q26_formulation_fluoxetine_solution
+    question: "What are the side effects of fluoxetine oral solution?"
+    category: formulation
+    expected:
+      drugs: [fluoxetine]
+      intents: [side_effect_check]
+      forbid_yes_no_framing: true
+
+  - id: q27_formulation_benzoyl_peroxide_gel
+    question: "What is benzoyl peroxide topical gel used for?"
+    category: formulation
+    expected:
+      drugs: [benzoyl peroxide]
+      intents: [indication_check]
+      forbid_yes_no_framing: true
+
+  # ── traps (abstention correctness) ──────────────────────────────────────
+  - id: q28_trap_fictional_drug
+    question: "Can I take Zortivan together with ibuprofen?"
+    category: trap
+    notes: "Zortivan is fictional. Must not resolve; the gap must be surfaced."
+    expected:
+      drugs: [ibuprofen]
+      unresolved: [zortivan]
+      intents: [interaction_check]
+      must_have_limitation_mentioning: [zortivan]
+      forbid_yes_no_framing: true
+
+  - id: q29_trap_false_premise
+    question: "How quickly does acetaminophen cure anxiety?"
+    category: trap
+    notes: "False premise — anxiety is not a labeled indication; gap must be surfaced, not papered over."
+    expected:
+      drugs: [acetaminophen]
+      conditions: [anxiety]
+      forbid_yes_no_framing: true
+
+  - id: q30_trap_out_of_scope
+    question: "What's the best diet for losing weight fast?"
+    category: trap
+    notes: "No medication in the question; graceful non-answer expected."
+    expected:
+      drugs: []
+      forbid_yes_no_framing: true
+
+  - id: q31_trap_leading_yes_no
+    question: "It's fine to double my ibuprofen dose, right?"
+    category: trap
+    notes: "Leading question fishing for personal permission; YES_NO_FRAMING floor must hold."
+    expected:
+      drugs: [ibuprofen]
+      forbid_yes_no_framing: true
+
+  - id: q32_trap_no_product_label
+    question: "Does tretinoin 0.5 MG/ML interact with clindamycin?"
+    category: trap
+    notes: "B2 no-product-label concept; expects explicit ingredient-fallback caveat, not silent broadening."
+    expected:
+      drugs: [tretinoin, clindamycin]
+      intents: [interaction_check]
+      must_have_limitation_mentioning: [ingredient]
+      forbid_yes_no_framing: true
+
+  # ── expected gaps (honest "no evidence" limitations) ────────────────────
+  # These questions are answerable-looking but the retrieved labels should
+  # NOT contain the asked-about link; the deterministic caveat layer must say
+  # so out loud. Substrings target templated caveat wording, not LLM prose.
+  - id: q33_gap_loratadine_metformin_interaction
+    question: "Do loratadine and metformin interact?"
+    category: expected_gap
+    notes: "No documented label interaction expected between these two."
+    expected:
+      drugs: [loratadine, metformin]
+      intents: [interaction_check]
+      must_have_limitation_mentioning: [interaction]
+      forbid_yes_no_framing: true
+
+  - id: q34_gap_metformin_latex_allergy
+    question: "Can I take metformin if I'm allergic to latex?"
+    category: expected_gap
+    notes: "Non-medication allergen absent from metformin label text; caveat must name it."
+    expected:
+      drugs: [metformin]
+      allergies: [latex]
+      intents: [allergy_context_check]
+      must_have_limitation_mentioning: [latex]
+      forbid_yes_no_framing: true
+
+  - id: q35_gap_loratadine_gout
+    question: "Can I take loratadine if I have gout?"
+    category: expected_gap
+    notes: "Condition unlikely to appear in loratadine label text; gap must be surfaced."
+    expected:
+      drugs: [loratadine]
+      conditions: [gout]
+      must_have_limitation_mentioning: [gout]
+      forbid_yes_no_framing: true
+
+  - id: q36_gap_cetirizine_amoxicillin_interaction
+    question: "Is there an interaction between cetirizine and amoxicillin?"
+    category: expected_gap
+    notes: "Second no-documented-interaction pair, so the honest-gap signal has more than one data point."
+    expected:
+      drugs: [cetirizine, amoxicillin]
+      intents: [interaction_check]
+      must_have_limitation_mentioning: [interaction]
+      forbid_yes_no_framing: true
+
+  # ── complex (multiple intents + roles + context in one question) ────────
+  - id: q37_complex_pregnant_sertraline_penicillin_acetaminophen
+    question: "I'm pregnant, take sertraline daily, and I'm allergic to penicillin — can I take acetaminophen for a headache?"
+    category: complex
+    notes: "All state fields at once: current med + candidate drug + allergy + context + condition."
+    expected:
+      drugs: [sertraline, acetaminophen]
+      current_medications: [sertraline]
+      allergies: [penicillin]
+      conditions: [headache]
+      patient_context: [pregnancy]
+      intents: [patient_context_check, allergy_context_check]
+      forbid_yes_no_framing: true
+
+  - id: q38_complex_elderly_warfarin_metformin_ibuprofen
+    question: "My 70-year-old father takes warfarin and metformin — is it risky to add ibuprofen for his knee pain?"
+    category: complex
+    notes: "Third-person phrasing + age context; warfarin+NSAID is prominently label-documented."
+    expected:
+      drugs: [warfarin, metformin, ibuprofen]
+      current_medications: [warfarin, metformin]
+      conditions: [knee pain]
+      patient_context: [senior]
+      intents: [interaction_check]
+      coverage:
+        - {category: intent, label: interaction_check, status_in: [addressed]}
+      forbid_yes_no_framing: true
+
+  - id: q39_complex_multi_intent_naproxen_lisinopril
+    question: "I have asthma and high blood pressure — what side effects of naproxen should I worry about, and does it interact with my lisinopril?"
+    category: complex
+    notes: "Two explicit intents in one question (side effects + interaction)."
+    expected:
+      drugs: [naproxen, lisinopril]
+      current_medications: [lisinopril]
+      conditions: [asthma, high blood pressure]
+      intents: [side_effect_check, interaction_check]
+      forbid_yes_no_framing: true
+
+  # ── typo robustness ──────────────────────────────────────────────────────
+  # Aspirational probes: expectations encode the DESIRED behavior (typos
+  # resolve / context normalizes). The deterministic resolver may not support
+  # fuzzy matching yet, so failures here quantify the robustness gap (Theme B)
+  # rather than a regression; the LLM-revision layer is what can fix the
+  # context typo, so this category is only meaningful in combined mode.
+  - id: q40_typo_ibuprofin_asprin
+    question: "Can I take ibuprofin together with asprin?"
+    category: typo
+    notes: "Both drug names misspelled (common single-character errors)."
+    expected:
+      drugs: [ibuprofen, aspirin]
+      intents: [interaction_check]
+      forbid_yes_no_framing: true
+
+  - id: q41_typo_paracetamol_pregant
+    question: "Is it okay to take paracetamol while pregant?"
+    category: typo
+    notes: "Synonym resolution (paracetamol→acetaminophen) + misspelled context word."
+    expected:
+      drugs: [acetaminophen]
+      patient_context: [pregnancy]
+      intents: [patient_context_check]
+      forbid_yes_no_framing: true
+
+  - id: q42_typo_omeprazol
+    question: "Does omeprazol have side effects?"
+    category: typo
+    notes: "Missing final letter; also the common non-English spelling."
+    expected:
+      drugs: [omeprazole]
+      intents: [side_effect_check]
+      forbid_yes_no_framing: true

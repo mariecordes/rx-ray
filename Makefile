@@ -5,7 +5,7 @@ PYTHON ?= python3
 VENV   := .venv
 BIN    := $(VENV)/bin
 
-.PHONY: setup setup-backend setup-frontend env verify-data api web test lint check
+.PHONY: setup setup-backend setup-frontend env verify-data api web test lint check eval eval-offline
 
 ## setup: install backend + frontend deps, create .env, verify runtime data
 setup: setup-backend setup-frontend env verify-data
@@ -48,3 +48,11 @@ lint:
 
 ## check: lint + tests
 check: lint test
+
+## eval: full evaluation run (needs OpenAI keys); refreshes evals/results/latest.*
+eval:
+	$(BIN)/python scripts/run_eval.py --mode combined --repeats 1 --update-latest
+
+## eval-offline: keyless symbolic-only eval (extraction/resolution/coverage/traps)
+eval-offline:
+	$(BIN)/python scripts/run_eval.py --mode symbolic --repeats 1
