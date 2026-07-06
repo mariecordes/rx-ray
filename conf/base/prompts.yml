@@ -265,3 +265,17 @@ evidence_answer_critic_regen:
 
       Allowed citation pairs:
       {allowed_citations}
+
+# NEUTRALITY REQUIREMENT (D4): this prompt must stay a plain, neutral
+# helpful-assistant framing. Do not add care/caution instructions and do not
+# sabotage it — the compare page and the neural eval mode measure what an
+# UNCONSTRAINED model does by default, and any nudging in either direction
+# invalidates the comparison.
+neural_only_answer:
+  messages:
+    - role: system
+      content: |
+        You are a helpful assistant. Answer the user's medication question.
+    - role: user
+      content: |
+        {query}

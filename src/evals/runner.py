@@ -77,7 +77,7 @@ def build_service(mode: EvalMode) -> QueryAnswerService:
             ),
         )
     if mode == "neural":
-        raise NotImplementedError("neural mode lands with roadmap package D4")
+        raise ValueError("neural mode does not use the pipeline service")
     return QueryAnswerService(builder=builder)
 
 
@@ -95,6 +95,9 @@ def run_eval(
     so failures don't lose completed work and post-hoc analysis (e.g. the D3b
     critic sample export) can reuse the run.
     """
+
+    if mode == "neural":
+        return _run_neural_eval(questions, repeats=repeats, out_dir=out_dir)
 
     service = service or build_service(mode)
     run = EvalRunResult(
@@ -144,6 +147,79 @@ def run_eval(
                             "repeat": repeat,
                             "elapsed_s": round(elapsed, 2),
                             "response": response.model_dump(mode="json"),
+                        },
+                        indent=2,
+                    )
+                )
+            status = "pass" if result.passed else "FAIL"
+            logger.info(
+                "eval %s r%s: %s in %.0fs", question.id, repeat, status, elapsed
+            )
+
+    return run
+
+
+def _run_neural_eval(
+    questions: list[EvalQuestion],
+    *,
+    repeats: int,
+    out_dir: Path | None,
+) -> EvalRunResult:
+    """Neural mode (D4): one unconstrained LLM call per question, no pipeline.
+
+    Only prose-applicable checks run (framing floor, trap handling); the
+    property counts feed the mode-comparison table.
+    """
+
+    from src.evals.compare import evaluate_neural_question
+    from src.evals.neural import generate_neural_answer
+
+    run = EvalRunResult(
+        mode="neural",
+        questions_file="",
+        repeats=repeats,
+        started_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+    )
+    if out_dir is not None:
+        out_dir.mkdir(parents=True, exist_ok=True)
+
+    for question in questions:
+        for repeat in range(repeats):
+            started = time.time()
+            try:
+                answer_text = generate_neural_answer(question.question)
+            except Exception as exc:  # noqa: BLE001 — one bad question must not sink a run
+                logger.exception("neural eval question %s failed", question.id)
+                run.results.append(
+                    QuestionResult(
+                        question_id=question.id,
+                        category=question.category,
+                        mode="neural",
+                        repeat=repeat,
+                        elapsed_s=round(time.time() - started, 2),
+                        error=repr(exc),
+                    )
+                )
+                continue
+            elapsed = time.time() - started
+            result = evaluate_neural_question(
+                question,
+                answer_text,
+                repeat=repeat,
+                elapsed_s=elapsed,
+            )
+            run.results.append(result)
+            if out_dir is not None:
+                raw_path = out_dir / f"{question.id}.r{repeat}.json"
+                raw_path.write_text(
+                    json.dumps(
+                        {
+                            "question_id": question.id,
+                            "question": question.question,
+                            "mode": "neural",
+                            "repeat": repeat,
+                            "elapsed_s": round(elapsed, 2),
+                            "neural_answer": answer_text,
                         },
                         indent=2,
                     )
