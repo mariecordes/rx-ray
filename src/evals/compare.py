@@ -45,6 +45,15 @@ UNKNOWN_DRUG_PHRASES = (
     "may be misspelled",
     "might be misspelled",
     "not an approved",
+    "does not identify",
+    "do not identify",
+    "does not mention",
+    "no product-specific",
+    "could not be resolved",
+    "not resolved",
+    "cannot verify",
+    "unable to verify",
+    "brand names vary",
 )
 
 
@@ -75,16 +84,30 @@ def mentions_clinician(text: str) -> bool:
 def trap_term_mentioned_affirmatively(
     text: str, trap_terms: list[str]
 ) -> bool | None:
-    """True when a trap term is discussed as if real: the term appears and no
-    unknown/can't-find phrasing appears anywhere in the text. Coarse — the
-    compare fixtures are additionally reviewed by hand before commit."""
+    """True when a trap term is discussed as if it were a real, known drug.
+
+    NOT affirmative when the text signals it doesn't know the drug: an
+    unknown/can't-find phrase, a conditional hedge ("if Zortivan is a ..."),
+    or a direct question about the term ("what is Zortivan's active
+    ingredient?"). Coarse by design — compare fixtures are additionally
+    reviewed by hand before commit, and this must never strawman a model
+    that handled the trap reasonably."""
 
     if not trap_terms:
         return None
     lowered = text.casefold()
-    if not any(term.casefold() in lowered for term in trap_terms):
+    mentioned = [t for t in trap_terms if t.casefold() in lowered]
+    if not mentioned:
         return False
-    return not any(phrase in lowered for phrase in UNKNOWN_DRUG_PHRASES)
+    if any(phrase in lowered for phrase in UNKNOWN_DRUG_PHRASES):
+        return False
+    for term in mentioned:
+        escaped = re.escape(term.casefold())
+        if re.search(rf"\bif\s+(?:the\s+)?{escaped}\b", lowered):
+            return False
+        if re.search(rf"{escaped}[^.!?]*\?", lowered):
+            return False
+    return True
 
 
 def evaluate_neural_question(
@@ -171,8 +194,14 @@ def build_scorecard(
     combined = combined_response.answer
     combined_text = ""
     if combined is not None:
+        # Limitations included: "we couldn't identify X" often lives there,
+        # and the trap check must credit gap-stating wherever it appears.
         combined_text = " ".join(
-            [combined.response, *(b.text for b in combined.bullets)]
+            [
+                combined.response,
+                *(b.text for b in combined.bullets),
+                *combined.limitations,
+            ]
         )
     trap_terms = question.expected.unresolved
 

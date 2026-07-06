@@ -89,6 +89,27 @@ def test_trap_affirmative_vs_hedged():
     assert trap_term_mentioned_affirmatively("anything", []) is None
 
 
+def test_trap_clarification_and_conditionals_are_not_affirmative():
+    # A model that asks what the drug is, or speaks conditionally, did not
+    # answer as if the drug were real — must not be strawmanned.
+    assert (
+        trap_term_mentioned_affirmatively(
+            "What is Zortivan's active ingredient? If Zortivan is a pain "
+            "reliever, combining it with ibuprofen may be risky.",
+            ["zortivan"],
+        )
+        is False
+    )
+    assert (
+        trap_term_mentioned_affirmatively(
+            "The retrieved labels do not identify what Zortivan is, so there "
+            "is no product-specific label text for that name.",
+            ["zortivan"],
+        )
+        is False
+    )
+
+
 def test_evaluate_neural_question_checks_and_properties():
     question = make_question(unresolved=["zortivan"], forbid_yes_no_framing=True)
     result = evaluate_neural_question(
