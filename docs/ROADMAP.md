@@ -53,6 +53,7 @@ These determine first impressions.
 | [C2](#c2--external-interaction-data-source) | External interaction data | Evidence | XL | High | todo | — |
 | [C3](#c3--question-level-provenance-graph-maturation) | Provenance graph maturation | Evidence | L | High | todo | — |
 | [C4](#c4--context-targeted-retrieval-tuning) | Context-targeted tuning | Evidence | M | Low–Med | todo | — |
+| [C5](#c5--synthesis-requested-retrieval-expansion) | Synthesis-requested retrieval expansion | Evidence | M–L | Med | todo | — |
 | [D1](#d1--guardrails-v2) | Guardrails V2 | Safety | M | High | ✅ done | — |
 | [D2](#d2--guardrails-v3) | Guardrails V3 | Safety | L | High | ✅ done | D1 |
 | [D2b](#d2b--fix-cross-intent-leakage-in-the-deterministic-support-status-floor) | Fix cross-intent support-status leakage | Safety | S | High | ✅ done | D2 |
@@ -61,12 +62,13 @@ These determine first impressions.
 | [D2e](#d2e--replace-the-deterministic-support-status-floor-with-a-source-faithfulness-critic) | Replace the deterministic floor with a source-faithfulness LLM critic | Safety | M | High | ✅ done | D1, D2 |
 | [D2f](#d2f--more-direct-answer-tone-two-axis-support-badges-remove-critique-clutter) | More direct answer tone, two-axis support badges, remove critique clutter | Safety | S–M | Med | ✅ done | D2e |
 | [D2g](#d2g--cover-the-misreads-source--contradicted-gap-in-the-critic-taxonomy) | Cover the "misreads + contradicted" gap in the critic taxonomy | Safety | S | Low | todo | D2e, D2f |
+| [D2h](#d2h--joint-multi-citation-judgment-in-the-critic) | Joint multi-citation judgment in the critic | Safety | S–M | Med–High | todo | D2e, D3b |
 | [D3a](#d3a--evaluation-harness--curated-question-set) | Evaluation harness | Safety | L | High | in progress | — |
-| [D3b](#d3b--critic-accuracy-labeling-study) | Critic accuracy labeling study | Safety | S–M | High | in progress | D3a |
+| [D3b](#d3b--critic-accuracy-labeling-study) | Critic accuracy labeling study | Safety | S–M | High | ✅ done | D3a |
 | [D4](#d4--neural-vs-symbolic-vs-combined) | Neural vs symbolic vs combined | Safety | L | High | todo | D3a |
 | [D5](#d5--reasoning--execution-traces) | Reasoning/execution traces | Safety | M | Med | todo | — |
 | [D6](#d6--ablation-studies-on-the-eval-harness) | Ablation studies | Safety | M | Med | todo | D3a |
-| [D7](#d7--evaluation-docs--plan-cleanup) | Evaluation docs & plan cleanup | Safety | S | Med | todo | D3a, D3b, D4 |
+| [D7](#d7--evaluation-docs--plan-cleanup) | Evaluation docs & plan cleanup | Safety | S | Med | in progress | D3a, D3b, D4 |
 | [E1](#e1--resolver--neighborhood-performance) | Resolver/neighborhood perf | Engineering | M | Med | todo | (=B1) |
 | [E2](#e2--test-fixtures-fast-suite--ci) | Fixtures + fast suite + CI | Engineering | M | Med | todo | — |
 | [E3](#e3--lint-scope--legacy-module-triage) | Lint scope / legacy triage | Engineering | S | Med | todo | — |
@@ -341,6 +343,34 @@ Maturing how evidence is modeled, especially for multi-drug / interaction questi
 - Careful UI wording: label text mentions a context ≠ the app validating suitability.
 
 **Done when:** Context-targeted hits are more accurate and clearly framed.
+
+---
+
+### C5 — Synthesis-requested retrieval expansion
+
+**Effort:** M–L · **Impact:** Med · **Status:** todo
+
+**Goal:** Let the synthesis step *request* more evidence instead of silently working
+from truncated sections: when a cited section was capped (D2c truncation) or a
+relevant section wasn't included in the packet, the model can ask for the full text
+of specific, named label sections and synthesis re-runs once with the expanded
+packet. Idea raised during the D3b label review.
+
+**Why it matters:** The evidence packet caps (per-section and per-drug) exist to
+bound prompt size, but they can starve the answer of detail that *was* retrieved.
+A bounded request loop keeps prompts small in the common case while removing the
+cap as a hard ceiling on answer quality.
+
+**Invariant check:** compatible with the neuro-symbolic boundary — the model may
+only request sections that already exist in the retrieved, whitelisted label store;
+the symbolic layer decides what is served, and citations stay whitelisted.
+Alternative/simpler variant to evaluate first: rank label sections by relevance to
+the question intent and give the top-ranked section(s) untruncated up front, no
+request loop at all.
+
+**Done when:** Truncation-starved answers can obtain the full text of specific
+retrieved sections (or the ranking variant demonstrably reduces truncation-caused
+gaps), with bounded cost and unchanged citation whitelisting.
 
 ---
 
@@ -648,6 +678,35 @@ both axes independently and all 6 matrix cells are reachable.
 
 ---
 
+### D2h — Joint multi-citation judgment in the critic
+
+**Effort:** S–M · **Impact:** Med–High · **Status:** todo · **Depends on:** D2e, D3b
+
+**Goal:** Fix a taxonomy limitation surfaced during the D3b label review: the critic
+judges each citation **independently** — the same bullet text against one cited
+section at a time — so a bullet legitimately synthesized from multiple sources
+looks "broader than the source" against any single one of them and gets flagged
+as misreading. The D3b labeling protocol deliberately shares this 1:1 framing (so
+the study measures the critic on its defined task), which means human and critic
+over-flag multi-source bullets *together*; the D3b error analysis should quantify
+how much of the flag volume this explains before this package is scoped further.
+
+**Scope:**
+- Restructure the critic input from per-citation rows to per-bullet groups: the
+  claim text together with **all** of its cited section texts.
+- Two-level judgment: does the claim hold against the union of its cited texts
+  (faithfulness), and per citation, does that source support its part of the claim
+  (contribution). Keep per-citation `support_status` badges, but computed in
+  context rather than in isolation.
+- Update the D3b labeling guide/protocol to match, so any future labeling round
+  measures the new task.
+
+**Done when:** A multi-source bullet whose sources jointly support it is no longer
+flaggable for being broader than any single source, verified against examples from
+the D3b disagreement list.
+
+---
+
 ### D3a — Evaluation harness & curated question set
 
 **Effort:** L · **Impact:** High · **Status:** in progress
@@ -673,9 +732,9 @@ both axes independently and all 6 matrix cells are reachable.
 
 ---
 
-### D3b — Critic accuracy labeling study
+### ✅ D3b — Critic accuracy labeling study
 
-**Effort:** S–M · **Impact:** High · **Status:** in progress · **Depends on:** D3a
+**Effort:** S–M · **Impact:** High · **Status:** done · **Depends on:** D3a
 
 **Goal:** Measure the LLM critic itself. Since D2e it is the *only* source of citation support-status badges — an LLM judging an LLM, currently unmeasured.
 
@@ -686,6 +745,17 @@ both axes independently and all 6 matrix cells are reachable.
 
 **Done when:** The eval report carries a critic-accuracy table (κ, precision/recall) with error analysis.
 
+> **Done.** Run as a one-off experiment against the frozen 2026-07-04
+> combined run: 75 citations (all 58 flagged + 17 accurate) labeled blind
+> and scored (`src/evals/critic_study.py`, export/score CLIs). Results in
+> `docs/EVALUATION.md` §4: flag precision 0.76, flag recall 0.96, per-axis
+> κ 0.49/0.45; the 36 disagreements bucket into paraphrase-blindness (20),
+> over-called misreads from per-citation judging (9), and under-called
+> misreads (10, of which only 2 escaped flagging entirely). Derived next
+> steps recorded as D2h and C5; synthesis-prompt fixes (evidence-scope
+> statements → limitations, no retrieval-mechanics narration) landed during
+> the study.
+
 ---
 
 ### D4 — Neural vs symbolic vs combined
@@ -694,15 +764,16 @@ both axes independently and all 6 matrix cells are reachable.
 
 **Goal:** For a given question, compare neural-only, symbolic-only, and combined outputs side by side.
 
-**Why it matters:** Directly demonstrates the neuro-symbolic thesis in concrete, observable terms. Neural-only shows what the LLM does without grounding; symbolic-only shows what deterministic extraction + retrieval + coverage alone produces; combined shows how the two layers work together. Pairs naturally with D3a.
+**Why it matters:** Directly demonstrates the neuro-symbolic thesis in concrete, observable terms — and does it **on the live deployment**, where recruiters and casual reviewers actually look. Neural-only shows what the LLM does without grounding; symbolic-only shows what deterministic extraction + retrieval + coverage alone produces; combined shows how the two layers work together.
 
 **Scope:**
-- Three evaluation-only modes in `src/evals/modes.py` behind `run_eval.py --mode`: neural-only (one neutral, un-sabotaged LLM call, new `neural_only_answer` prompt), symbolic-only (stub synthesizer — the existing graceful-degradation path), combined (production pipeline untouched).
-- No single shared quality score (neural-only has no citations by construction); instead a property table: provenance rate, yes/no personal-advice + definitive-language rate (reusing `YES_NO_FRAMING_PATTERNS`), trap handling (fictional drug, false premise), limitations per answer, safety-note presence.
-- Showcase deliverable: `notebooks/06_neural_symbolic_combined.ipynb` — 6 questions side by side across all three modes with commentary, plus the aggregate table; 2–3 headline contrast numbers in the README Results section.
-- Deferred: UI compare view; automatic LLM-graded hallucination scoring (a second unvalidated judge — apply the D3b pattern first).
+- **Showcase deliverable: a `/compare` page in the UI** (replaces the previously planned notebook 06). Precomputed fixtures, not live calls: ~8 curated questions from `evals/questions.yml` (traps included) run through all three modes once by `scripts/build_compare_fixtures.py`, committed as static JSON, rendered as three mode columns + question picker. Default question: the fictional-drug trap, so every visitor sees the unconstrained LLM overclaim while rx-ray abstains. Zero backend/deployment changes; works in demo mode; no per-visitor LLM cost.
+- Neural mode: one neutral, un-sabotaged LLM call (`neural_only_answer` prompt, neutrality requirement documented in the YAML) in `src/evals/neural.py`, shared by the fixture script and a new `run_eval.py --mode neural`.
+- Deterministic property scorecard per question (`src/evals/compare.py`, unit-tested): cited-source count, personal-advice / definitive-language hits (reusing `YES_NO_FRAMING_PATTERNS`), trap handling, limitations count, safety-note presence — rendered on the page and aggregated into the eval report's three-mode table. No single shared quality score (neural-only has no citations by construction) and no LLM-graded hallucination scoring (a second unvalidated judge — the D3b pattern applies first).
+- The neural column always renders with a banner framing it as a demonstration of what the guardrails prevent (component-level, per the careful-framing invariant); all fixture content is eyeballed before commit.
+- Phase 2 (explicitly out of scope now): env-gated, rate-limited live compare.
 
-**Done when:** The three modes can be contrasted on real questions with the comparison table, the notebook runs end to end, and the README quotes the contrast numbers.
+**Done when:** `/compare` on the live deployment shows the curated questions across all three modes with the deterministic scorecard, defaulting to the fictional-drug trap; `--mode neural` produces the property metrics in the eval report; `docs/EVALUATION.md` §5 and the README quote the contrast numbers.
 
 ---
 
@@ -740,7 +811,12 @@ both axes independently and all 6 matrix cells are reachable.
 
 ### D7 — Evaluation docs & plan cleanup
 
-**Effort:** S · **Impact:** Med · **Status:** todo · **Depends on:** D3a, D3b, D4
+**Effort:** S · **Impact:** Med · **Status:** in progress · **Depends on:** D3a, D3b, D4
+
+> **Progress:** `docs/EVALUATION.md` skeleton landed (question-set design,
+> harness modes/metrics, critic-study design, D4 plan, design principles),
+> with placeholders for the headline run, critic-study scores, and D4
+> results.
 
 **Goal:** Once the evaluation packages have landed and stabilized, turn the working evaluation plan into a permanent `docs/EVALUATION.md` explaining the question set design, metrics, labeling study, and mode comparison — and ensure no committed file references local-only `.claude/` paths.
 
@@ -845,6 +921,26 @@ Do these opportunistically, when a concrete query exposes a problem — not pree
 ## Shipped
 
 A record of completed work.
+
+**D3b — Critic accuracy labeling study**
+- One-off experiment against the frozen 2026-07-04 combined run over the
+  42-question set: 75 citations (all 58 critic-flagged + 17 sampled accurate)
+  exported to a blind sheet, hand-labeled on the two badge axes, and scored.
+- Tooling: `src/evals/critic_study.py` (axis mapping mirroring the frontend
+  badge derivation, Cohen's κ, flagged precision/recall, confusion matrices,
+  disagreement list), `scripts/export_critic_sample.py` (blind sheet + sealed
+  key from any combined run), `scripts/score_critic_labels.py`; 10 unit tests.
+- Results (`docs/EVALUATION.md` §4): the critic is a strong flagger (precision
+  0.76, recall 0.96) and a moderate diagnoser (per-axis κ 0.49/0.45); the 36
+  disagreements bucket into paraphrase-blindness (20), over-called misreads
+  from per-citation judging (9), and under-called misreads (10, only 2 of
+  which escaped flagging entirely).
+- Derived and recorded next steps: D2h (joint multi-citation judgment, folds
+  in D2g), C5 (synthesis-requested retrieval expansion); synthesis-prompt
+  fixes landed during the study (evidence-scope statements are limitations,
+  no retrieval-mechanics narration).
+- `docs/EVALUATION.md` created (question-set design, harness, critic study,
+  D4 plan, design principles), started ahead of D7.
 
 **A4 — Live demo deployment**
 - Deployed the live app at [rx-ray.vercel.app](https://rx-ray.vercel.app/).

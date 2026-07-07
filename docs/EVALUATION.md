@@ -3,8 +3,7 @@
 rx-ray's thesis is that a symbolic layer (RxNorm terminology + retrieved FDA
 label evidence + deterministic coverage checks) can constrain and audit an LLM
 so it cannot overclaim. This document describes how that claim is **measured**
-rather than asserted: a behavioral evaluation harness (D3a), a human labeling
-study of the LLM critic (D3b), and a three-way mode comparison (D4).
+rather than asserted: (1.) a behavioral evaluation harness (roadmap item D3a), (2.) a human labeling study of the LLM critic (roadmap item D3b), and (3.) a three-way mode comparison (roadmap item D4).
 
 Everything here is reproducible from the repo; commands are listed per
 section. Raw run outputs land in `evals/runs/` (gitignored); the committed
@@ -12,7 +11,7 @@ headline results live in `evals/results/latest.{json,md}`.
 
 ---
 
-## 1. The question set
+## The question set
 
 [`evals/questions.yml`](../evals/questions.yml) — 42 curated questions across
 12 categories:
@@ -49,7 +48,7 @@ Design rules (documented in the file header):
 - **Typo questions encode desired behavior, not current behavior** — their
   failures quantify a known robustness gap rather than regressions.
 
-## 2. The harness (D3a)
+## 1. The harness
 
 `src/evals/` consumes the pipeline's existing structured output
 (`QueryAnswerResponse`: extracted state, resolved concepts, coverage report,
@@ -94,10 +93,10 @@ make eval                                          # combined + refresh evals/re
 - **Stability**: `--repeats N` reports verdict flips and worst-of-repeats
   match quality; LLM nondeterminism is reported, not averaged away.
 
-## 3. Headline results
+### Headline results
 
 _To be filled from `evals/results/latest.md` after the headline combined run
-(`--repeats 3`) that closes D3a._
+(`--repeats 3`)._
 
 <!-- TODO(D3a close-out): headline table (questions passed, check pass rate,
 verdict flips, latency), extraction P/R/F1 table, guardrail intervention
@@ -122,18 +121,18 @@ The harness caught real defects during its own construction:
 
 - **Pronoun resolves to a real drug** (deterministic mode): in *"Is it okay
   to take paracetamol while pregant?"*, the scanner captured "it" as a drug
-  mention and resolved it to **itraconazole** — the same failure family as
+  mention and resolved it to **itraconazole** - the same failure family as
   the B5 "CREAM" stray-node bug. (Tracked for a scanner stopword fix.)
 - **LLM revision can regress state**: the revision layer fixed 11 questions
   but rewrote a correctly-extracted `pollen` allergy to `unspecified`
-  (q18) — the neural layer giveth and taketh away, which is precisely why
+  (q18) - the neural layer giveth and taketh away, which is precisely why
   the deterministic layer audits it.
 - **Resolver synonym gap**: "paracetamol" fails to resolve to acetaminophen
   even after LLM revision normalizes the rest of the question.
 
-## 4. Critic accuracy study (D3b)
+## 2. Critic accuracy study
 
-Since the D2e guardrail work, an LLM critic is the *only* source of the
+Since the roadmap package D2e guardrail work, an LLM critic is the *only* source of the
 per-citation support badges shown in the UI — an LLM judging an LLM. This
 study measures the judge.
 
@@ -206,17 +205,11 @@ critic-`accurate` items (the sheet oversamples flags by design), so 0.96 is
 the low-confidence number; sheet composition ≠ population flag rate (26% of
 citations in the underlying run).
 
-**Derived next steps.** (1) **D2h — joint multi-citation judgment** (see
-roadmap): give the critic each bullet with *all* its cited texts plus an
-explicit hedged-counts-as-reflected rule — directly targets buckets 1 and 2
-(≈80% of disagreements) and folds in D2g. (2) **C5 — retrieval expansion**
-(see roadmap), from the review finding that answers narrated truncated
-evidence instead of obtaining fuller text. (3) Already landed during the
-study: synthesis-prompt rules moving evidence-scope statements to
-limitations and banning retrieval-mechanics narration. (4) The product
-conclusion: flag-level badges are trustworthy enough to display;
-fine-grained five-tier wording is not — consistent with the earlier D2f
-decision to render two coarse axes instead of the raw tier.
+**Derived next steps** (reference roadmap for further info):
+  1. **D2h — joint multi-citation judgment**: give the critic each bullet with *all* its cited texts plus an explicit hedged-counts-as-reflected rule — directly targets buckets 1 and 2 (≈80% of disagreements) and folds in D2g. 
+  2. **C5 — retrieval expansion**, from the review finding that answers narrated truncated evidence instead of obtaining fuller text. 
+  3. Already landed during the study: synthesis-prompt rules moving evidence-scope statements to limitations and banning retrieval-mechanics narration. 
+  4. The product conclusion: flag-level badges are trustworthy enough to display; fine-grained five-tier wording is not — consistent with the earlier D2f decision to render two coarse axes instead of the raw tier.
 
 ## 5. Neural vs symbolic vs combined (D4)
 
