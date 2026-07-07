@@ -159,6 +159,10 @@ The guardrails are measured, not just asserted, in two complementary ways:
 - The deterministic layer visibly earns its keep: per run, the critic flagged
   17% of citations, 42% of answers were regenerated after a critic flag, and
   12% had a dropped caveat re-appended deterministically.
+- **Each layer's contribution is measured, not assumed** — the same question
+  set run per mode: symbolic-only **28/42** → + extraction LLM **39/42** →
+  full pipeline **40/42**, with the full pipeline holding 99% of checks
+  while also carrying the answer-side checks the cheaper modes can't run.
 
 Methodology, results, and analysis: [docs/EVALUATION.md](docs/EVALUATION.md) ·
 full report: [evals/results/latest.md](evals/results/latest.md).

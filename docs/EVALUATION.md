@@ -119,18 +119,26 @@ LLM-revision layer intermittently rewrites a correctly-extracted `pollen`
 allergy to `unspecified`; this is also the single verdict flip —
 repeat-stability surfacing that the regression is nondeterministic).
 
-### Three-mode progression (single-repeat development runs)
+### Three-mode progression
 
-| Mode | Questions passing | Checks passing |
-|---|---|---|
-| symbolic | 28/42 | 86% |
-| combined_extraction_only | 39/42 | 98% |
-| combined | 39/42 | 98% |
+All three modes measured against the same system state as the headline run;
+committed reports linked per row.
+
+| Mode | Questions passing | Checks passing | Repeats | Report |
+|---|---|---|---|---|
+| symbolic | 28/42 | 86% | 1 (deterministic) | [`latest_symbolic.md`](../evals/results/latest_symbolic.md) |
+| combined_extraction_only | 39/42 | 99% | 3 (2 verdict flips) | [`latest_combined_extraction_only.md`](../evals/results/latest_combined_extraction_only.md) |
+| combined | **40/42** | 99% | 3 (1 verdict flip) | [`latest.md`](../evals/results/latest.md) |
 
 The extraction-LLM layer recovers 11 questions over the symbolic floor
 (intent phrasings like "can X *cause*…", role assignment for current
-medications, condition extraction); the synthesis/critic layers add
-answer-side guarantees rather than extraction fixes.
+medications, condition extraction). The full pipeline's checks-passing rate
+holds at 99% even though it carries the answer-side checks the cheaper
+modes can't run at all (limitations wording, guardrail floors); its +1
+question over extraction-only is within run-to-run nondeterminism (q29
+flickers in extraction mode), so the honest reading is: the neural
+extraction layer buys extraction quality, the synthesis/critic layers buy
+audited, cited answers at no loss of behavioral compliance.
 
 ### Selected findings from development runs
 

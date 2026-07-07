@@ -1,0 +1,777 @@
+{
+  "mode": "combined_extraction_only",
+  "started_at": "2026-07-07T15:55:24+00:00",
+  "repeats": 3,
+  "questions": 42,
+  "headline": {
+    "questions_passed": 39,
+    "checks_total": 486,
+    "checks_passed": 480,
+    "check_pass_rate": 0.9876543209876543,
+    "verdict_flips": 2,
+    "latency_p50_s": 4.95,
+    "latency_p95_s": 14.29,
+    "errors": 0
+  },
+  "field_scores": {
+    "drugs": {
+      "precision": 0.9833333333333333,
+      "recall": 0.975609756097561,
+      "f1": 0.99
+    },
+    "intents": {
+      "precision": 0.6547619047619048,
+      "recall": 1.0,
+      "f1": 0.8432098765432099
+    },
+    "conditions": {
+      "precision": 1.0,
+      "recall": 0.9583333333333334,
+      "f1": 1.0
+    },
+    "allergies": {
+      "precision": 0.9047619047619048,
+      "recall": 0.9047619047619048,
+      "f1": 1.0
+    },
+    "current_medications": {
+      "precision": 0.631578947368421,
+      "recall": 1.0,
+      "f1": 1.0
+    },
+    "patient_context": {
+      "precision": 0.6296296296296297,
+      "recall": 1.0,
+      "f1": 0.873015873015873
+    }
+  },
+  "match_quality": {
+    "drugs": {
+      "exact": 114,
+      "extra": 6,
+      "partial": 0,
+      "none": 3
+    },
+    "intents": {
+      "exact": 56,
+      "extra": 70,
+      "partial": 0,
+      "none": 0
+    },
+    "conditions": {
+      "exact": 23,
+      "extra": 0,
+      "partial": 0,
+      "none": 1
+    },
+    "allergies": {
+      "exact": 19,
+      "extra": 0,
+      "partial": 0,
+      "none": 2
+    },
+    "current_medications": {
+      "exact": 12,
+      "extra": 7,
+      "partial": 0,
+      "none": 0
+    },
+    "patient_context": {
+      "exact": 13,
+      "extra": 14,
+      "partial": 0,
+      "none": 0
+    }
+  },
+  "per_question_match_quality": [
+    {
+      "question_id": "q01_indication_amoxicillin",
+      "fields": {
+        "drugs": "exact",
+        "intents": "extra"
+      }
+    },
+    {
+      "question_id": "q02_indication_metformin",
+      "fields": {
+        "drugs": "exact",
+        "intents": "extra"
+      }
+    },
+    {
+      "question_id": "q03_indication_omeprazole",
+      "fields": {
+        "drugs": "exact",
+        "intents": "extra"
+      }
+    },
+    {
+      "question_id": "q04_indication_loratadine_hayfever",
+      "fields": {
+        "drugs": "exact",
+        "conditions": "exact",
+        "intents": "exact"
+      }
+    },
+    {
+      "question_id": "q05_side_effects_ibuprofen",
+      "fields": {
+        "drugs": "exact",
+        "intents": "extra"
+      }
+    },
+    {
+      "question_id": "q06_side_effect_amoxicillin_diarrhea",
+      "fields": {
+        "drugs": "exact",
+        "intents": "extra"
+      }
+    },
+    {
+      "question_id": "q07_side_effects_sertraline",
+      "fields": {
+        "drugs": "exact",
+        "intents": "extra"
+      }
+    },
+    {
+      "question_id": "q08_side_effect_cetirizine_drowsy",
+      "fields": {
+        "drugs": "exact",
+        "intents": "extra"
+      }
+    },
+    {
+      "question_id": "q09_interaction_ibuprofen_aspirin",
+      "fields": {
+        "drugs": "exact",
+        "intents": "exact"
+      }
+    },
+    {
+      "question_id": "q10_interaction_ibuprofen_aspirin_allergy",
+      "fields": {
+        "drugs": "exact",
+        "allergies": "exact",
+        "conditions": "exact",
+        "intents": "exact"
+      }
+    },
+    {
+      "question_id": "q11_interaction_sertraline_ibuprofen",
+      "fields": {
+        "drugs": "exact",
+        "intents": "exact",
+        "current_medications": "extra"
+      }
+    },
+    {
+      "question_id": "q12_interaction_omeprazole_clopidogrel",
+      "fields": {
+        "drugs": "exact",
+        "intents": "exact"
+      }
+    },
+    {
+      "question_id": "q13_interaction_amoxicillin_warfarin",
+      "fields": {
+        "drugs": "exact",
+        "intents": "exact"
+      }
+    },
+    {
+      "question_id": "q14_interaction_cetirizine_ibuprofen_aspirin",
+      "fields": {
+        "drugs": "exact",
+        "current_medications": "extra",
+        "intents": "exact"
+      }
+    },
+    {
+      "question_id": "q15_interaction_lisinopril_metformin_naproxen",
+      "fields": {
+        "drugs": "exact",
+        "current_medications": "exact",
+        "intents": "extra"
+      }
+    },
+    {
+      "question_id": "q16_allergy_tretinoin_clindamycin",
+      "fields": {
+        "drugs": "exact",
+        "allergies": "exact",
+        "intents": "extra"
+      }
+    },
+    {
+      "question_id": "q17_allergy_amoxicillin_penicillin",
+      "fields": {
+        "drugs": "extra",
+        "allergies": "exact",
+        "intents": "extra"
+      }
+    },
+    {
+      "question_id": "q18_allergy_cetirizine_pollen",
+      "fields": {
+        "drugs": "exact",
+        "allergies": "none",
+        "intents": "extra"
+      }
+    },
+    {
+      "question_id": "q19_allergy_hctz_sulfa",
+      "fields": {
+        "drugs": "exact",
+        "allergies": "exact",
+        "intents": "exact"
+      }
+    },
+    {
+      "question_id": "q20_pregnancy_acetaminophen",
+      "fields": {
+        "drugs": "exact",
+        "patient_context": "exact",
+        "intents": "extra"
+      }
+    },
+    {
+      "question_id": "q21_lactation_ibuprofen",
+      "fields": {
+        "drugs": "exact",
+        "patient_context": "exact",
+        "intents": "extra"
+      }
+    },
+    {
+      "question_id": "q22_pregnancy_loratadine",
+      "fields": {
+        "drugs": "exact",
+        "patient_context": "extra",
+        "intents": "exact"
+      }
+    },
+    {
+      "question_id": "q23_context_child_cetirizine",
+      "fields": {
+        "drugs": "exact",
+        "patient_context": "extra",
+        "intents": "extra"
+      }
+    },
+    {
+      "question_id": "q24_context_ibuprofen_hypertension",
+      "fields": {
+        "drugs": "exact",
+        "conditions": "exact",
+        "patient_context": "extra",
+        "intents": "extra"
+      }
+    },
+    {
+      "question_id": "q25_formulation_hctz_tablet",
+      "fields": {
+        "drugs": "exact",
+        "intents": "extra"
+      }
+    },
+    {
+      "question_id": "q26_formulation_fluoxetine_solution",
+      "fields": {
+        "drugs": "exact",
+        "intents": "extra"
+      }
+    },
+    {
+      "question_id": "q27_formulation_benzoyl_peroxide_gel",
+      "fields": {
+        "drugs": "exact",
+        "intents": "extra"
+      }
+    },
+    {
+      "question_id": "q28_trap_fictional_drug",
+      "fields": {
+        "drugs": "exact",
+        "intents": "exact"
+      }
+    },
+    {
+      "question_id": "q29_trap_false_premise",
+      "fields": {
+        "drugs": "exact",
+        "conditions": "none",
+        "intents": "extra"
+      }
+    },
+    {
+      "question_id": "q30_trap_out_of_scope",
+      "fields": {
+        "intents": "extra"
+      }
+    },
+    {
+      "question_id": "q31_trap_leading_yes_no",
+      "fields": {
+        "drugs": "exact",
+        "current_medications": "extra",
+        "intents": "extra"
+      }
+    },
+    {
+      "question_id": "q32_trap_no_product_label",
+      "fields": {
+        "drugs": "exact",
+        "intents": "exact"
+      }
+    },
+    {
+      "question_id": "q33_gap_loratadine_metformin_interaction",
+      "fields": {
+        "drugs": "exact",
+        "intents": "exact"
+      }
+    },
+    {
+      "question_id": "q34_gap_metformin_latex_allergy",
+      "fields": {
+        "drugs": "exact",
+        "allergies": "exact",
+        "intents": "extra"
+      }
+    },
+    {
+      "question_id": "q35_gap_loratadine_gout",
+      "fields": {
+        "drugs": "exact",
+        "conditions": "exact",
+        "intents": "extra"
+      }
+    },
+    {
+      "question_id": "q36_gap_cetirizine_amoxicillin_interaction",
+      "fields": {
+        "drugs": "exact",
+        "intents": "exact"
+      }
+    },
+    {
+      "question_id": "q37_complex_pregnant_sertraline_penicillin_acetaminophen",
+      "fields": {
+        "drugs": "extra",
+        "current_medications": "exact",
+        "allergies": "exact",
+        "conditions": "exact",
+        "patient_context": "exact",
+        "intents": "extra"
+      }
+    },
+    {
+      "question_id": "q38_complex_elderly_warfarin_metformin_ibuprofen",
+      "fields": {
+        "drugs": "exact",
+        "current_medications": "exact",
+        "conditions": "exact",
+        "patient_context": "extra",
+        "intents": "extra"
+      }
+    },
+    {
+      "question_id": "q39_complex_multi_intent_naproxen_lisinopril",
+      "fields": {
+        "drugs": "exact",
+        "current_medications": "exact",
+        "conditions": "exact",
+        "patient_context": "extra",
+        "intents": "exact"
+      }
+    },
+    {
+      "question_id": "q40_typo_ibuprofin_asprin",
+      "fields": {
+        "drugs": "exact",
+        "intents": "exact"
+      }
+    },
+    {
+      "question_id": "q41_typo_paracetamol_pregant",
+      "fields": {
+        "drugs": "none",
+        "patient_context": "exact",
+        "intents": "exact"
+      }
+    },
+    {
+      "question_id": "q42_typo_omeprazol",
+      "fields": {
+        "drugs": "exact",
+        "intents": "extra"
+      }
+    }
+  ],
+  "guardrails": {},
+  "per_category": {
+    "indication": {
+      "questions": 4,
+      "passed": 4,
+      "pass_rate": 1.0
+    },
+    "side_effect": {
+      "questions": 4,
+      "passed": 4,
+      "pass_rate": 1.0
+    },
+    "interaction_2": {
+      "questions": 5,
+      "passed": 5,
+      "pass_rate": 1.0
+    },
+    "interaction_3": {
+      "questions": 2,
+      "passed": 2,
+      "pass_rate": 1.0
+    },
+    "allergy": {
+      "questions": 4,
+      "passed": 3,
+      "pass_rate": 0.75
+    },
+    "pregnancy_lactation": {
+      "questions": 3,
+      "passed": 3,
+      "pass_rate": 1.0
+    },
+    "patient_context": {
+      "questions": 2,
+      "passed": 2,
+      "pass_rate": 1.0
+    },
+    "formulation": {
+      "questions": 3,
+      "passed": 3,
+      "pass_rate": 1.0
+    },
+    "trap": {
+      "questions": 5,
+      "passed": 4,
+      "pass_rate": 0.8
+    },
+    "expected_gap": {
+      "questions": 4,
+      "passed": 4,
+      "pass_rate": 1.0
+    },
+    "complex": {
+      "questions": 3,
+      "passed": 3,
+      "pass_rate": 1.0
+    },
+    "typo": {
+      "questions": 3,
+      "passed": 2,
+      "pass_rate": 0.6666666666666666
+    }
+  },
+  "per_question": [
+    {
+      "question_id": "q01_indication_amoxicillin",
+      "category": "indication",
+      "passed_all_repeats": true,
+      "verdict_flipped": false,
+      "failed_checks": []
+    },
+    {
+      "question_id": "q02_indication_metformin",
+      "category": "indication",
+      "passed_all_repeats": true,
+      "verdict_flipped": false,
+      "failed_checks": []
+    },
+    {
+      "question_id": "q03_indication_omeprazole",
+      "category": "indication",
+      "passed_all_repeats": true,
+      "verdict_flipped": false,
+      "failed_checks": []
+    },
+    {
+      "question_id": "q04_indication_loratadine_hayfever",
+      "category": "indication",
+      "passed_all_repeats": true,
+      "verdict_flipped": false,
+      "failed_checks": []
+    },
+    {
+      "question_id": "q05_side_effects_ibuprofen",
+      "category": "side_effect",
+      "passed_all_repeats": true,
+      "verdict_flipped": false,
+      "failed_checks": []
+    },
+    {
+      "question_id": "q06_side_effect_amoxicillin_diarrhea",
+      "category": "side_effect",
+      "passed_all_repeats": true,
+      "verdict_flipped": false,
+      "failed_checks": []
+    },
+    {
+      "question_id": "q07_side_effects_sertraline",
+      "category": "side_effect",
+      "passed_all_repeats": true,
+      "verdict_flipped": false,
+      "failed_checks": []
+    },
+    {
+      "question_id": "q08_side_effect_cetirizine_drowsy",
+      "category": "side_effect",
+      "passed_all_repeats": true,
+      "verdict_flipped": false,
+      "failed_checks": []
+    },
+    {
+      "question_id": "q09_interaction_ibuprofen_aspirin",
+      "category": "interaction_2",
+      "passed_all_repeats": true,
+      "verdict_flipped": false,
+      "failed_checks": []
+    },
+    {
+      "question_id": "q10_interaction_ibuprofen_aspirin_allergy",
+      "category": "interaction_2",
+      "passed_all_repeats": true,
+      "verdict_flipped": false,
+      "failed_checks": []
+    },
+    {
+      "question_id": "q11_interaction_sertraline_ibuprofen",
+      "category": "interaction_2",
+      "passed_all_repeats": true,
+      "verdict_flipped": false,
+      "failed_checks": []
+    },
+    {
+      "question_id": "q12_interaction_omeprazole_clopidogrel",
+      "category": "interaction_2",
+      "passed_all_repeats": true,
+      "verdict_flipped": false,
+      "failed_checks": []
+    },
+    {
+      "question_id": "q13_interaction_amoxicillin_warfarin",
+      "category": "interaction_2",
+      "passed_all_repeats": true,
+      "verdict_flipped": false,
+      "failed_checks": []
+    },
+    {
+      "question_id": "q14_interaction_cetirizine_ibuprofen_aspirin",
+      "category": "interaction_3",
+      "passed_all_repeats": true,
+      "verdict_flipped": false,
+      "failed_checks": []
+    },
+    {
+      "question_id": "q15_interaction_lisinopril_metformin_naproxen",
+      "category": "interaction_3",
+      "passed_all_repeats": true,
+      "verdict_flipped": false,
+      "failed_checks": []
+    },
+    {
+      "question_id": "q16_allergy_tretinoin_clindamycin",
+      "category": "allergy",
+      "passed_all_repeats": true,
+      "verdict_flipped": false,
+      "failed_checks": []
+    },
+    {
+      "question_id": "q17_allergy_amoxicillin_penicillin",
+      "category": "allergy",
+      "passed_all_repeats": true,
+      "verdict_flipped": false,
+      "failed_checks": []
+    },
+    {
+      "question_id": "q18_allergy_cetirizine_pollen",
+      "category": "allergy",
+      "passed_all_repeats": false,
+      "verdict_flipped": true,
+      "failed_checks": [
+        "allergies_extracted"
+      ]
+    },
+    {
+      "question_id": "q19_allergy_hctz_sulfa",
+      "category": "allergy",
+      "passed_all_repeats": true,
+      "verdict_flipped": false,
+      "failed_checks": []
+    },
+    {
+      "question_id": "q20_pregnancy_acetaminophen",
+      "category": "pregnancy_lactation",
+      "passed_all_repeats": true,
+      "verdict_flipped": false,
+      "failed_checks": []
+    },
+    {
+      "question_id": "q21_lactation_ibuprofen",
+      "category": "pregnancy_lactation",
+      "passed_all_repeats": true,
+      "verdict_flipped": false,
+      "failed_checks": []
+    },
+    {
+      "question_id": "q22_pregnancy_loratadine",
+      "category": "pregnancy_lactation",
+      "passed_all_repeats": true,
+      "verdict_flipped": false,
+      "failed_checks": []
+    },
+    {
+      "question_id": "q23_context_child_cetirizine",
+      "category": "patient_context",
+      "passed_all_repeats": true,
+      "verdict_flipped": false,
+      "failed_checks": []
+    },
+    {
+      "question_id": "q24_context_ibuprofen_hypertension",
+      "category": "patient_context",
+      "passed_all_repeats": true,
+      "verdict_flipped": false,
+      "failed_checks": []
+    },
+    {
+      "question_id": "q25_formulation_hctz_tablet",
+      "category": "formulation",
+      "passed_all_repeats": true,
+      "verdict_flipped": false,
+      "failed_checks": []
+    },
+    {
+      "question_id": "q26_formulation_fluoxetine_solution",
+      "category": "formulation",
+      "passed_all_repeats": true,
+      "verdict_flipped": false,
+      "failed_checks": []
+    },
+    {
+      "question_id": "q27_formulation_benzoyl_peroxide_gel",
+      "category": "formulation",
+      "passed_all_repeats": true,
+      "verdict_flipped": false,
+      "failed_checks": []
+    },
+    {
+      "question_id": "q28_trap_fictional_drug",
+      "category": "trap",
+      "passed_all_repeats": true,
+      "verdict_flipped": false,
+      "failed_checks": []
+    },
+    {
+      "question_id": "q29_trap_false_premise",
+      "category": "trap",
+      "passed_all_repeats": false,
+      "verdict_flipped": true,
+      "failed_checks": [
+        "conditions_extracted"
+      ]
+    },
+    {
+      "question_id": "q30_trap_out_of_scope",
+      "category": "trap",
+      "passed_all_repeats": true,
+      "verdict_flipped": false,
+      "failed_checks": []
+    },
+    {
+      "question_id": "q31_trap_leading_yes_no",
+      "category": "trap",
+      "passed_all_repeats": true,
+      "verdict_flipped": false,
+      "failed_checks": []
+    },
+    {
+      "question_id": "q32_trap_no_product_label",
+      "category": "trap",
+      "passed_all_repeats": true,
+      "verdict_flipped": false,
+      "failed_checks": []
+    },
+    {
+      "question_id": "q33_gap_loratadine_metformin_interaction",
+      "category": "expected_gap",
+      "passed_all_repeats": true,
+      "verdict_flipped": false,
+      "failed_checks": []
+    },
+    {
+      "question_id": "q34_gap_metformin_latex_allergy",
+      "category": "expected_gap",
+      "passed_all_repeats": true,
+      "verdict_flipped": false,
+      "failed_checks": []
+    },
+    {
+      "question_id": "q35_gap_loratadine_gout",
+      "category": "expected_gap",
+      "passed_all_repeats": true,
+      "verdict_flipped": false,
+      "failed_checks": []
+    },
+    {
+      "question_id": "q36_gap_cetirizine_amoxicillin_interaction",
+      "category": "expected_gap",
+      "passed_all_repeats": true,
+      "verdict_flipped": false,
+      "failed_checks": []
+    },
+    {
+      "question_id": "q37_complex_pregnant_sertraline_penicillin_acetaminophen",
+      "category": "complex",
+      "passed_all_repeats": true,
+      "verdict_flipped": false,
+      "failed_checks": []
+    },
+    {
+      "question_id": "q38_complex_elderly_warfarin_metformin_ibuprofen",
+      "category": "complex",
+      "passed_all_repeats": true,
+      "verdict_flipped": false,
+      "failed_checks": []
+    },
+    {
+      "question_id": "q39_complex_multi_intent_naproxen_lisinopril",
+      "category": "complex",
+      "passed_all_repeats": true,
+      "verdict_flipped": false,
+      "failed_checks": []
+    },
+    {
+      "question_id": "q40_typo_ibuprofin_asprin",
+      "category": "typo",
+      "passed_all_repeats": true,
+      "verdict_flipped": false,
+      "failed_checks": []
+    },
+    {
+      "question_id": "q41_typo_paracetamol_pregant",
+      "category": "typo",
+      "passed_all_repeats": false,
+      "verdict_flipped": false,
+      "failed_checks": [
+        "drugs_resolved"
+      ]
+    },
+    {
+      "question_id": "q42_typo_omeprazol",
+      "category": "typo",
+      "passed_all_repeats": true,
+      "verdict_flipped": false,
+      "failed_checks": []
+    }
+  ]
+}
