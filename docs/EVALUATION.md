@@ -164,13 +164,59 @@ the full labeling protocol):
 agreement, not inter-annotator reliability; the sheet oversamples flagged
 citations by design, so sheet composition is not the population flag rate.
 
-### Results
+### Results (one-off experiment, July 2026)
 
-_To be filled from `evals/critic_labels/sheet_2026-07-04.scoring.md` once
-labeling is complete._
+This study was run once, as a designed experiment against a frozen system
+state — the pipeline as of the 2026-07-04 combined run over the 42-question
+set — and is recorded here rather than continuously re-run. Sheet:
+`evals/critic_labels/sheet_2026-07-04.yml` (75 citations = **all 58** the
+critic flagged in that run + 17 sampled `accurate`), labeled blind, scored
+with `scripts/score_critic_labels.py`; full output in
+`sheet_2026-07-04.scoring.{md,json}`.
 
-<!-- TODO(D3b): per-axis agreement + κ table, flagged precision/recall,
-confusion matrices, 3–5 sentence error analysis from the disagreements. -->
+| metric | value |
+|---|---|
+| Source-match axis: raw agreement / Cohen's κ | 0.75 / **0.49** |
+| Answer-use axis: raw agreement / Cohen's κ | 0.71 / **0.45** |
+| "Flagged" precision (critic flag confirmed by human) | **0.76** (44/58) |
+| "Flagged" recall (human flag caught by critic) | **0.96** (44/46) |
+
+**Analysis.** The critic is a strong *flagger* and a moderate *diagnoser*:
+it almost never misses a problem the human sees (2 misses in 46), and three
+quarters of its flags are confirmed — but agreement on *what exactly* is
+wrong is only moderate (κ ≈ 0.45–0.49). The 36 fine-grained disagreements
+bucket cleanly:
+
+1. **Paraphrase-blindness — 20/36.** The critic says the response doesn't
+   reflect a claim when it does, in hedged or paraphrased form. The labeling
+   protocol explicitly credits hedged conveyance; the critic prompt contains
+   no such instruction. This is the dominant error and also a driver of
+   unnecessary regenerations.
+2. **Over-called "misreads" — 9/36.** The critic judges each citation in
+   isolation, so a claim legitimately synthesized from multiple sources
+   looks "broader than the source" against any single one (documented
+   labeler note on item 26). A designed-in blind spot of the per-citation
+   taxonomy, shared by this study's own labeling protocol.
+3. **Under-called "misreads" — 10/36.** The critic credits a source the
+   human judged misread; in 8 of the 10 the item was still flagged via the
+   answer-use axis, so only 2 problems escaped flagging entirely.
+
+**Caveats.** Single annotator; the recall estimate rests on only 17
+critic-`accurate` items (the sheet oversamples flags by design), so 0.96 is
+the low-confidence number; sheet composition ≠ population flag rate (26% of
+citations in the underlying run).
+
+**Derived next steps.** (1) **D2h — joint multi-citation judgment** (see
+roadmap): give the critic each bullet with *all* its cited texts plus an
+explicit hedged-counts-as-reflected rule — directly targets buckets 1 and 2
+(≈80% of disagreements) and folds in D2g. (2) **C5 — retrieval expansion**
+(see roadmap), from the review finding that answers narrated truncated
+evidence instead of obtaining fuller text. (3) Already landed during the
+study: synthesis-prompt rules moving evidence-scope statements to
+limitations and banning retrieval-mechanics narration. (4) The product
+conclusion: flag-level badges are trustworthy enough to display;
+fine-grained five-tier wording is not — consistent with the earlier D2f
+decision to render two coarse axes instead of the raw tier.
 
 ## 5. Neural vs symbolic vs combined (D4)
 
