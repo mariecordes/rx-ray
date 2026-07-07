@@ -1,0 +1,2553 @@
+# BLIND critic label sheet — see evals/LABELING_GUIDE.md.
+# Do NOT open the matching .key.yml until all items are labeled.
+# 75 items (17 flagged + 58 accurate before shuffling; order is randomized).
+
+- item: 1
+  question_id: q09_interaction_ibuprofen_aspirin
+  question: Can I take ibuprofen and aspirin together?
+  response: 'The retrieved ibuprofen labels **do describe an interaction with aspirin**: they
+    say ibuprofen can interfere with aspirin’s **antiplatelet effect** (the blood-thinning/anti-clotting
+    action), and that this may raise cardiovascular risk. The labels also point to extra caution
+    about **stomach bleeding** when NSAIDs are combined, and they note that aspirin-sensitive
+    asthma can cross-react with ibuprofen.'
+  limitations:
+  - RxNorm terminology overlap is not evidence of a clinical interaction.
+  - The retrieved labels do not cover every aspirin product or every dosing schedule, so the
+    timing details are limited to the specific ibuprofen label text retrieved.
+  - This is label-based educational information, not personal medical advice.
+  claim: The contraindications section says ibuprofen should not be given to people who have
+    had **asthma, hives, or allergic-type reactions** after aspirin or other NSAIDs, and the
+    warnings repeat that ibuprofen may cause a severe allergic reaction in people allergic
+    to aspirin.
+  cited_source:
+    source_id: 4bd1345d-d116-426e-825f-bbf29381746a
+    section: warnings
+  cited_text: 'Warnings Allergy alert: Ibuprofen may cause a severe allergic reaction, especially
+    in people allergic to aspirin. Symptoms may include: rash facial swelling asthma (wheezing)
+    hives skin reddening shock blisters If an allergic reaction occurs, stop use and seek
+    medical help right away. Stomach bleeding warning: This product contains an NSAID, which
+    may cause severe stomach bleeding. The chance is higher if you: take more or for a longer
+    time than directed take a blood thinning (anticoagulant) or steroid drug have had stomach
+    ulcers or bleeding problems have 3 or more alcoholic drinks every day while using this
+    product are age 60 or older take other drugs containing prescription or nonprescription
+    NSAIDs [aspirin, ibuprofen, naproxen, or others] Heart attack and stroke warning: NSAIDs,
+    except aspirin, increase the risk of heart attack, heart failure, and stroke. These can
+    be fatal. The risk is higher if you use more than directed or for longer than directed.
+    Do not use if you have eve...'
+  claim_matches_source: ''
+  answer_reflects_claim: ''
+  skip: false
+  labeler_notes: ''
+- item: 2
+  question_id: q09_interaction_ibuprofen_aspirin
+  question: Can I take ibuprofen and aspirin together?
+  response: 'The retrieved ibuprofen labels **do describe an interaction with aspirin**: they
+    say ibuprofen can interfere with aspirin’s **antiplatelet effect** (the blood-thinning/anti-clotting
+    action), and that this may raise cardiovascular risk. The labels also point to extra caution
+    about **stomach bleeding** when NSAIDs are combined, and they note that aspirin-sensitive
+    asthma can cross-react with ibuprofen.'
+  limitations:
+  - RxNorm terminology overlap is not evidence of a clinical interaction.
+  - The retrieved labels do not cover every aspirin product or every dosing schedule, so the
+    timing details are limited to the specific ibuprofen label text retrieved.
+  - This is label-based educational information, not personal medical advice.
+  claim: The warnings say taking other NSAIDs together, including **aspirin and ibuprofen**,
+    can increase the chance of **severe stomach bleeding**.
+  cited_source:
+    source_id: ec4746b3-2707-40c5-bb70-58a42f46c249
+    section: warnings
+  cited_text: 'Warnings Allergy alert: Ibuprofen may cause a severe allergic reaction, especially
+    in people allergic to aspirin. Symptoms may include: • hives • facial swelling • asthma
+    (wheezing) • shock • skin reddening • rash • blisters If an allergic reaction occurs,
+    stop use and seek medical help right away. Stomach bleeding warning: This product contains
+    an NSAID, which may cause severe stomach bleeding. The chance is higher if you • are age
+    60 or older • have had stomach ulcers or bleeding problems • take a blood thinning (anticoagulant)
+    or steroid drug • take other drugs containing prescription or nonprescription NSAIDs [aspirin,
+    ibuprofen, naproxen, or others] • have 3 or more alcoholic drinks every day while using
+    this product • take more or for a longer time than directed Heart attack and stroke warning:
+    NSAIDs, except aspirin, increase the risk of heart attack, heart failure, and stroke.
+    These can be fatal. The risk is higher if you use more than directed or for longer than
+    directed. D...'
+  claim_matches_source: ''
+  answer_reflects_claim: ''
+  skip: false
+  labeler_notes: ''
+- item: 3
+  question_id: q14_interaction_cetirizine_ibuprofen_aspirin
+  question: Can I take cetirizine and ibuprofen together if I'm also taking aspirin?
+  response: The retrieved labels point to **caution with ibuprofen when aspirin is already
+    being used**, because ibuprofen’s label says it can interfere with aspirin’s antiplatelet
+    (blood-thinning) effect and that taking multiple NSAIDs (nonsteroidal anti-inflammatory
+    drugs) raises stomach-bleeding risk. The cetirizine label does not add a specific ibuprofen/aspirin
+    interaction signal in the retrieved text; its warnings focus on allergy, drowsiness, liver/kidney
+    disease, sedatives, and pregnancy/breast-feeding.
+  limitations:
+  - RxNorm terminology overlap is not evidence of a clinical interaction.
+  - The retrieved labels do not provide a full, patient-specific dosing plan for combining
+    these medicines.
+  - The retrieved evidence is limited to the label sections shown here; it does not cover
+    every possible formulation or all real-world interaction scenarios.
+  claim: Ibuprofen’s retrieved label says **aspirin** can have its antiplatelet activity interfered
+    with when ibuprofen is taken together, and that the interaction is reduced if immediate-release
+    low-dose aspirin is taken at least 2 hours before a once-daily ibuprofen regimen; it also
+    says this timing finding does **not** extend to enteric-coated low-dose aspirin.
+  cited_source:
+    source_id: 5e595111-8477-4ec7-8d32-a0aeabc04e1a
+    section: drug_interactions
+  cited_text: Preexisting asthma Patients with asthma may have aspirin-sensitive asthma. The
+    use of aspirin in patients with aspirin-sensitive asthma has been associated with severe
+    bronchospasm, which can be fatal. Since cross reactivity, including bronchospasm, between
+    aspirin and NSAIDs has been reported in such aspirin-sensitive patients, ibuprofen tablets
+    should not be administered to patients with this form of aspirin sensitivity and should
+    be used with caution in patients with preexisting asthma.
+  claim_matches_source: ''
+  answer_reflects_claim: ''
+  skip: false
+  labeler_notes: ''
+- item: 4
+  question_id: q19_allergy_hctz_sulfa
+  question: I'm allergic to sulfa drugs — can I take hydrochlorothiazide?
+  response: 'The retrieved hydrochlorothiazide-related labels point toward **caution** in
+    people with a sulfonamide-related allergy: the hydrochlorothiazide-containing product
+    labels list **hypersensitivity to other sulfonamide-derived drugs** as a contraindication
+    (should not be used), but the retrieved labels do **not** explicitly discuss "sulfa drugs"
+    by name. Because only the primary medication dossier was retrieved here, this is a label-based
+    flag to review with a clinician or pharmacist rather than a personal yes/no answer.'
+  limitations:
+  - Only the primary medication dossier was retrieved; sulfa drugs was recognized but not
+    retrieved in this version.
+  - The retrieved labels did not explicitly mention sulfa drugs.
+  - This is label-based information only and does not determine whether a specific allergy
+    history matches the label wording.
+  - The hydrochlorothiazide-only labels in the retrieved set describe the drug as a **sulfonamide**
+    chemically, but they do not add a separate allergy warning section about sulfa allergy.
+  claim: The lisinopril/hydrochlorothiazide labels say the product is **contraindicated**
+    (should not be used) in people with **hypersensitivity to other sulfonamide-derived drugs**
+    because of the hydrochlorothiazide component.
+  cited_source:
+    source_id: 54d8eecf-c6b1-58b4-e063-6394a90a49ed
+    section: contraindications
+  cited_text: CONTRAINDICATIONS Lisinopril and hydrochlorothiazide tablets are contraindicated
+    in patients who are hypersensitive to any component of this product and in patients with
+    a history of angioedema related to previous treatment with an angiotensin converting enzyme
+    inhibitor and in patients with hereditary or idiopathic angioedema. Because of the hydrochlorothiazide
+    component, this product is contraindicated in patients with anuria or hypersensitivity
+    to other sulfonamide-derived drugs. Lisinopril and hydrochlorothiazide tablets are contraindicated
+    in combination with a neprilysin inhibitor (e.g., sacubitril). Do not administer lisinopril
+    and hydrochlorothiazide tablets within 36 hours of switching to or from sacubitril/valsartan,
+    a neprilysin inhibitor (see WARNINGS ). Do not coadminister aliskiren with lisinopril
+    and hydrochlorothiazide tablets in patients with diabetes.
+  claim_matches_source: ''
+  answer_reflects_claim: ''
+  skip: false
+  labeler_notes: ''
+- item: 5
+  question_id: q13_interaction_amoxicillin_warfarin
+  question: Do amoxicillin and warfarin interact?
+  response: 'The retrieved labels **do describe an interaction concern** between amoxicillin
+    and oral anticoagulants like warfarin: they report increased prothrombin time, which means
+    the blood may take longer to clot, and they call for monitoring when the drugs are used
+    together. The warfarin label also notes that antibiotics and other drugs can affect INR
+    (a blood-clotting test), so the labels point toward **closer INR monitoring and possible
+    dose adjustment** rather than a simple no-interaction answer.'
+  limitations:
+  - RxNorm terminology overlap is not evidence of a clinical interaction.
+  - The retrieved labels do not provide a patient-specific recommendation or a quantified
+    risk for this exact drug pair.
+  - The amoxicillin label text refers to oral anticoagulants generally; it does not name every
+    anticoagulant in that sentence.
+  claim: Warfarin’s boxed warning says it can cause **major or fatal bleeding**, which is
+    why INR changes from interacting drugs matter clinically.
+  cited_source:
+    source_id: b8c33971-54b3-4971-bf7f-1bec66999a29
+    section: boxed_warning
+  cited_text: 'WARNING: BLEEDING RISK Warfarin sodium can cause major or fatal bleeding [see
+    Warnings and Precautions ( 5.1 )] . Perform regular monitoring of INR in all treated patients
+    [see Dosage and Administration ( 2.1 )] . Drugs, dietary changes, and other factors affect
+    INR levels achieved with warfarin sodium therapy [see Drug Interactions ( 7 )] . Instruct
+    patients about prevention measures to minimize risk of bleeding and to report signs and
+    symptoms of bleeding [see Patient Counseling Information ( 17 )] . WARNING: BLEEDING RISK
+    See full prescribing information for complete boxed warning. Warfarin sodium can cause
+    major or fatal bleeding. ( 5.1 ) Perform regular monitoring of INR in all treated patients.
+    ( 2.1 ) Drugs, dietary changes, and other factors affect INR levels achieved with warfarin
+    sodium therapy. ( 7 ) Instruct patients about prevention measures to minimize risk of
+    bleeding and to report signs and symptoms of bleeding. ( 17 )'
+  claim_matches_source: ''
+  answer_reflects_claim: ''
+  skip: false
+  labeler_notes: ''
+- item: 6
+  question_id: q12_interaction_omeprazole_clopidogrel
+  question: Can I take omeprazole with clopidogrel?
+  response: 'The retrieved drug labels point toward **avoiding the combination**: omeprazole’s
+    label says it **decreases exposure to clopidogrel’s active metabolite**, and clopidogrel’s
+    label says to **avoid concomitant use of omeprazole or esomeprazole** because CYP2C19
+    inhibition can reduce clopidogrel’s effect. The RxNorm relationship summary did **not**
+    show a clinical interaction by itself; the interaction signal comes from the label text.'
+  limitations:
+  - RxNorm terminology overlap is not evidence of a clinical interaction.
+  - The retrieved labels do not provide a patient-specific recommendation or a substitute
+    medication choice.
+  claim: The omeprazole label also lists **interaction with clopidogrel** in its warnings
+    and says to **avoid concomitant use of omeprazole**.
+  cited_source:
+    source_id: 4bac7b98-8e95-1e51-e063-6294a90ab1cc
+    section: warnings
+  cited_text: '5 WARNINGS AND PRECAUTIONS Gastric Malignancy: In adults, symptomatic response
+    does not preclude the presence of gastric malignancy. Consider additional follow-up and
+    diagnostic testing. (5.1) Acute Tubulointerstitial Nephritis: Discontinue treatment and
+    evaluate patients. (5.2) Clostridium difficile-Associated Diarrhea : PPI therapy may be
+    associated with increased risk. (5.3) Bone Fracture: Long-term and multiple daily dose
+    PPI therapy may be associated with an increased risk for osteoporosis-related fractures
+    of the hip, wrist or spine. (5.4) Severe Cutaneous Adverse Reactions: Discontinue at the
+    first signs or symptoms of severe cutaneous adverse reactions or other signs of hypersensitivity
+    and consider further evaluation. ( 5.5 ) Cutaneous and Systemic Lupus Erythematosus: Mostly
+    cutaneous; new onset or exacerbation of existing disease; discontinue omeprazole and refer
+    to specialist for evaluation (5.6) Interaction with Clopidogrel: Avoid concomitant use
+    of omeprazole. ( 5.7 ,...'
+  claim_matches_source: ''
+  answer_reflects_claim: ''
+  skip: false
+  labeler_notes: ''
+- item: 7
+  question_id: q10_interaction_ibuprofen_aspirin_allergy
+  question: Can I take ibuprofen for my migraine if I'm allergic to aspirin?
+  response: The retrieved labels point toward **caution** with ibuprofen in someone who has
+    had an aspirin allergy, because the ibuprofen label says it may cause a severe allergic
+    reaction especially in people allergic to aspirin, and its contraindications say it should
+    not be given after aspirin-related asthma, hives (hives), or other allergic-type reactions.
+    The same labels also note ibuprofen is used for general pain relief, but the allergy warning
+    is the key issue here rather than the migraine use itself.
+  limitations:
+  - RxNorm name overlap or terminology links are not clinical interaction evidence.
+  - The retrieved labels do not provide a patient-specific allergy history beyond the aspirin
+    allergy context in the query.
+  - The retrieved evidence is label-based and does not replace clinician evaluation for aspirin-sensitive
+    reactions.
+  - RxNorm terminology overlap is not evidence of a clinical interaction.
+  claim: 'One ibuprofen label section mentions an aspirin-related **drug interaction**: ibuprofen
+    can interfere with aspirin’s antiplatelet (anti-clotting) effect when taken together.
+    That is a separate label issue from aspirin allergy.'
+  cited_source:
+    source_id: 5e595111-8477-4ec7-8d32-a0aeabc04e1a
+    section: drug_interactions
+  cited_text: Preexisting asthma Patients with asthma may have aspirin-sensitive asthma. The
+    use of aspirin in patients with aspirin-sensitive asthma has been associated with severe
+    bronchospasm, which can be fatal. Since cross reactivity, including bronchospasm, between
+    aspirin and NSAIDs has been reported in such aspirin-sensitive patients, ibuprofen tablets
+    should not be administered to patients with this form of aspirin sensitivity and should
+    be used with caution in patients with preexisting asthma.
+  claim_matches_source: ''
+  answer_reflects_claim: ''
+  skip: false
+  labeler_notes: ''
+- item: 8
+  question_id: q15_interaction_lisinopril_metformin_naproxen
+  question: I take lisinopril and metformin — is it a problem to add naproxen?
+  response: The retrieved labels point to **caution** with naproxen in someone taking lisinopril
+    and metformin, mainly because naproxen is an NSAID with label warnings for **kidney effects**,
+    **blood pressure effects**, and **serious stomach bleeding**. The lisinopril label also
+    includes an NSAID interaction section, and the metformin label warns that **kidney problems**
+    raise the risk of metformin-associated lactic acidosis, so this combination is worth reviewing
+    with a clinician or pharmacist before use.
+  limitations:
+  - RxNorm terminology overlap is not evidence of a clinical interaction.
+  - The retrieved lisinopril interaction text is truncated, so it does not show the full NSAID
+    section wording.
+  - The retrieved labels do not provide patient-specific kidney function, blood pressure control,
+    or dosing details for this situation.
+  claim: The metformin label warns that **kidney impairment** is a risk factor for metformin-associated
+    lactic acidosis, and its boxed warning says this condition has been reported with serious
+    outcomes; that makes naproxen’s kidney-related warnings especially relevant to review.
+  cited_source:
+    source_id: 19e4bfb8-2ed1-4a6b-adf5-853ad2953362
+    section: warnings
+  cited_text: '5 WARNINGS AND PRECAUTIONS Lactic Acidosis: See boxed warning. ( 5.1 ) Vitamin
+    B 12 Deficiency: Metformin may lower vitamin B12 levels. Measure hematological parameters
+    annually and vitamin B12 at 2 to 3 year intervals and manage any abnormalities. ( 5.2
+    ) Hypoglycemia with Concomitant Use with Insulin and Insulin Secretagogues: Increased
+    risk of hypoglycemia when used in combination with insulin and/or an insulin secretagogue.
+    Lower dose of insulin or insulin secretagogue may be required ( 5.3 ) 5.1 Lactic Acidosis
+    There have been postmarketing cases of metformin-associated lactic acidosis, including
+    fatal cases. These cases had a subtle onset and were accompanied by nonspecific symptoms
+    such as malaise, myalgias, abdominal pain, respiratory distress, or increased somnolence;
+    however, hypotension and resistant bradyarrhythmias have occurred with severe acidosis.
+    Metformin­ associated lactic acidosis was characterized by elevated blood lactate concentrations
+    (>5 mmol/L), anion gap a...'
+  claim_matches_source: ''
+  answer_reflects_claim: ''
+  skip: false
+  labeler_notes: ''
+- item: 9
+  question_id: q09_interaction_ibuprofen_aspirin
+  question: Can I take ibuprofen and aspirin together?
+  response: 'The retrieved ibuprofen labels **do describe an interaction with aspirin**: they
+    say ibuprofen can interfere with aspirin’s **antiplatelet effect** (the blood-thinning/anti-clotting
+    action), and that this may raise cardiovascular risk. The labels also point to extra caution
+    about **stomach bleeding** when NSAIDs are combined, and they note that aspirin-sensitive
+    asthma can cross-react with ibuprofen.'
+  limitations:
+  - RxNorm terminology overlap is not evidence of a clinical interaction.
+  - The retrieved labels do not cover every aspirin product or every dosing schedule, so the
+    timing details are limited to the specific ibuprofen label text retrieved.
+  - This is label-based educational information, not personal medical advice.
+  claim: The ibuprofen drug-interactions section says ibuprofen 400 mg with low-dose aspirin
+    can interfere with aspirin’s antiplatelet activity, especially when ibuprofen is taken
+    before aspirin; it says the effect is lessened if immediate-release low-dose aspirin is
+    taken at least 2 hours before once-daily ibuprofen, but that this does **not** extend
+    to enteric-coated aspirin.
+  cited_source:
+    source_id: 56fb8ceb-3a90-44df-881b-9d93606bbac6
+    section: drug_interactions
+  cited_text: Drug Interactions ACE-inhibitors Reports suggest that NSAIDs may diminish the
+    antihypertensive effect of ACE-inhibitors. This interaction should be given consideration
+    in patients taking NSAIDs concomitantly with ACE-inhibitors. Aspirin Pharmacodynamic studies
+    have demonstrated interference with the antiplatelet activity of aspirin when ibuprofen
+    400 mg, given three times daily, is administered with enteric-coated low-dose aspirin.
+    The interaction exists even following a once-daily regimen of ibuprofen 400 mg, particularly
+    when ibuprofen is dosed prior to aspirin. The interaction is alleviated if immediate-release
+    low-dose aspirin is dosed at least 2 hours prior to a once-daily regimen of ibuprofen;
+    however, this finding cannot be extended to enteric-coated low-dose aspirin [see Clinical
+    Pharmacology/Pharmacodynamics ]. Because there may be an increased risk of cardiovascular
+    events due to the interference of ibuprofen with the antiplatelet effect of aspirin, for
+    patients taking low...
+  claim_matches_source: ''
+  answer_reflects_claim: ''
+  skip: false
+  labeler_notes: ''
+- item: 10
+  question_id: q05_side_effects_ibuprofen
+  question: What are common side effects of ibuprofen?
+  response: The retrieved labels point to **gastrointestinal (stomach/intestinal) complaints**
+    as the most frequent adverse reaction with ibuprofen, and they also list **allergic-type
+    reactions** and **serious stomach bleeding** as important warnings. The label evidence
+    is limited to what is explicitly listed in the retrieved sections, so it does not provide
+    a full side-effect frequency list beyond those points.
+  limitations:
+  - The retrieved label sections do not give a complete, ranked list of all common side effects
+    beyond the gastrointestinal complaints and the warning-listed reactions.
+  - The label text here is product-label language, so it does not separate mild side effects
+    from rare but serious harms in a full consumer-friendly list.
+  claim: The boxed warning and warnings also highlight **serious stomach bleeding, ulcers,
+    and perforation** (a hole in the stomach or intestines), which can happen **without warning
+    symptoms**.
+  cited_source:
+    source_id: ec4746b3-2707-40c5-bb70-58a42f46c249
+    section: warnings
+  cited_text: 'Warnings Allergy alert: Ibuprofen may cause a severe allergic reaction, especially
+    in people allergic to aspirin. Symptoms may include: • hives • facial swelling • asthma
+    (wheezing) • shock • skin reddening • rash • blisters If an allergic reaction occurs,
+    stop use and seek medical help right away. Stomach bleeding warning: This product contains
+    an NSAID, which may cause severe stomach bleeding. The chance is higher if you • are age
+    60 or older • have had stomach ulcers or bleeding problems • take a blood thinning (anticoagulant)
+    or steroid drug • take other drugs containing prescription or nonprescription NSAIDs [aspirin,
+    ibuprofen, naproxen, or others] • have 3 or more alcoholic drinks every day while using
+    this product • take more or for a longer time than directed Heart attack and stroke warning:
+    NSAIDs, except aspirin, increase the risk of heart attack, heart failure, and stroke.
+    These can be fatal. The risk is higher if you use more than directed or for longer than
+    directed. D...'
+  claim_matches_source: ''
+  answer_reflects_claim: ''
+  skip: false
+  labeler_notes: ''
+- item: 11
+  question_id: q24_context_ibuprofen_hypertension
+  question: Is ibuprofen okay for someone with high blood pressure?
+  response: The retrieved labels point to **caution** with ibuprofen in people with high blood
+    pressure because NSAIDs can raise cardiovascular risk and may blunt the effect of ACE-inhibitor
+    blood pressure medicines. The label text does not say that high blood pressure alone is
+    a formal contraindication (should not be used), but it does support discussing use with
+    a clinician if blood pressure treatment is involved.
+  limitations:
+  - RxNorm terminology overlap is not evidence of a clinical interaction.
+  - The retrieved labels do not provide patient-specific guidance for a particular blood pressure
+    reading, diagnosis severity, or which antihypertensive medicine is being used.
+  - The context-targeted lookup found label coverage for high blood pressure, but the retrieved
+    text is limited to the sections shown here.
+  claim: The label’s general dosing advice is to use the **lowest effective dose for the shortest
+    duration**, which fits a more cautious approach when cardiovascular risk is a concern.
+  cited_source:
+    source_id: 5e595111-8477-4ec7-8d32-a0aeabc04e1a
+    section: indications_and_usage
+  cited_text: INDICATIONS AND USAGE Carefully consider the potential benefits and risks of
+    ibuprofen tablets and other treatment options before deciding to use ibuprofen. Use the
+    lowest effective dose for the shortest duration consistent with individual patient treatment
+    goals (see WARNINGS ). Ibuprofen tablets are indicated for relief of the signs and symptoms
+    of rheumatoid arthritis and osteoarthritis. Ibuprofen tablets are indicated for relief
+    of mild to moderate pain. Ibuprofen tablets are also indicated for the treatment of primary
+    dysmenorrhea. Controlled clinical trials to establish the safety and effectiveness of
+    ibuprofen tablets in children have not been conducted.
+  claim_matches_source: ''
+  answer_reflects_claim: ''
+  skip: false
+  labeler_notes: ''
+- item: 12
+  question_id: q14_interaction_cetirizine_ibuprofen_aspirin
+  question: Can I take cetirizine and ibuprofen together if I'm also taking aspirin?
+  response: The retrieved labels point to **caution with ibuprofen when aspirin is already
+    being used**, because ibuprofen’s label says it can interfere with aspirin’s antiplatelet
+    (blood-thinning) effect and that taking multiple NSAIDs (nonsteroidal anti-inflammatory
+    drugs) raises stomach-bleeding risk. The cetirizine label does not add a specific ibuprofen/aspirin
+    interaction signal in the retrieved text; its warnings focus on allergy, drowsiness, liver/kidney
+    disease, sedatives, and pregnancy/breast-feeding.
+  limitations:
+  - RxNorm terminology overlap is not evidence of a clinical interaction.
+  - The retrieved labels do not provide a full, patient-specific dosing plan for combining
+    these medicines.
+  - The retrieved evidence is limited to the label sections shown here; it does not cover
+    every possible formulation or all real-world interaction scenarios.
+  claim: Ibuprofen’s contraindications say it should not be given to people who have had **asthma,
+    hives (urticaria), or allergic-type reactions** after aspirin or other NSAIDs, and its
+    allergy warning says aspirin-sensitive people may have a severe allergic reaction.
+  cited_source:
+    source_id: 4bd1345d-d116-426e-825f-bbf29381746a
+    section: warnings
+  cited_text: 'Warnings Allergy alert: Ibuprofen may cause a severe allergic reaction, especially
+    in people allergic to aspirin. Symptoms may include: rash facial swelling asthma (wheezing)
+    hives skin reddening shock blisters If an allergic reaction occurs, stop use and seek
+    medical help right away. Stomach bleeding warning: This product contains an NSAID, which
+    may cause severe stomach bleeding. The chance is higher if you: take more or for a longer
+    time than directed take a blood thinning (anticoagulant) or steroid drug have had stomach
+    ulcers or bleeding problems have 3 or more alcoholic drinks every day while using this
+    product are age 60 or older take other drugs containing prescription or nonprescription
+    NSAIDs [aspirin, ibuprofen, naproxen, or others] Heart attack and stroke warning: NSAIDs,
+    except aspirin, increase the risk of heart attack, heart failure, and stroke. These can
+    be fatal. The risk is higher if you use more than directed or for longer than directed.
+    Do not use if you have eve...'
+  claim_matches_source: ''
+  answer_reflects_claim: ''
+  skip: false
+  labeler_notes: ''
+- item: 13
+  question_id: q13_interaction_amoxicillin_warfarin
+  question: Do amoxicillin and warfarin interact?
+  response: 'The retrieved labels **do describe an interaction concern** between amoxicillin
+    and oral anticoagulants like warfarin: they report increased prothrombin time, which means
+    the blood may take longer to clot, and they call for monitoring when the drugs are used
+    together. The warfarin label also notes that antibiotics and other drugs can affect INR
+    (a blood-clotting test), so the labels point toward **closer INR monitoring and possible
+    dose adjustment** rather than a simple no-interaction answer.'
+  limitations:
+  - RxNorm terminology overlap is not evidence of a clinical interaction.
+  - The retrieved labels do not provide a patient-specific recommendation or a quantified
+    risk for this exact drug pair.
+  - The amoxicillin label text refers to oral anticoagulants generally; it does not name every
+    anticoagulant in that sentence.
+  claim: Warfarin’s boxed warning says it can cause **major or fatal bleeding**, which is
+    why INR changes from interacting drugs matter clinically.
+  cited_source:
+    source_id: b8c33971-54b3-4971-bf7f-1bec66999a29
+    section: boxed_warning
+  cited_text: 'WARNING: BLEEDING RISK Warfarin sodium can cause major or fatal bleeding [see
+    Warnings and Precautions ( 5.1 )] . Perform regular monitoring of INR in all treated patients
+    [see Dosage and Administration ( 2.1 )] . Drugs, dietary changes, and other factors affect
+    INR levels achieved with warfarin sodium therapy [see Drug Interactions ( 7 )] . Instruct
+    patients about prevention measures to minimize risk of bleeding and to report signs and
+    symptoms of bleeding [see Patient Counseling Information ( 17 )] . WARNING: BLEEDING RISK
+    See full prescribing information for complete boxed warning. Warfarin sodium can cause
+    major or fatal bleeding. ( 5.1 ) Perform regular monitoring of INR in all treated patients.
+    ( 2.1 ) Drugs, dietary changes, and other factors affect INR levels achieved with warfarin
+    sodium therapy. ( 7 ) Instruct patients about prevention measures to minimize risk of
+    bleeding and to report signs and symptoms of bleeding. ( 17 )'
+  claim_matches_source: ''
+  answer_reflects_claim: ''
+  skip: false
+  labeler_notes: ''
+- item: 14
+  question_id: q24_context_ibuprofen_hypertension
+  question: Is ibuprofen okay for someone with high blood pressure?
+  response: The retrieved labels point to **caution** with ibuprofen in people with high blood
+    pressure because NSAIDs can raise cardiovascular risk and may blunt the effect of ACE-inhibitor
+    blood pressure medicines. The label text does not say that high blood pressure alone is
+    a formal contraindication (should not be used), but it does support discussing use with
+    a clinician if blood pressure treatment is involved.
+  limitations:
+  - RxNorm terminology overlap is not evidence of a clinical interaction.
+  - The retrieved labels do not provide patient-specific guidance for a particular blood pressure
+    reading, diagnosis severity, or which antihypertensive medicine is being used.
+  - The context-targeted lookup found label coverage for high blood pressure, but the retrieved
+    text is limited to the sections shown here.
+  claim: The retrieved label text does **not** list high blood pressure itself as a contraindication;
+    the explicit contraindications shown are hypersensitivity (allergy) to ibuprofen, certain
+    aspirin/NSAID reactions, and CABG surgery.
+  cited_source:
+    source_id: 5e595111-8477-4ec7-8d32-a0aeabc04e1a
+    section: contraindications
+  cited_text: CONTRAINDICATIONS Ibuprofen tablets are contraindicated in patients with known
+    hypersensitivity to Ibuprofen. Ibuprofen tablets should not be given to patients who have
+    experienced asthma, urticaria, or allergic-type reactions after taking aspirin or other
+    NSAIDs. Severe, rarely fatal, anaphylactic-like reactions to NSAIDs have been reported
+    in such patients (see WARNINGS , Anaphylactoid Reactions , and PRECAUTIONS , Preexisting
+    Asthma ). In the setting of coronary artery bypass graft (CABG) surgery [see Warnings
+    ]
+  claim_matches_source: ''
+  answer_reflects_claim: ''
+  skip: false
+  labeler_notes: ''
+- item: 15
+  question_id: q16_allergy_tretinoin_clindamycin
+  question: Can I use a tretinoin cream if I have a clindamycin allergy?
+  response: The retrieved labels point to **tretinoin cream** as a topical acne medicine,
+    and the clindamycin allergy label text does **not** show a direct clindamycin–tretinoin
+    allergy link. What the labels do show is that some **combined clindamycin/tretinoin**
+    products are contraindicated (should not be used) in people with clindamycin or lincomycin
+    hypersensitivity, so the combination product is a different issue from tretinoin alone.
+  limitations:
+  - The retrieved topical tretinoin label text is limited and does not explicitly discuss
+    clindamycin allergy cross-reactivity with tretinoin cream.
+  - Some retrieved tretinoin label text is for oral tretinoin capsules, so it is not directly
+    applicable to a topical cream question.
+  - This is retrieved label information only and not personal medical advice.
+  claim: The retrieved labels for **clindamycin/tretinoin combination** products specifically
+    say they are contraindicated in people with clindamycin or lincomycin hypersensitivity,
+    which is why the combination product is not the same as tretinoin-only cream.
+  cited_source:
+    source_id: 1319a6c2-eed2-49b6-9ec8-85d44fae9b91
+    section: contraindications
+  cited_text: 4 CONTRAINDICATIONS History of hypersensitivity to clindamycin or lincomycin.
+    ( 4.1 ) 4.1 Hypersensitivity XACIATO is contraindicated in individuals with a history
+    of hypersensitivity to clindamycin or lincomycin. [see Adverse Reactions ( 6.2 )] .
+  claim_matches_source: ''
+  answer_reflects_claim: ''
+  skip: false
+  labeler_notes: ''
+- item: 16
+  question_id: q17_allergy_amoxicillin_penicillin
+  question: Is amoxicillin a problem if I have a penicillin allergy?
+  response: 'The retrieved labels point toward **caution** with amoxicillin in someone with
+    a penicillin allergy: amoxicillin labeling says serious hypersensitivity reactions are
+    more likely in people with a history of penicillin hypersensitivity, and the contraindications
+    section says amoxicillin is contraindicated (should not be used) after a serious hypersensitivity
+    reaction to amoxicillin or other beta-lactams such as penicillins. The retrieved evidence
+    also includes a penicillin G label that says a history of hypersensitivity to any penicillin
+    is a contraindication, which supports the allergy concern, but the exact reaction history
+    matters because the labels focus on **serious** reactions.'
+  limitations:
+  - The retrieved labels focus on **serious** hypersensitivity reactions; they do not classify
+    every possible penicillin allergy history.
+  - No patient-specific reaction details were provided, so the retrieved labels cannot determine
+    the risk for a particular person.
+  - The retrieved evidence is label text only and does not replace clinician evaluation of
+    an allergy history.
+  claim: The amoxicillin contraindications section says it is contraindicated (should not
+    be used) in patients with a history of a **serious hypersensitivity reaction** such as
+    anaphylaxis (severe allergic reaction) or Stevens-Johnson syndrome to amoxicillin or to
+    other beta-lactams, including penicillins and cephalosporins.
+  cited_source:
+    source_id: 156fa79e-91a6-460c-8f93-af5115b9588a
+    section: contraindications
+  cited_text: 4 CONTRAINDICATIONS Amoxicillin tablets are contraindicated in patients who
+    have experienced a serious hypersensitivity reaction (e.g., anaphylaxis or Stevens-Johnson
+    syndrome) to amoxicillin tablets or to other β-lactam antibacterial drugs (e.g., penicillins
+    and cephalosporins). History of a serious hypersensitivity reaction (e.g., anaphylaxis
+    or Stevens-Johnson syndrome) to amoxicillin tablets or to other beta-lactams (e.g., penicillins
+    or cephalosporins). (4)
+  claim_matches_source: ''
+  answer_reflects_claim: ''
+  skip: false
+  labeler_notes: ''
+- item: 17
+  question_id: q15_interaction_lisinopril_metformin_naproxen
+  question: I take lisinopril and metformin — is it a problem to add naproxen?
+  response: The retrieved labels point to **caution** with naproxen in someone taking lisinopril
+    and metformin, mainly because naproxen is an NSAID with label warnings for **kidney effects**,
+    **blood pressure effects**, and **serious stomach bleeding**. The lisinopril label also
+    includes an NSAID interaction section, and the metformin label warns that **kidney problems**
+    raise the risk of metformin-associated lactic acidosis, so this combination is worth reviewing
+    with a clinician or pharmacist before use.
+  limitations:
+  - RxNorm terminology overlap is not evidence of a clinical interaction.
+  - The retrieved lisinopril interaction text is truncated, so it does not show the full NSAID
+    section wording.
+  - The retrieved labels do not provide patient-specific kidney function, blood pressure control,
+    or dosing details for this situation.
+  claim: The lisinopril label’s drug-interactions section includes **non-steroidal anti-inflammatory
+    agents** (NSAIDs), which is the class naproxen belongs to; the retrieved text is truncated,
+    so the exact wording of that section is limited here.
+  cited_source:
+    source_id: 54d8eecf-c6b1-58b4-e063-6394a90a49ed
+    section: drug_interactions
+  cited_text: 'Drug Interactions Lisinopril Hypotension - Patients on Diuretic Therapy: Patients
+    on diuretics, and especially those in whom diuretic therapy was recently instituted, may
+    occasionally experience an excessive reduction of blood pressure after initiation of therapy
+    with lisinopril. The possibility of hypotensive effects with lisinopril can be minimized
+    by either discontinuing the diuretic or increasing the salt intake prior to initiation
+    of treatment with lisinopril. If it is necessary to continue the diuretic, initiate therapy
+    with lisinopril at a dose of 5 mg daily, and provide close medical supervision after the
+    initial dose for at least two hours and until blood pressure has stabilized for at least
+    an additional hour. (See WARNINGS and DOSAGE AND ADMINISTRATION .) When a diuretic is
+    added to the therapy of a patient receiving lisinopril, an additional antihypertensive
+    effect is usually observed. (See DOSAGE AND ADMINISTRATION .) Non-steroidal Anti-inflammatory
+    Agents Including Sel...'
+  claim_matches_source: ''
+  answer_reflects_claim: ''
+  skip: false
+  labeler_notes: ''
+- item: 18
+  question_id: q24_context_ibuprofen_hypertension
+  question: Is ibuprofen okay for someone with high blood pressure?
+  response: The retrieved labels point to **caution** with ibuprofen in people with high blood
+    pressure because NSAIDs can raise cardiovascular risk and may blunt the effect of ACE-inhibitor
+    blood pressure medicines. The label text does not say that high blood pressure alone is
+    a formal contraindication (should not be used), but it does support discussing use with
+    a clinician if blood pressure treatment is involved.
+  limitations:
+  - RxNorm terminology overlap is not evidence of a clinical interaction.
+  - The retrieved labels do not provide patient-specific guidance for a particular blood pressure
+    reading, diagnosis severity, or which antihypertensive medicine is being used.
+  - The context-targeted lookup found label coverage for high blood pressure, but the retrieved
+    text is limited to the sections shown here.
+  claim: The ibuprofen label warns that NSAIDs (nonsteroidal anti-inflammatory drugs) increase
+    the risk of **heart attack, heart failure, and stroke**, and that this risk can happen
+    early and is higher with longer use or higher doses.
+  cited_source:
+    source_id: 5e595111-8477-4ec7-8d32-a0aeabc04e1a
+    section: boxed_warning
+  cited_text: Cardiovascular Thrombotic Events Nonsteroidal anti-inflammatory drugs (NSAIDs)
+    cause an increased risk of serious cardiovascular thrombotic events, including myocardial
+    infarction and stroke, which can be fatal. This risk may occur early in treatment and
+    may increase with duration of use [see Warnings and Precautions ]. Ibuprofen tablets are
+    contraindicated in the setting of coronary artery bypass graft (CABG) surgery [see Contraindications
+    and Warnings ]. Gastrointestinal Risk NSAIDs cause an increased risk of serious gastrointestinal
+    adverse events including bleeding, ulceration, and perforation of the stomach or intestines,
+    which can be fatal. These events can occur at any time during use and without warning
+    symptoms. Elderly patients are at greater risk for serious gastrointestinal events (see
+    WARNINGS ).
+  claim_matches_source: ''
+  answer_reflects_claim: ''
+  skip: false
+  labeler_notes: ''
+- item: 19
+  question_id: q17_allergy_amoxicillin_penicillin
+  question: Is amoxicillin a problem if I have a penicillin allergy?
+  response: 'The retrieved labels point toward **caution** with amoxicillin in someone with
+    a penicillin allergy: amoxicillin labeling says serious hypersensitivity reactions are
+    more likely in people with a history of penicillin hypersensitivity, and the contraindications
+    section says amoxicillin is contraindicated (should not be used) after a serious hypersensitivity
+    reaction to amoxicillin or other beta-lactams such as penicillins. The retrieved evidence
+    also includes a penicillin G label that says a history of hypersensitivity to any penicillin
+    is a contraindication, which supports the allergy concern, but the exact reaction history
+    matters because the labels focus on **serious** reactions.'
+  limitations:
+  - The retrieved labels focus on **serious** hypersensitivity reactions; they do not classify
+    every possible penicillin allergy history.
+  - No patient-specific reaction details were provided, so the retrieved labels cannot determine
+    the risk for a particular person.
+  - The retrieved evidence is label text only and does not replace clinician evaluation of
+    an allergy history.
+  claim: Amoxicillin labeling says serious, sometimes fatal allergic reactions have been reported,
+    and they are more likely in people with a **history of penicillin hypersensitivity**;
+    it also says to ask about prior reactions to penicillins, cephalosporins, or other allergens
+    before starting therapy.
+  cited_source:
+    source_id: 0e877b33-af19-d857-e063-6394a90a08ea
+    section: warnings
+  cited_text: WARNINGS AND PRECAUTIONS SECTION 5.1 Anaphylactic Reactions Serious and occasionally
+    fatal hypersensitivity (anaphylactic) reactions have been reported in patients on penicillin
+    therapy including amoxicillin. Although anaphylaxis is more frequent following parenteral
+    therapy, it has occurred in patients on oral penicillins. These reactions are more likely
+    to occur in individuals with a history of penicillin hypersensitivity and/or a history
+    of sensitivity to multiple allergens. There have been reports of individuals with a history
+    of penicillin hypersensitivity who have experienced severe reactions when treated with
+    cephalosporins. Before initiating therapy with amoxicillin, careful inquiry should be
+    made regarding previous hypersensitivity reactions to penicillins, cephalosporins, or
+    other allergens.5.2 Clostridium difficile Associated Diarrhea Clostridium difficile associated
+    diarrhea (CDAD) has been reported with use of nearly all antibacterial agents, including
+    amoxicillin, and...
+  claim_matches_source: ''
+  answer_reflects_claim: ''
+  skip: false
+  labeler_notes: ''
+- item: 20
+  question_id: q09_interaction_ibuprofen_aspirin
+  question: Can I take ibuprofen and aspirin together?
+  response: 'The retrieved ibuprofen labels **do describe an interaction with aspirin**: they
+    say ibuprofen can interfere with aspirin’s **antiplatelet effect** (the blood-thinning/anti-clotting
+    action), and that this may raise cardiovascular risk. The labels also point to extra caution
+    about **stomach bleeding** when NSAIDs are combined, and they note that aspirin-sensitive
+    asthma can cross-react with ibuprofen.'
+  limitations:
+  - RxNorm terminology overlap is not evidence of a clinical interaction.
+  - The retrieved labels do not cover every aspirin product or every dosing schedule, so the
+    timing details are limited to the specific ibuprofen label text retrieved.
+  - This is label-based educational information, not personal medical advice.
+  claim: The retrieved aspirin labels also warn that aspirin products may cause severe stomach
+    bleeding and list other NSAIDs, including ibuprofen, among drugs that raise that risk.
+  cited_source:
+    source_id: 39ea5b3c-510d-adb0-e063-6394a90acb20
+    section: warnings
+  cited_text: 'Warnings Reye''s syndrome: Children and teenagers who have or are recovering
+    from chicken pox or flu-like symptoms should not use this product. When using this product,
+    if changes in behavior with nausea and vomiting occur, consult a doctor because these
+    symptoms could be an early sign of Reye''s syndrome, a rare but serious illness. Allergy
+    alert: Aspirin may cause severe allergic reactions which may include: ■ hives ■ facial
+    swelling ■ shock ■ asthma (wheezing) Stomach bleeding warning: This product contains an
+    NSAID , which may cause severe stomach bleeding. The chance is higher if you: ■ are age
+    60 or older ■ have had stomach ulcers or bleeding problems ■ take a blood thinning (anticoagulant)
+    or steroid drug ■ take other drugs containing prescription or nonprescription NSAIDs (aspirin,
+    ibuproben, naproxen, or others) ■ have 3 or more alcoholic drinks every day while using
+    this product ■ take more or for a longer time than directed Do not use ■ if you have ever
+    had an allergic reac...'
+  claim_matches_source: ''
+  answer_reflects_claim: ''
+  skip: false
+  labeler_notes: ''
+- item: 21
+  question_id: q10_interaction_ibuprofen_aspirin_allergy
+  question: Can I take ibuprofen for my migraine if I'm allergic to aspirin?
+  response: The retrieved labels point toward **caution** with ibuprofen in someone who has
+    had an aspirin allergy, because the ibuprofen label says it may cause a severe allergic
+    reaction especially in people allergic to aspirin, and its contraindications say it should
+    not be given after aspirin-related asthma, hives (hives), or other allergic-type reactions.
+    The same labels also note ibuprofen is used for general pain relief, but the allergy warning
+    is the key issue here rather than the migraine use itself.
+  limitations:
+  - RxNorm name overlap or terminology links are not clinical interaction evidence.
+  - The retrieved labels do not provide a patient-specific allergy history beyond the aspirin
+    allergy context in the query.
+  - The retrieved evidence is label-based and does not replace clinician evaluation for aspirin-sensitive
+    reactions.
+  - RxNorm terminology overlap is not evidence of a clinical interaction.
+  claim: The ibuprofen label’s **contraindications** say it should not be given to people
+    who have had asthma, hives, or other allergic-type reactions after taking aspirin or other
+    NSAIDs (nonsteroidal anti-inflammatory drugs).
+  cited_source:
+    source_id: 5e595111-8477-4ec7-8d32-a0aeabc04e1a
+    section: contraindications
+  cited_text: CONTRAINDICATIONS Ibuprofen tablets are contraindicated in patients with known
+    hypersensitivity to Ibuprofen. Ibuprofen tablets should not be given to patients who have
+    experienced asthma, urticaria, or allergic-type reactions after taking aspirin or other
+    NSAIDs. Severe, rarely fatal, anaphylactic-like reactions to NSAIDs have been reported
+    in such patients (see WARNINGS , Anaphylactoid Reactions , and PRECAUTIONS , Preexisting
+    Asthma ). In the setting of coronary artery bypass graft (CABG) surgery [see Warnings
+    ]
+  claim_matches_source: ''
+  answer_reflects_claim: ''
+  skip: false
+  labeler_notes: ''
+- item: 22
+  question_id: q14_interaction_cetirizine_ibuprofen_aspirin
+  question: Can I take cetirizine and ibuprofen together if I'm also taking aspirin?
+  response: The retrieved labels point to **caution with ibuprofen when aspirin is already
+    being used**, because ibuprofen’s label says it can interfere with aspirin’s antiplatelet
+    (blood-thinning) effect and that taking multiple NSAIDs (nonsteroidal anti-inflammatory
+    drugs) raises stomach-bleeding risk. The cetirizine label does not add a specific ibuprofen/aspirin
+    interaction signal in the retrieved text; its warnings focus on allergy, drowsiness, liver/kidney
+    disease, sedatives, and pregnancy/breast-feeding.
+  limitations:
+  - RxNorm terminology overlap is not evidence of a clinical interaction.
+  - The retrieved labels do not provide a full, patient-specific dosing plan for combining
+    these medicines.
+  - The retrieved evidence is limited to the label sections shown here; it does not cover
+    every possible formulation or all real-world interaction scenarios.
+  claim: Cetirizine’s retrieved warnings mention **drowsiness**, avoiding alcohol, and asking
+    a doctor before use with **liver or kidney disease** or with **tranquilizers/sedatives**;
+    the retrieved cetirizine text does not mention aspirin or ibuprofen interactions.
+  cited_source:
+    source_id: 322eb217-089d-e92d-e063-6394a90a6566
+    section: warnings
+  cited_text: 'Warnings Do not use if you have ever had an allergic reaction to this product
+    or any of its ingredients or to an antihistamine containing hydroxyzine. Ask a doctor
+    before use if you have liver or kidney disease. Your doctor should determine if you need
+    a different dose. Ask a doctor or pharmacist before use if you are taking tranquilizers
+    or sedatives. When using this product drowsiness may occur avoid alcoholic drinks alcohol,
+    sedatives, and tranquilizers may increase drowsiness be careful when driving a motor vehicle
+    or operating machinery Stop use and ask a doctor if an allergic reaction to this product
+    occurs. Seek medical help right away. If pregnant or breast-feeding if breast-feeding:
+    not recommended if pregnant: ask a health professional before use. Keep out of reach of
+    children. In case of overdose, get medical help or contact a Poison Control Center right
+    away. (1-800-222-1222)'
+  claim_matches_source: ''
+  answer_reflects_claim: ''
+  skip: false
+  labeler_notes: ''
+- item: 23
+  question_id: q05_side_effects_ibuprofen
+  question: What are common side effects of ibuprofen?
+  response: The retrieved labels point to **gastrointestinal (stomach/intestinal) complaints**
+    as the most frequent adverse reaction with ibuprofen, and they also list **allergic-type
+    reactions** and **serious stomach bleeding** as important warnings. The label evidence
+    is limited to what is explicitly listed in the retrieved sections, so it does not provide
+    a full side-effect frequency list beyond those points.
+  limitations:
+  - The retrieved label sections do not give a complete, ranked list of all common side effects
+    beyond the gastrointestinal complaints and the warning-listed reactions.
+  - The label text here is product-label language, so it does not separate mild side effects
+    from rare but serious harms in a full consumer-friendly list.
+  claim: The retrieved label text also notes **heart attack, heart failure, and stroke** as
+    NSAID warnings, but those are warning risks rather than the common side effects asked
+    about.
+  cited_source:
+    source_id: 4bd1345d-d116-426e-825f-bbf29381746a
+    section: warnings
+  cited_text: 'Warnings Allergy alert: Ibuprofen may cause a severe allergic reaction, especially
+    in people allergic to aspirin. Symptoms may include: rash facial swelling asthma (wheezing)
+    hives skin reddening shock blisters If an allergic reaction occurs, stop use and seek
+    medical help right away. Stomach bleeding warning: This product contains an NSAID, which
+    may cause severe stomach bleeding. The chance is higher if you: take more or for a longer
+    time than directed take a blood thinning (anticoagulant) or steroid drug have had stomach
+    ulcers or bleeding problems have 3 or more alcoholic drinks every day while using this
+    product are age 60 or older take other drugs containing prescription or nonprescription
+    NSAIDs [aspirin, ibuprofen, naproxen, or others] Heart attack and stroke warning: NSAIDs,
+    except aspirin, increase the risk of heart attack, heart failure, and stroke. These can
+    be fatal. The risk is higher if you use more than directed or for longer than directed.
+    Do not use if you have eve...'
+  claim_matches_source: ''
+  answer_reflects_claim: ''
+  skip: false
+  labeler_notes: ''
+- item: 24
+  question_id: q06_side_effect_amoxicillin_diarrhea
+  question: Can amoxicillin cause diarrhea?
+  response: The retrieved amoxicillin labels **do list diarrhea as a reported adverse effect**,
+    and they also flag **Clostridioides difficile–associated diarrhea** as a warning to evaluate
+    if diarrhea occurs. The evidence is limited to label text, but it clearly points to diarrhea
+    being a known issue with amoxicillin-containing products.
+  limitations:
+  - The retrieved labels do not say whether any specific person's diarrhea is caused by amoxicillin;
+    they only show that diarrhea is a known reported effect and a warning sign to evaluate.
+  - The label-context evidence is limited to product-label text for amoxicillin and amoxicillin-containing
+    products; it does not provide patient-specific guidance.
+  claim: The warnings sections say **Clostridioides difficile–associated diarrhea** has been
+    reported with amoxicillin, and the label says to **evaluate if diarrhea occurs**.
+  cited_source:
+    source_id: 0e877b33-af19-d857-e063-6394a90a08ea
+    section: warnings
+  cited_text: WARNINGS AND PRECAUTIONS SECTION 5.1 Anaphylactic Reactions Serious and occasionally
+    fatal hypersensitivity (anaphylactic) reactions have been reported in patients on penicillin
+    therapy including amoxicillin. Although anaphylaxis is more frequent following parenteral
+    therapy, it has occurred in patients on oral penicillins. These reactions are more likely
+    to occur in individuals with a history of penicillin hypersensitivity and/or a history
+    of sensitivity to multiple allergens. There have been reports of individuals with a history
+    of penicillin hypersensitivity who have experienced severe reactions when treated with
+    cephalosporins. Before initiating therapy with amoxicillin, careful inquiry should be
+    made regarding previous hypersensitivity reactions to penicillins, cephalosporins, or
+    other allergens.5.2 Clostridium difficile Associated Diarrhea Clostridium difficile associated
+    diarrhea (CDAD) has been reported with use of nearly all antibacterial agents, including
+    amoxicillin, and...
+  claim_matches_source: ''
+  answer_reflects_claim: ''
+  skip: false
+  labeler_notes: ''
+- item: 25
+  question_id: q13_interaction_amoxicillin_warfarin
+  question: Do amoxicillin and warfarin interact?
+  response: 'The retrieved labels **do describe an interaction concern** between amoxicillin
+    and oral anticoagulants like warfarin: they report increased prothrombin time, which means
+    the blood may take longer to clot, and they call for monitoring when the drugs are used
+    together. The warfarin label also notes that antibiotics and other drugs can affect INR
+    (a blood-clotting test), so the labels point toward **closer INR monitoring and possible
+    dose adjustment** rather than a simple no-interaction answer.'
+  limitations:
+  - RxNorm terminology overlap is not evidence of a clinical interaction.
+  - The retrieved labels do not provide a patient-specific recommendation or a quantified
+    risk for this exact drug pair.
+  - The amoxicillin label text refers to oral anticoagulants generally; it does not name every
+    anticoagulant in that sentence.
+  claim: Amoxicillin’s label says **oral anticoagulants** can be associated with abnormal
+    prolongation of prothrombin time and increased INR, and that monitoring should be done
+    when they are prescribed together.
+  cited_source:
+    source_id: 156fa79e-91a6-460c-8f93-af5115b9588a
+    section: drug_interactions
+  cited_text: 7 DRUG INTERACTIONS Co-administration with probenicid is not recommended. (7.1)
+    Concomitant use of amoxicillin and oral anticoagulants may increase the prolongation of
+    prothrombin time. (7.2) Co-administration with allopurinol increases the risk of rash.
+    (7.3) Amoxicillin may reduce the efficacy of oral contraceptives. (7.4) 7.1 Probenecid
+    Probenecid decreases the renal tubular secretion of amoxicillin. Concurrent use of amoxicillin
+    and probenecid may result in increased and prolonged blood levels of amoxicillin. 7.2
+    Oral Anticoagulants Abnormal prolongation of prothrombin time (increased international
+    normalized ratio [INR]) has been reported in patients receiving amoxicillin and oral anticoagulants.
+    Appropriate monitoring should be undertaken when anticoagulants are prescribed concurrently.
+    Adjustments in the dose of oral anticoagulants may be necessary to maintain the desired
+    level of anticoagulation. 7.3 Allopurinol The concurrent administration of allopurinol
+    and amoxicillin in...
+  claim_matches_source: ''
+  answer_reflects_claim: ''
+  skip: false
+  labeler_notes: ''
+- item: 26
+  question_id: q11_interaction_sertraline_ibuprofen
+  question: Is it okay to combine sertraline and ibuprofen?
+  response: The retrieved sertraline label points toward **caution** with ibuprofen because
+    it says sertraline can increase the risk of **bleeding**, and that risk may be higher
+    with **NSAIDs** (nonsteroidal anti-inflammatory drugs) like ibuprofen. The retrieved ibuprofen
+    labels also warn that ibuprofen itself can cause **stomach bleeding** and other serious
+    bleeding-related problems, so this combination is worth discussing with a clinician or
+    pharmacist before use.
+  limitations:
+  - RxNorm terminology overlap is not evidence of a clinical interaction.
+  - The retrieved labels do not provide a patient-specific risk estimate for this combination.
+  - The retrieved evidence is limited to label text; it does not replace individualized medical
+    guidance.
+  claim: Sertraline’s label says **concomitant use** with aspirin, **NSAIDs** (like ibuprofen),
+    other antiplatelet drugs, warfarin, and other anticoagulants **may increase bleeding risk**.
+  cited_source:
+    source_id: 9bab5466-564e-4ce9-a139-0eb1ae02b6d1
+    section: warnings
+  cited_text: '5 WARNINGS AND PRECAUTIONS Serotonin Syndrome: Increased risk when co-administered
+    with other serotonergic agents, but also when taken alone. If it occurs, discontinue sertraline
+    hydrochloride and serotonergic agents and initiate supportive treatment. ( 5.2 ) Increased
+    Risk of Bleeding: Concomitant use of aspirin, nonsteroidal anti-inflammatory drugs (NSAIDs),
+    other antiplatelet drugs, warfarin, and other anticoagulants may increase this risk. (
+    5.3 ) Activation of Mania/Hypomania: Screen patients for bipolar disorder. ( 5.4 ) Seizures:
+    Use with caution in patients with seizure disorders. ( 5.6 ) Angle Closure Glaucoma: Avoid
+    use of antidepressants, including sertraline hydrochloride, in patients with untreated
+    anatomically narrow angles. ( 5.7 ) QTc Prolongation: Sertraline hydrochloride should
+    be used with caution in patients with risk factors for QTc prolongation. ( 5.10 ) Sexual
+    Dysfunction: Sertraline hydrochloride may cause symptoms of sexual dysfunction. ( 5.11
+    ) 5.1 Suicidal...'
+  claim_matches_source: ''
+  answer_reflects_claim: ''
+  skip: false
+  labeler_notes: ''
+- item: 27
+  question_id: q24_context_ibuprofen_hypertension
+  question: Is ibuprofen okay for someone with high blood pressure?
+  response: The retrieved labels point to **caution** with ibuprofen in people with high blood
+    pressure because NSAIDs can raise cardiovascular risk and may blunt the effect of ACE-inhibitor
+    blood pressure medicines. The label text does not say that high blood pressure alone is
+    a formal contraindication (should not be used), but it does support discussing use with
+    a clinician if blood pressure treatment is involved.
+  limitations:
+  - RxNorm terminology overlap is not evidence of a clinical interaction.
+  - The retrieved labels do not provide patient-specific guidance for a particular blood pressure
+    reading, diagnosis severity, or which antihypertensive medicine is being used.
+  - The context-targeted lookup found label coverage for high blood pressure, but the retrieved
+    text is limited to the sections shown here.
+  claim: The ibuprofen label warns that NSAIDs (nonsteroidal anti-inflammatory drugs) increase
+    the risk of **heart attack, heart failure, and stroke**, and that this risk can happen
+    early and is higher with longer use or higher doses.
+  cited_source:
+    source_id: 5e595111-8477-4ec7-8d32-a0aeabc04e1a
+    section: warnings
+  cited_text: WARNINGS Cardiovascular Effects Cardiovascular Thrombotic Events Clinical trials
+    of several COX-2 selective and nonselective NSAIDs of up to three years duration have
+    shown an increased risk of serious cardiovascular (CV) thrombotic events, including myocardial
+    infarction (MI) and stroke, which can be fatal. Based on available data, it is unclear
+    that the risk for CV thrombotic events is similar for all NSAIDs. The relative increase
+    in serious CV thrombotic events over baseline conferred by NSAID use appears to be similar
+    in those with and without known CV disease or risk factors for CV disease. However, patients
+    with known CV disease or risk factors had a higher absolute incidence of excess serious
+    CV thrombotic events, due to their increased baseline rate. Some observational studies
+    found that this increased risk of serious CV thrombotic events began as early as the first
+    weeks of treatment. The increase in CV thrombotic risk has been observed most consistently
+    at higher doses. To...
+  claim_matches_source: ''
+  answer_reflects_claim: ''
+  skip: false
+  labeler_notes: ''
+- item: 28
+  question_id: q12_interaction_omeprazole_clopidogrel
+  question: Can I take omeprazole with clopidogrel?
+  response: 'The retrieved drug labels point toward **avoiding the combination**: omeprazole’s
+    label says it **decreases exposure to clopidogrel’s active metabolite**, and clopidogrel’s
+    label says to **avoid concomitant use of omeprazole or esomeprazole** because CYP2C19
+    inhibition can reduce clopidogrel’s effect. The RxNorm relationship summary did **not**
+    show a clinical interaction by itself; the interaction signal comes from the label text.'
+  limitations:
+  - RxNorm terminology overlap is not evidence of a clinical interaction.
+  - The retrieved labels do not provide a patient-specific recommendation or a substitute
+    medication choice.
+  claim: Clopidogrel’s label says **avoid concomitant use of omeprazole or esomeprazole**
+    because drugs that inhibit CYP2C19 can impair clopidogrel’s conversion to its active metabolite.
+  cited_source:
+    source_id: 4a4c0017-ff4f-4475-8257-c0994ad0e332
+    section: warnings
+  cited_text: '5 WARNINGS AND PRECAUTIONS • CYP2C19 inhibitors: Avoid concomitant use of omeprazole
+    or esomeprazole. ( 5.1 ) • Bleeding: Clopidogrel increases risk of bleeding. ( 5.2 ) •
+    Discontinuation: Premature discontinuation increases risk of cardiovascular events. Discontinue
+    5 days prior to elective surgery that has a major risk of bleeding. ( 5.3 ) • Thrombotic
+    thrombocytopenic purpura (TTP) has been reported. ( 5.4 ) • Cross-reactivity among thienopyridines
+    has been reported. ( 5.5 ) 5.1 Diminished Antiplatelet Activity in Patients with Impaired
+    CYP2C19 Function Clopidogrel is a prodrug. Inhibition of platelet aggregation by clopidogrel
+    is achieved through an active metabolite. The metabolism of clopidogrel to its active
+    metabolite can be impaired by genetic variations in CYP2C19 [ see Boxed Warning ]. The
+    metabolism of clopidogrel can also be impaired by drugs that inhibit CYP2C19, such as
+    omeprazole or esomeprazole. Avoid concomitant use of clopidogrel with omeprazole or esomeprazole
+    be...'
+  claim_matches_source: ''
+  answer_reflects_claim: ''
+  skip: false
+  labeler_notes: ''
+- item: 29
+  question_id: q21_lactation_ibuprofen
+  question: Can I take ibuprofen while breastfeeding?
+  response: The retrieved labels do **not** give a clear breastfeeding-specific safety statement;
+    instead, they say to **ask a health professional before use** when breast-feeding and
+    note that it is **not known whether ibuprofen passes into human milk**. The labels also
+    say there are **3 retrieved label entries** for this breastfeeding context, so the evidence
+    is present but limited and mostly precautionary.
+  limitations:
+  - The retrieved labels do not state that ibuprofen is safe or unsafe during breastfeeding.
+  - The lactation text is precautionary and does not quantify how much, if any, ibuprofen
+    enters breast milk.
+  - The label-context lookup confirms breastfeeding-related label coverage, but the retrieved
+    text is limited and does not add a more specific lactation recommendation.
+  - The retrieved context lookup found **3 labels** for the breastfeeding/lactation search,
+    but the available text still does not provide a direct yes/no breastfeeding recommendation.
+  claim: 'One label says: **"If pregnant or breast-feeding, ask a health professional before
+    use"** and adds that ibuprofen should especially be avoided in late pregnancy unless a
+    doctor directs it.'
+  cited_source:
+    source_id: 4bd1345d-d116-426e-825f-bbf29381746a
+    section: pregnancy
+  cited_text: If pregnant or breast-feeding, ask a health professional before use. It is especially
+    important not to use ibuprofen at 20 weeks or later in pregnancy unless definitely directed
+    to do so by a doctor because it may cause problems in the unborn child or complications
+    during delivery.
+  claim_matches_source: ''
+  answer_reflects_claim: ''
+  skip: false
+  labeler_notes: ''
+- item: 30
+  question_id: q11_interaction_sertraline_ibuprofen
+  question: Is it okay to combine sertraline and ibuprofen?
+  response: The retrieved sertraline label points toward **caution** with ibuprofen because
+    it says sertraline can increase the risk of **bleeding**, and that risk may be higher
+    with **NSAIDs** (nonsteroidal anti-inflammatory drugs) like ibuprofen. The retrieved ibuprofen
+    labels also warn that ibuprofen itself can cause **stomach bleeding** and other serious
+    bleeding-related problems, so this combination is worth discussing with a clinician or
+    pharmacist before use.
+  limitations:
+  - RxNorm terminology overlap is not evidence of a clinical interaction.
+  - The retrieved labels do not provide a patient-specific risk estimate for this combination.
+  - The retrieved evidence is limited to label text; it does not replace individualized medical
+    guidance.
+  claim: The retrieved sertraline label also lists **protein-bound drugs** as a drug-interaction
+    concern, but the specific interaction text shown names examples like warfarin rather than
+    ibuprofen.
+  cited_source:
+    source_id: 7731d02d-7220-4f43-b230-9d38875f4192
+    section: drug_interactions
+  cited_text: Drug Interactions Potential Effects of Coadministration of Drugs Highly Bound
+    to Plasma Proteins –Because sertraline is tightly bound to plasma protein, the administration
+    of sertraline hydrochloride to a patient taking another drug which is tightly bound to
+    protein (e.g., warfarin, digitoxin) may cause a shift in plasma concentrations potentially
+    resulting in an adverse effect. Conversely, adverse effects may result from displacement
+    of protein bound sertraline hydrochloride by other tightly bound drugs. In a study comparing
+    prothrombin time AUC (0-120 hr) following dosing with warfarin (0.75 mg/kg) before and
+    after 21 days of dosing with either sertraline hydrochloride (50-200 mg/day) or placebo,
+    there was a mean increase in prothrombin time of 8% relative to baseline for sertraline
+    hydrochloride compared to a 1% decrease for placebo (p<0.02). The normalization of prothrombin
+    time for the sertraline hydrochloride group was delayed compared to the placebo group.
+    The clinical signif...
+  claim_matches_source: ''
+  answer_reflects_claim: ''
+  skip: false
+  labeler_notes: ''
+- item: 31
+  question_id: q15_interaction_lisinopril_metformin_naproxen
+  question: I take lisinopril and metformin — is it a problem to add naproxen?
+  response: The retrieved labels point to **caution** with naproxen in someone taking lisinopril
+    and metformin, mainly because naproxen is an NSAID with label warnings for **kidney effects**,
+    **blood pressure effects**, and **serious stomach bleeding**. The lisinopril label also
+    includes an NSAID interaction section, and the metformin label warns that **kidney problems**
+    raise the risk of metformin-associated lactic acidosis, so this combination is worth reviewing
+    with a clinician or pharmacist before use.
+  limitations:
+  - RxNorm terminology overlap is not evidence of a clinical interaction.
+  - The retrieved lisinopril interaction text is truncated, so it does not show the full NSAID
+    section wording.
+  - The retrieved labels do not provide patient-specific kidney function, blood pressure control,
+    or dosing details for this situation.
+  claim: The naproxen label warns of **serious stomach bleeding** (bleeding in the stomach
+    or intestines), and says the risk is higher with higher-than-directed use or longer use;
+    the OTC naproxen sodium label also says the chance is higher when taking other NSAIDs.
+  cited_source:
+    source_id: 25a249be-b52a-4d7e-8352-8e6d30f3664f
+    section: warnings
+  cited_text: 'Warnings Allergy alert: Naproxen sodium may cause a severe allergic reaction,
+    especially in people allergic to aspirin. Symptoms may include: • hives • facial swelling
+    • asthma (wheezing) • shock • skin reddening • rash • blisters If an allergic reaction
+    occurs, stop use and seek medical help right away. Stomach bleeding warning: This product
+    contains an NSAID, which may cause severe stomach bleeding. The chance is higher if you
+    • are age 60 or older • have had stomach ulcers or bleeding problems • take a blood thinning
+    (anticoagulant) or steroid drug • take other drugs containing prescription or nonprescription
+    NSAIDs (aspirin, ibuprofen, naproxen, or others) • have 3 or more alcoholic drinks every
+    day while using this product • take more or for a longer time than directed Heart attack
+    and stroke warning: NSAIDs, except aspirin, increase the risk of heart attack, heart failure,
+    and stroke. These can be fatal. The risk is higher if you use more than directed or for
+    longer than direc...'
+  claim_matches_source: ''
+  answer_reflects_claim: ''
+  skip: false
+  labeler_notes: ''
+- item: 32
+  question_id: q14_interaction_cetirizine_ibuprofen_aspirin
+  question: Can I take cetirizine and ibuprofen together if I'm also taking aspirin?
+  response: The retrieved labels point to **caution with ibuprofen when aspirin is already
+    being used**, because ibuprofen’s label says it can interfere with aspirin’s antiplatelet
+    (blood-thinning) effect and that taking multiple NSAIDs (nonsteroidal anti-inflammatory
+    drugs) raises stomach-bleeding risk. The cetirizine label does not add a specific ibuprofen/aspirin
+    interaction signal in the retrieved text; its warnings focus on allergy, drowsiness, liver/kidney
+    disease, sedatives, and pregnancy/breast-feeding.
+  limitations:
+  - RxNorm terminology overlap is not evidence of a clinical interaction.
+  - The retrieved labels do not provide a full, patient-specific dosing plan for combining
+    these medicines.
+  - The retrieved evidence is limited to the label sections shown here; it does not cover
+    every possible formulation or all real-world interaction scenarios.
+  claim: The ibuprofen label also warns that the chance of **severe stomach bleeding** is
+    higher when a person takes other NSAIDs, listing **aspirin, ibuprofen, naproxen, or others**
+    in that group.
+  cited_source:
+    source_id: 4bd1345d-d116-426e-825f-bbf29381746a
+    section: warnings
+  cited_text: 'Warnings Allergy alert: Ibuprofen may cause a severe allergic reaction, especially
+    in people allergic to aspirin. Symptoms may include: rash facial swelling asthma (wheezing)
+    hives skin reddening shock blisters If an allergic reaction occurs, stop use and seek
+    medical help right away. Stomach bleeding warning: This product contains an NSAID, which
+    may cause severe stomach bleeding. The chance is higher if you: take more or for a longer
+    time than directed take a blood thinning (anticoagulant) or steroid drug have had stomach
+    ulcers or bleeding problems have 3 or more alcoholic drinks every day while using this
+    product are age 60 or older take other drugs containing prescription or nonprescription
+    NSAIDs [aspirin, ibuprofen, naproxen, or others] Heart attack and stroke warning: NSAIDs,
+    except aspirin, increase the risk of heart attack, heart failure, and stroke. These can
+    be fatal. The risk is higher if you use more than directed or for longer than directed.
+    Do not use if you have eve...'
+  claim_matches_source: ''
+  answer_reflects_claim: ''
+  skip: false
+  labeler_notes: ''
+- item: 33
+  question_id: q13_interaction_amoxicillin_warfarin
+  question: Do amoxicillin and warfarin interact?
+  response: 'The retrieved labels **do describe an interaction concern** between amoxicillin
+    and oral anticoagulants like warfarin: they report increased prothrombin time, which means
+    the blood may take longer to clot, and they call for monitoring when the drugs are used
+    together. The warfarin label also notes that antibiotics and other drugs can affect INR
+    (a blood-clotting test), so the labels point toward **closer INR monitoring and possible
+    dose adjustment** rather than a simple no-interaction answer.'
+  limitations:
+  - RxNorm terminology overlap is not evidence of a clinical interaction.
+  - The retrieved labels do not provide a patient-specific recommendation or a quantified
+    risk for this exact drug pair.
+  - The amoxicillin label text refers to oral anticoagulants generally; it does not name every
+    anticoagulant in that sentence.
+  claim: Warfarin’s label says **antibiotics** and other factors can affect INR levels, and
+    it recommends more frequent INR monitoring when interacting drugs are involved.
+  cited_source:
+    source_id: b8c33971-54b3-4971-bf7f-1bec66999a29
+    section: drug_interactions
+  cited_text: 7 DRUG INTERACTIONS Concomitant use of drugs that increase bleeding risk, antibiotics,
+    antifungals, botanical (herbal) products, and inhibitors and inducers of CYP2C9, 1A2,
+    or 3A4. ( 7 ) Consult labeling of all concurrently used drugs for complete information
+    about interactions with warfarin sodium or increased risks for bleeding. ( 7 ) 7.1 General
+    Information Drugs may interact with warfarin sodium through pharmacodynamic or pharmacokinetic
+    mechanisms. Pharmacodynamic mechanisms for drug interactions with warfarin sodium are
+    synergism (impaired hemostasis, reduced clotting factor synthesis), competitive antagonism
+    (vitamin K), and alteration of the physiologic control loop for vitamin K metabolism (hereditary
+    resistance). Pharmacokinetic mechanisms for drug interactions with warfarin sodium are
+    mainly enzyme induction, enzyme inhibition, and reduced plasma protein binding. It is
+    important to note that some drugs may interact by more than one mechanism. More frequent
+    INR monitoring...
+  claim_matches_source: ''
+  answer_reflects_claim: ''
+  skip: false
+  labeler_notes: ''
+- item: 34
+  question_id: q01_indication_amoxicillin
+  question: What is amoxicillin used for?
+  response: The retrieved labels show that **amoxicillin** is a penicillin-class antibacterial
+    used to treat certain **bacterial infections**; one label also lists a specific use for
+    **H. pylori infection** in adults. The retrieved label coverage is limited, so it does
+    not provide a full list of every infection amoxicillin may be used for.
+  limitations:
+  - The retrieved evidence is limited for amoxicillin-alone indications, so this answer cannot
+    give a complete list of all labeled uses.
+  - One retrieved indications section is for amoxicillin/clavulanate potassium, which is a
+    different product from amoxicillin alone.
+  - The amoxicillin label describes it as a **broad-spectrum antibacterial** with activity
+    against many **Gram-positive and Gram-negative microorganisms**.
+  - The retrieved amoxicillin label includes **H. pylori infection** in adults as a dosing
+    use, given as part of combination therapy.
+  claim: The retrieved label sections available here do **not** include a full indications-and-usage
+    list for amoxicillin alone; the only explicit indications section in the retrieved text
+    is for an **amoxicillin/clavulanate** product, not amoxicillin by itself.
+  cited_source:
+    source_id: a2a30785-599c-4436-a3cc-b4db011b7a87
+    section: indications_and_usage
+  cited_text: '1 INDICATIONS AND USAGE Amoxicillin and Clavulanate Potassium is indicated
+    for the treatment of infections in adults and pediatric patients, due to susceptible isolates
+    of the designated bacteria in the conditions listed below: Lower Respiratory Tract Infections
+    - caused by beta‑lactamase–producing isolates of Haemophilus influenzae and Moraxella
+    catarrhalis . Acute Bacterial Otitis Media - caused by beta‑lactamase–producing isolates
+    of H. influenzae and M. catarrhalis . Sinusitis - caused by beta‑lactamase–producing isolates
+    of H. influenzae and M. catarrhalis . Skin and Skin Structure Infections - caused by beta‑lactamase–producing
+    isolates of Staphylococcus aureus , Escherichia coli , and Klebsiella species. Urinary
+    Tract Infections - caused by beta‑lactamase–producing isolates of E. coli , Klebsiella
+    species, and Enterobacter species. Amoxicillin and Clavulanate Potassium is a combination
+    of amoxicillin, a penicillin-class antibacterial and clavulanate potassium, a beta‑lactamas...'
+  claim_matches_source: ''
+  answer_reflects_claim: ''
+  skip: false
+  labeler_notes: ''
+- item: 35
+  question_id: q16_allergy_tretinoin_clindamycin
+  question: Can I use a tretinoin cream if I have a clindamycin allergy?
+  response: The retrieved labels point to **tretinoin cream** as a topical acne medicine,
+    and the clindamycin allergy label text does **not** show a direct clindamycin–tretinoin
+    allergy link. What the labels do show is that some **combined clindamycin/tretinoin**
+    products are contraindicated (should not be used) in people with clindamycin or lincomycin
+    hypersensitivity, so the combination product is a different issue from tretinoin alone.
+  limitations:
+  - The retrieved topical tretinoin label text is limited and does not explicitly discuss
+    clindamycin allergy cross-reactivity with tretinoin cream.
+  - Some retrieved tretinoin label text is for oral tretinoin capsules, so it is not directly
+    applicable to a topical cream question.
+  - This is retrieved label information only and not personal medical advice.
+  claim: The retrieved topical tretinoin label text also describes tretinoin cream as a **topical
+    acne** treatment and gives once-daily application directions, which helps identify the
+    product but does not add allergy-specific safety information.
+  cited_source:
+    source_id: 8f5850a4-4294-418c-8b1f-65f229e5973f
+    section: lactation
+  cited_text: Nursing Mothers It is not known whether this drug is excreted in human milk.
+    Because many drugs are excreted in human milk, caution should be exercised when tretinoin
+    is administered to a nursing woman.
+  claim_matches_source: ''
+  answer_reflects_claim: ''
+  skip: false
+  labeler_notes: ''
+- item: 36
+  question_id: q11_interaction_sertraline_ibuprofen
+  question: Is it okay to combine sertraline and ibuprofen?
+  response: The retrieved sertraline label points toward **caution** with ibuprofen because
+    it says sertraline can increase the risk of **bleeding**, and that risk may be higher
+    with **NSAIDs** (nonsteroidal anti-inflammatory drugs) like ibuprofen. The retrieved ibuprofen
+    labels also warn that ibuprofen itself can cause **stomach bleeding** and other serious
+    bleeding-related problems, so this combination is worth discussing with a clinician or
+    pharmacist before use.
+  limitations:
+  - RxNorm terminology overlap is not evidence of a clinical interaction.
+  - The retrieved labels do not provide a patient-specific risk estimate for this combination.
+  - The retrieved evidence is limited to label text; it does not replace individualized medical
+    guidance.
+  claim: The retrieved sertraline label also lists **protein-bound drugs** as a drug-interaction
+    concern, but the specific interaction text shown names examples like warfarin rather than
+    ibuprofen.
+  cited_source:
+    source_id: 9bab5466-564e-4ce9-a139-0eb1ae02b6d1
+    section: drug_interactions
+  cited_text: '7 DRUG INTERACTIONS Protein-bound drugs: Monitor for adverse reactions and
+    reduce dosage of sertraline hydrochloride or other protein-bound drugs (e.g., warfarin)
+    as warranted. ( 7.1 , 12.3 ) CYP2D6 substrates: Reduce dosage of drugs metabolized by
+    CYP2D6. ( 7.1 , 12.3 ) 7.1 Clinically Significant Drug Interactions Table 5 includes clinically
+    significant drug interactions with sertraline hydrochloride [See Clinical Pharmacology
+    (12.3) ] . Table 5: Clinically-Significant Drug Interactions with Sertraline Hydrochloride
+    Monoamine Oxidase Inhibitors (MAOIs) Clinical Impact: The concomitant use of SSRIs including
+    sertraline hydrochloride and MAOIs increases the risk of serotonin syndrome. Intervention:
+    Sertraline hydrochloride is contraindicated in patients taking MAOIs, including MAOIs
+    such as linezolid or intravenous methylene blue [See Dosage and Administration (2.5) ,
+    Contraindications (4) , Warnings and Precautions (5.2) ]. Examples: selegiline, tranylcypromine,
+    isocarboxazid, phene...'
+  claim_matches_source: ''
+  answer_reflects_claim: ''
+  skip: false
+  labeler_notes: ''
+- item: 37
+  question_id: q17_allergy_amoxicillin_penicillin
+  question: Is amoxicillin a problem if I have a penicillin allergy?
+  response: 'The retrieved labels point toward **caution** with amoxicillin in someone with
+    a penicillin allergy: amoxicillin labeling says serious hypersensitivity reactions are
+    more likely in people with a history of penicillin hypersensitivity, and the contraindications
+    section says amoxicillin is contraindicated (should not be used) after a serious hypersensitivity
+    reaction to amoxicillin or other beta-lactams such as penicillins. The retrieved evidence
+    also includes a penicillin G label that says a history of hypersensitivity to any penicillin
+    is a contraindication, which supports the allergy concern, but the exact reaction history
+    matters because the labels focus on **serious** reactions.'
+  limitations:
+  - The retrieved labels focus on **serious** hypersensitivity reactions; they do not classify
+    every possible penicillin allergy history.
+  - No patient-specific reaction details were provided, so the retrieved labels cannot determine
+    the risk for a particular person.
+  - The retrieved evidence is label text only and does not replace clinician evaluation of
+    an allergy history.
+  claim: The retrieved labels are enough to answer the allergy question, but they do **not**
+    provide a patient-specific allergy history or describe whether the prior penicillin reaction
+    was mild or severe.
+  cited_source:
+    source_id: 156fa79e-91a6-460c-8f93-af5115b9588a
+    section: warnings
+  cited_text: '5 WARNINGS AND PRECAUTIONS Anaphylactic reactions: Serious and occasionally
+    fatal anaphylactic reactions have been reported in patients on penicillin therapy, including
+    amoxicillin. Discontinue amoxicillin if a reaction occurs ( 5.1 ). Severe cutaneous adverse
+    reactions (SCAR): Monitor closely. Discontinue if rash progresses. ( 5.2 ) Clostridioides
+    difficile -associated diarrhea (CDAD) (ranging from mild diarrhea to fatal colitis): Evaluate
+    if diarrhea occurs. ( 5.3 ) 5.1 Anaphylactic Reactions Serious and occasionally fatal
+    hypersensitivity (anaphylactic) reactions have been reported in patients on penicillin
+    therapy including amoxicillin. Although anaphylaxis is more frequent following parenteral
+    therapy, it has occurred in patients on oral penicillins. These reactions are more likely
+    to occur in individuals with a history of penicillin hypersensitivity and/or a history
+    of sensitivity to multiple allergens. There have been reports of individuals with a history
+    of penicillin hypers...'
+  claim_matches_source: ''
+  answer_reflects_claim: ''
+  skip: false
+  labeler_notes: ''
+- item: 38
+  question_id: q15_interaction_lisinopril_metformin_naproxen
+  question: I take lisinopril and metformin — is it a problem to add naproxen?
+  response: The retrieved labels point to **caution** with naproxen in someone taking lisinopril
+    and metformin, mainly because naproxen is an NSAID with label warnings for **kidney effects**,
+    **blood pressure effects**, and **serious stomach bleeding**. The lisinopril label also
+    includes an NSAID interaction section, and the metformin label warns that **kidney problems**
+    raise the risk of metformin-associated lactic acidosis, so this combination is worth reviewing
+    with a clinician or pharmacist before use.
+  limitations:
+  - RxNorm terminology overlap is not evidence of a clinical interaction.
+  - The retrieved lisinopril interaction text is truncated, so it does not show the full NSAID
+    section wording.
+  - The retrieved labels do not provide patient-specific kidney function, blood pressure control,
+    or dosing details for this situation.
+  claim: Naproxen’s label warns that NSAIDs can cause **renal toxicity** (kidney injury) and
+    says to monitor kidney function in people with dehydration, heart failure, or kidney/liver
+    impairment; it also says NSAIDs may blunt the response to some blood pressure medicines
+    and to monitor blood pressure.
+  cited_source:
+    source_id: 8c45ef1f-f708-485b-bc20-60aa87ce6289
+    section: warnings
+  cited_text: '5 WARNINGS AND PRECAUTIONS Hepatotoxicity : Inform patients of warning signs
+    and symptoms of hepatotoxicity. Discontinue if abnormal liver tests persist or worsen
+    or if clinical signs and symptoms of liver disease develop. ( 5.3 ) Hypertension : Patients
+    taking some antihypertensive medications may have impaired response to these therapies
+    when taking NSAIDs. Monitor blood pressure. ( 5.4 , 7 ) Heart Failure and Edema: Avoid
+    use of naproxen tablets and naproxen sodium tablets in patients with severe heart failure
+    unless benefits are expected to outweigh risk of worsening heart failure. ( 5.5 ) Renal
+    Toxicity : Monitor renal function in patients with renal or hepatic impairment, heart
+    failure, dehydration, or hypovolemia. Avoid use of naproxen tablets and naproxen sodium
+    tablets in patients with advanced renal disease unless benefits are expected to outweigh
+    risk of worsening renal function. ( 5.6 ) Anaphylactic Reactions: Seek emergency help
+    if an anaphylactic reaction occurs. ( 5.7...'
+  claim_matches_source: ''
+  answer_reflects_claim: ''
+  skip: false
+  labeler_notes: ''
+- item: 39
+  question_id: q14_interaction_cetirizine_ibuprofen_aspirin
+  question: Can I take cetirizine and ibuprofen together if I'm also taking aspirin?
+  response: The retrieved labels point to **caution with ibuprofen when aspirin is already
+    being used**, because ibuprofen’s label says it can interfere with aspirin’s antiplatelet
+    (blood-thinning) effect and that taking multiple NSAIDs (nonsteroidal anti-inflammatory
+    drugs) raises stomach-bleeding risk. The cetirizine label does not add a specific ibuprofen/aspirin
+    interaction signal in the retrieved text; its warnings focus on allergy, drowsiness, liver/kidney
+    disease, sedatives, and pregnancy/breast-feeding.
+  limitations:
+  - RxNorm terminology overlap is not evidence of a clinical interaction.
+  - The retrieved labels do not provide a full, patient-specific dosing plan for combining
+    these medicines.
+  - The retrieved evidence is limited to the label sections shown here; it does not cover
+    every possible formulation or all real-world interaction scenarios.
+  claim: Cetirizine’s retrieved warnings mention **drowsiness**, avoiding alcohol, and asking
+    a doctor before use with **liver or kidney disease** or with **tranquilizers/sedatives**;
+    the retrieved cetirizine text does not mention aspirin or ibuprofen interactions.
+  cited_source:
+    source_id: 322eb217-089d-e92d-e063-6394a90a6566
+    section: warnings
+  cited_text: 'Warnings Do not use if you have ever had an allergic reaction to this product
+    or any of its ingredients or to an antihistamine containing hydroxyzine. Ask a doctor
+    before use if you have liver or kidney disease. Your doctor should determine if you need
+    a different dose. Ask a doctor or pharmacist before use if you are taking tranquilizers
+    or sedatives. When using this product drowsiness may occur avoid alcoholic drinks alcohol,
+    sedatives, and tranquilizers may increase drowsiness be careful when driving a motor vehicle
+    or operating machinery Stop use and ask a doctor if an allergic reaction to this product
+    occurs. Seek medical help right away. If pregnant or breast-feeding if breast-feeding:
+    not recommended if pregnant: ask a health professional before use. Keep out of reach of
+    children. In case of overdose, get medical help or contact a Poison Control Center right
+    away. (1-800-222-1222)'
+  claim_matches_source: ''
+  answer_reflects_claim: ''
+  skip: false
+  labeler_notes: ''
+- item: 40
+  question_id: q17_allergy_amoxicillin_penicillin
+  question: Is amoxicillin a problem if I have a penicillin allergy?
+  response: 'The retrieved labels point toward **caution** with amoxicillin in someone with
+    a penicillin allergy: amoxicillin labeling says serious hypersensitivity reactions are
+    more likely in people with a history of penicillin hypersensitivity, and the contraindications
+    section says amoxicillin is contraindicated (should not be used) after a serious hypersensitivity
+    reaction to amoxicillin or other beta-lactams such as penicillins. The retrieved evidence
+    also includes a penicillin G label that says a history of hypersensitivity to any penicillin
+    is a contraindication, which supports the allergy concern, but the exact reaction history
+    matters because the labels focus on **serious** reactions.'
+  limitations:
+  - The retrieved labels focus on **serious** hypersensitivity reactions; they do not classify
+    every possible penicillin allergy history.
+  - No patient-specific reaction details were provided, so the retrieved labels cannot determine
+    the risk for a particular person.
+  - The retrieved evidence is label text only and does not replace clinician evaluation of
+    an allergy history.
+  claim: The retrieved penicillin G labels also say that a history of hypersensitivity to
+    any penicillin is a contraindication, which is consistent with the amoxicillin label’s
+    allergy warning.
+  cited_source:
+    source_id: 4b3694af-9d77-487f-8838-b75aec6636da
+    section: contraindications
+  cited_text: CONTRAINDICATIONS A history of a previous hypersensitivity reaction to any of
+    the penicillins is a contraindication.
+  claim_matches_source: ''
+  answer_reflects_claim: ''
+  skip: false
+  labeler_notes: ''
+- item: 41
+  question_id: q15_interaction_lisinopril_metformin_naproxen
+  question: I take lisinopril and metformin — is it a problem to add naproxen?
+  response: The retrieved labels point to **caution** with naproxen in someone taking lisinopril
+    and metformin, mainly because naproxen is an NSAID with label warnings for **kidney effects**,
+    **blood pressure effects**, and **serious stomach bleeding**. The lisinopril label also
+    includes an NSAID interaction section, and the metformin label warns that **kidney problems**
+    raise the risk of metformin-associated lactic acidosis, so this combination is worth reviewing
+    with a clinician or pharmacist before use.
+  limitations:
+  - RxNorm terminology overlap is not evidence of a clinical interaction.
+  - The retrieved lisinopril interaction text is truncated, so it does not show the full NSAID
+    section wording.
+  - The retrieved labels do not provide patient-specific kidney function, blood pressure control,
+    or dosing details for this situation.
+  claim: Naproxen’s label warns that NSAIDs can cause **renal toxicity** (kidney injury) and
+    says to monitor kidney function in people with dehydration, heart failure, or kidney/liver
+    impairment; it also says NSAIDs may blunt the response to some blood pressure medicines
+    and to monitor blood pressure.
+  cited_source:
+    source_id: 8c45ef1f-f708-485b-bc20-60aa87ce6289
+    section: warnings
+  cited_text: '5 WARNINGS AND PRECAUTIONS Hepatotoxicity : Inform patients of warning signs
+    and symptoms of hepatotoxicity. Discontinue if abnormal liver tests persist or worsen
+    or if clinical signs and symptoms of liver disease develop. ( 5.3 ) Hypertension : Patients
+    taking some antihypertensive medications may have impaired response to these therapies
+    when taking NSAIDs. Monitor blood pressure. ( 5.4 , 7 ) Heart Failure and Edema: Avoid
+    use of naproxen tablets and naproxen sodium tablets in patients with severe heart failure
+    unless benefits are expected to outweigh risk of worsening heart failure. ( 5.5 ) Renal
+    Toxicity : Monitor renal function in patients with renal or hepatic impairment, heart
+    failure, dehydration, or hypovolemia. Avoid use of naproxen tablets and naproxen sodium
+    tablets in patients with advanced renal disease unless benefits are expected to outweigh
+    risk of worsening renal function. ( 5.6 ) Anaphylactic Reactions: Seek emergency help
+    if an anaphylactic reaction occurs. ( 5.7...'
+  claim_matches_source: ''
+  answer_reflects_claim: ''
+  skip: false
+  labeler_notes: ''
+- item: 42
+  question_id: q10_interaction_ibuprofen_aspirin_allergy
+  question: Can I take ibuprofen for my migraine if I'm allergic to aspirin?
+  response: The retrieved labels point toward **caution** with ibuprofen in someone who has
+    had an aspirin allergy, because the ibuprofen label says it may cause a severe allergic
+    reaction especially in people allergic to aspirin, and its contraindications say it should
+    not be given after aspirin-related asthma, hives (hives), or other allergic-type reactions.
+    The same labels also note ibuprofen is used for general pain relief, but the allergy warning
+    is the key issue here rather than the migraine use itself.
+  limitations:
+  - RxNorm name overlap or terminology links are not clinical interaction evidence.
+  - The retrieved labels do not provide a patient-specific allergy history beyond the aspirin
+    allergy context in the query.
+  - The retrieved evidence is label-based and does not replace clinician evaluation for aspirin-sensitive
+    reactions.
+  - RxNorm terminology overlap is not evidence of a clinical interaction.
+  claim: The retrieved ibuprofen label sections describe it as a medicine for **general pain
+    relief** and fever reduction, not as a migraine-specific allergy workaround.
+  cited_source:
+    source_id: 5e595111-8477-4ec7-8d32-a0aeabc04e1a
+    section: indications_and_usage
+  cited_text: INDICATIONS AND USAGE Carefully consider the potential benefits and risks of
+    ibuprofen tablets and other treatment options before deciding to use ibuprofen. Use the
+    lowest effective dose for the shortest duration consistent with individual patient treatment
+    goals (see WARNINGS ). Ibuprofen tablets are indicated for relief of the signs and symptoms
+    of rheumatoid arthritis and osteoarthritis. Ibuprofen tablets are indicated for relief
+    of mild to moderate pain. Ibuprofen tablets are also indicated for the treatment of primary
+    dysmenorrhea. Controlled clinical trials to establish the safety and effectiveness of
+    ibuprofen tablets in children have not been conducted.
+  claim_matches_source: ''
+  answer_reflects_claim: ''
+  skip: false
+  labeler_notes: ''
+- item: 43
+  question_id: q19_allergy_hctz_sulfa
+  question: I'm allergic to sulfa drugs — can I take hydrochlorothiazide?
+  response: 'The retrieved hydrochlorothiazide-related labels point toward **caution** in
+    people with a sulfonamide-related allergy: the hydrochlorothiazide-containing product
+    labels list **hypersensitivity to other sulfonamide-derived drugs** as a contraindication
+    (should not be used), but the retrieved labels do **not** explicitly discuss "sulfa drugs"
+    by name. Because only the primary medication dossier was retrieved here, this is a label-based
+    flag to review with a clinician or pharmacist rather than a personal yes/no answer.'
+  limitations:
+  - Only the primary medication dossier was retrieved; sulfa drugs was recognized but not
+    retrieved in this version.
+  - The retrieved labels did not explicitly mention sulfa drugs.
+  - This is label-based information only and does not determine whether a specific allergy
+    history matches the label wording.
+  - The hydrochlorothiazide-only labels in the retrieved set describe the drug as a **sulfonamide**
+    chemically, but they do not add a separate allergy warning section about sulfa allergy.
+  claim: The lisinopril/hydrochlorothiazide labels say the product is **contraindicated**
+    (should not be used) in people with **hypersensitivity to other sulfonamide-derived drugs**
+    because of the hydrochlorothiazide component.
+  cited_source:
+    source_id: 47d238b7-b5d5-0e63-e063-6294a90a8027
+    section: contraindications
+  cited_text: CONTRAINDICATIONS Lisinopril and hydrochlorothiazide is contraindicated in patients
+    who are hypersensitive to this product and in patients with a history of angioedema related
+    to previous treatment with an angiotensin-converting enzyme inhibitor and in patients
+    with hereditary or idiopathic angioedema. Because of the hydrochlorothiazide component,
+    this product is contraindicated in patients with anuria or hypersensitivity to other sulfonamide-derived
+    drugs. Lisinopril and hydrochlorothiazide is contraindicated in combination with a neprilysin
+    inhibitor (e.g., sacubitril). Do not administer Lisinopril and Hydrochlorothiazide tablets
+    USP within 36 hours of switching to or from sacubitril/valsartan, a neprilysin inhibitor
+    (see WARNINGS ). Do not co-administer aliskiren with lisinopril and hydrochlorothiazide
+    in patients with diabetes (see PRECAUTIONS, Drug Interactions ).
+  claim_matches_source: ''
+  answer_reflects_claim: ''
+  skip: false
+  labeler_notes: ''
+- item: 44
+  question_id: q06_side_effect_amoxicillin_diarrhea
+  question: Can amoxicillin cause diarrhea?
+  response: The retrieved amoxicillin labels **do list diarrhea as a reported adverse effect**,
+    and they also flag **Clostridioides difficile–associated diarrhea** as a warning to evaluate
+    if diarrhea occurs. The evidence is limited to label text, but it clearly points to diarrhea
+    being a known issue with amoxicillin-containing products.
+  limitations:
+  - The retrieved labels do not say whether any specific person's diarrhea is caused by amoxicillin;
+    they only show that diarrhea is a known reported effect and a warning sign to evaluate.
+  - The label-context evidence is limited to product-label text for amoxicillin and amoxicillin-containing
+    products; it does not provide patient-specific guidance.
+  claim: The warnings sections say **Clostridioides difficile–associated diarrhea** has been
+    reported with amoxicillin, and the label says to **evaluate if diarrhea occurs**.
+  cited_source:
+    source_id: 156fa79e-91a6-460c-8f93-af5115b9588a
+    section: warnings
+  cited_text: '5 WARNINGS AND PRECAUTIONS Anaphylactic reactions: Serious and occasionally
+    fatal anaphylactic reactions have been reported in patients on penicillin therapy, including
+    amoxicillin. Discontinue amoxicillin if a reaction occurs ( 5.1 ). Severe cutaneous adverse
+    reactions (SCAR): Monitor closely. Discontinue if rash progresses. ( 5.2 ) Clostridioides
+    difficile -associated diarrhea (CDAD) (ranging from mild diarrhea to fatal colitis): Evaluate
+    if diarrhea occurs. ( 5.3 ) 5.1 Anaphylactic Reactions Serious and occasionally fatal
+    hypersensitivity (anaphylactic) reactions have been reported in patients on penicillin
+    therapy including amoxicillin. Although anaphylaxis is more frequent following parenteral
+    therapy, it has occurred in patients on oral penicillins. These reactions are more likely
+    to occur in individuals with a history of penicillin hypersensitivity and/or a history
+    of sensitivity to multiple allergens. There have been reports of individuals with a history
+    of penicillin hypers...'
+  claim_matches_source: ''
+  answer_reflects_claim: ''
+  skip: false
+  labeler_notes: ''
+- item: 45
+  question_id: q19_allergy_hctz_sulfa
+  question: I'm allergic to sulfa drugs — can I take hydrochlorothiazide?
+  response: 'The retrieved hydrochlorothiazide-related labels point toward **caution** in
+    people with a sulfonamide-related allergy: the hydrochlorothiazide-containing product
+    labels list **hypersensitivity to other sulfonamide-derived drugs** as a contraindication
+    (should not be used), but the retrieved labels do **not** explicitly discuss "sulfa drugs"
+    by name. Because only the primary medication dossier was retrieved here, this is a label-based
+    flag to review with a clinician or pharmacist rather than a personal yes/no answer.'
+  limitations:
+  - Only the primary medication dossier was retrieved; sulfa drugs was recognized but not
+    retrieved in this version.
+  - The retrieved labels did not explicitly mention sulfa drugs.
+  - This is label-based information only and does not determine whether a specific allergy
+    history matches the label wording.
+  - The hydrochlorothiazide-only labels in the retrieved set describe the drug as a **sulfonamide**
+    chemically, but they do not add a separate allergy warning section about sulfa allergy.
+  claim: The retrieved labels also warn about **angioedema** (swelling of the face, lips,
+    tongue, or throat) with the ACE-inhibitor part of the combination, which is a separate
+    safety issue from the sulfonamide-allergy question.
+  cited_source:
+    source_id: 54d8eecf-c6b1-58b4-e063-6394a90a49ed
+    section: warnings
+  cited_text: 'WARNINGS General Lisinopril Anaphylactoid and Possibly Related Reactions: Presumably
+    because angiotensin-converting enzyme inhibitors affect the metabolism of eicosanoids
+    and polypeptides, including endogenous bradykinin, patients receiving ACE inhibitors (including
+    lisinopril and hydrochlorothiazide tablets) may be subject to a variety of adverse reactions,
+    some of them serious. Head and Neck Angioedema: Angioedema of the face, extremities, lips,
+    tongue, glottis and/or larynx has been reported rarely in patients treated with angiotensin
+    converting enzyme inhibitors, including lisinopril. This may occur at any time during
+    treatment. ACE inhibitors have been associated with a higher rate of angioedema in Black
+    than in non-Black patients. In such cases lisinopril and hydrochlorothiazide tablets should
+    be promptly discontinued and appropriate therapy and monitoring should be provided until
+    complete and sustained resolution of signs and symptoms has occurred. Even in those instances
+    whe...'
+  claim_matches_source: ''
+  answer_reflects_claim: ''
+  skip: false
+  labeler_notes: ''
+- item: 46
+  question_id: q16_allergy_tretinoin_clindamycin
+  question: Can I use a tretinoin cream if I have a clindamycin allergy?
+  response: The retrieved labels point to **tretinoin cream** as a topical acne medicine,
+    and the clindamycin allergy label text does **not** show a direct clindamycin–tretinoin
+    allergy link. What the labels do show is that some **combined clindamycin/tretinoin**
+    products are contraindicated (should not be used) in people with clindamycin or lincomycin
+    hypersensitivity, so the combination product is a different issue from tretinoin alone.
+  limitations:
+  - The retrieved topical tretinoin label text is limited and does not explicitly discuss
+    clindamycin allergy cross-reactivity with tretinoin cream.
+  - Some retrieved tretinoin label text is for oral tretinoin capsules, so it is not directly
+    applicable to a topical cream question.
+  - This is retrieved label information only and not personal medical advice.
+  claim: The retrieved labels for **clindamycin/tretinoin combination** products specifically
+    say they are contraindicated in people with clindamycin or lincomycin hypersensitivity,
+    which is why the combination product is not the same as tretinoin-only cream.
+  cited_source:
+    source_id: 854a8cf5-cfcf-4189-af34-e111363266a1
+    section: lactation
+  cited_text: 8.3 Nursing Mothers It is not known whether clindamycin is excreted in human
+    milk following use of clindamycin phosphate and tretinoin gel. However, orally and parenterally
+    administered clindamycin has been reported to appear in breast milk. Because of the potential
+    for serious adverse reactions in nursing infants, a decision should be made whether to
+    discontinue nursing or to discontinue the drug, taking into account the importance of
+    the drug to the mother. It is not known whether tretinoin is excreted in human milk. Because
+    many drugs are excreted in human milk, caution should be exercised when clindamycin phosphate
+    and tretinoin gel is administered to a nursing woman.
+  claim_matches_source: ''
+  answer_reflects_claim: ''
+  skip: false
+  labeler_notes: ''
+- item: 47
+  question_id: q09_interaction_ibuprofen_aspirin
+  question: Can I take ibuprofen and aspirin together?
+  response: 'The retrieved ibuprofen labels **do describe an interaction with aspirin**: they
+    say ibuprofen can interfere with aspirin’s **antiplatelet effect** (the blood-thinning/anti-clotting
+    action), and that this may raise cardiovascular risk. The labels also point to extra caution
+    about **stomach bleeding** when NSAIDs are combined, and they note that aspirin-sensitive
+    asthma can cross-react with ibuprofen.'
+  limitations:
+  - RxNorm terminology overlap is not evidence of a clinical interaction.
+  - The retrieved labels do not cover every aspirin product or every dosing schedule, so the
+    timing details are limited to the specific ibuprofen label text retrieved.
+  - This is label-based educational information, not personal medical advice.
+  claim: The retrieved aspirin labels also warn that aspirin products may cause severe stomach
+    bleeding and list other NSAIDs, including ibuprofen, among drugs that raise that risk.
+  cited_source:
+    source_id: 008ee85b-5cac-45a6-a857-a828f8125175
+    section: warnings
+  cited_text: 'Warnings Reye''s syndrome : Children and teenagers who have or are recovering
+    from chicken pox or flu-like symptoms should not use this product. When using this product,
+    if changes in behavior with nausea and vomiting occur, consult a doctor because these
+    symptoms could be an early sign of Reye''s syndrome, a rare but serious illness. Allergy
+    alert : Aspirin may cause a severe allergic reaction, which may include: hives facial
+    swelling shock asthma (wheezing) Stomach bleeding warning: This product contains an NSAID,
+    which may cause severe stomach bleeding. The chance is higher if you: are age 60 or older
+    have had stomach ulcers or bleeding problems take a blood thinning (anticoagulant) or
+    steroid drug take other drugs containing prescription or nonprescription NSAIDs [aspirin,
+    ibuprofen, naproxen, or others] have 3 or more alcoholic drinks every day while using
+    this product take more or for a longer time than directed Do not use if you are allergic
+    to aspirin or any other pain relieve...'
+  claim_matches_source: ''
+  answer_reflects_claim: ''
+  skip: false
+  labeler_notes: ''
+- item: 48
+  question_id: q16_allergy_tretinoin_clindamycin
+  question: Can I use a tretinoin cream if I have a clindamycin allergy?
+  response: The retrieved labels point to **tretinoin cream** as a topical acne medicine,
+    and the clindamycin allergy label text does **not** show a direct clindamycin–tretinoin
+    allergy link. What the labels do show is that some **combined clindamycin/tretinoin**
+    products are contraindicated (should not be used) in people with clindamycin or lincomycin
+    hypersensitivity, so the combination product is a different issue from tretinoin alone.
+  limitations:
+  - The retrieved topical tretinoin label text is limited and does not explicitly discuss
+    clindamycin allergy cross-reactivity with tretinoin cream.
+  - Some retrieved tretinoin label text is for oral tretinoin capsules, so it is not directly
+    applicable to a topical cream question.
+  - This is retrieved label information only and not personal medical advice.
+  claim: For **tretinoin cream** itself, the retrieved topical tretinoin label sections do
+    not list clindamycin allergy as a contraindication; one topical tretinoin label says there
+    are **no contraindications**, while another says to stop if hypersensitivity to any ingredient
+    occurs.
+  cited_source:
+    source_id: 5eacf7df-7bdd-4401-ae28-2319c8757b4a
+    section: contraindications
+  cited_text: 4 CONTRAINDICATIONS None. None. ( 4 )
+  claim_matches_source: ''
+  answer_reflects_claim: ''
+  skip: false
+  labeler_notes: ''
+- item: 49
+  question_id: q16_allergy_tretinoin_clindamycin
+  question: Can I use a tretinoin cream if I have a clindamycin allergy?
+  response: The retrieved labels point to **tretinoin cream** as a topical acne medicine,
+    and the clindamycin allergy label text does **not** show a direct clindamycin–tretinoin
+    allergy link. What the labels do show is that some **combined clindamycin/tretinoin**
+    products are contraindicated (should not be used) in people with clindamycin or lincomycin
+    hypersensitivity, so the combination product is a different issue from tretinoin alone.
+  limitations:
+  - The retrieved topical tretinoin label text is limited and does not explicitly discuss
+    clindamycin allergy cross-reactivity with tretinoin cream.
+  - Some retrieved tretinoin label text is for oral tretinoin capsules, so it is not directly
+    applicable to a topical cream question.
+  - This is retrieved label information only and not personal medical advice.
+  claim: The retrieved clindamycin labels say clindamycin products are **contraindicated (should
+    not be used)** in people with a history of hypersensitivity to clindamycin or lincomycin.
+  cited_source:
+    source_id: 1319a6c2-eed2-49b6-9ec8-85d44fae9b91
+    section: contraindications
+  cited_text: 4 CONTRAINDICATIONS History of hypersensitivity to clindamycin or lincomycin.
+    ( 4.1 ) 4.1 Hypersensitivity XACIATO is contraindicated in individuals with a history
+    of hypersensitivity to clindamycin or lincomycin. [see Adverse Reactions ( 6.2 )] .
+  claim_matches_source: ''
+  answer_reflects_claim: ''
+  skip: false
+  labeler_notes: ''
+- item: 50
+  question_id: q16_allergy_tretinoin_clindamycin
+  question: Can I use a tretinoin cream if I have a clindamycin allergy?
+  response: The retrieved labels point to **tretinoin cream** as a topical acne medicine,
+    and the clindamycin allergy label text does **not** show a direct clindamycin–tretinoin
+    allergy link. What the labels do show is that some **combined clindamycin/tretinoin**
+    products are contraindicated (should not be used) in people with clindamycin or lincomycin
+    hypersensitivity, so the combination product is a different issue from tretinoin alone.
+  limitations:
+  - The retrieved topical tretinoin label text is limited and does not explicitly discuss
+    clindamycin allergy cross-reactivity with tretinoin cream.
+  - Some retrieved tretinoin label text is for oral tretinoin capsules, so it is not directly
+    applicable to a topical cream question.
+  - This is retrieved label information only and not personal medical advice.
+  claim: For **tretinoin cream** itself, the retrieved topical tretinoin label sections do
+    not list clindamycin allergy as a contraindication; one topical tretinoin label says there
+    are **no contraindications**, while another says to stop if hypersensitivity to any ingredient
+    occurs.
+  cited_source:
+    source_id: 8f5850a4-4294-418c-8b1f-65f229e5973f
+    section: contraindications
+  cited_text: Contraindications Use of the product should be discontinued if hypersensitivity
+    to any of the ingredients is noted.
+  claim_matches_source: ''
+  answer_reflects_claim: ''
+  skip: false
+  labeler_notes: ''
+- item: 51
+  question_id: q06_side_effect_amoxicillin_diarrhea
+  question: Can amoxicillin cause diarrhea?
+  response: The retrieved amoxicillin labels **do list diarrhea as a reported adverse effect**,
+    and they also flag **Clostridioides difficile–associated diarrhea** as a warning to evaluate
+    if diarrhea occurs. The evidence is limited to label text, but it clearly points to diarrhea
+    being a known issue with amoxicillin-containing products.
+  limitations:
+  - The retrieved labels do not say whether any specific person's diarrhea is caused by amoxicillin;
+    they only show that diarrhea is a known reported effect and a warning sign to evaluate.
+  - The label-context evidence is limited to product-label text for amoxicillin and amoxicillin-containing
+    products; it does not provide patient-specific guidance.
+  claim: The retrieved label text for amoxicillin also includes a **contraindication (should
+    not be used)** for people with a history of serious hypersensitivity reactions such as
+    **anaphylaxis** or **Stevens-Johnson syndrome** to amoxicillin or other beta-lactam antibiotics.
+  cited_source:
+    source_id: 156fa79e-91a6-460c-8f93-af5115b9588a
+    section: warnings
+  cited_text: '5 WARNINGS AND PRECAUTIONS Anaphylactic reactions: Serious and occasionally
+    fatal anaphylactic reactions have been reported in patients on penicillin therapy, including
+    amoxicillin. Discontinue amoxicillin if a reaction occurs ( 5.1 ). Severe cutaneous adverse
+    reactions (SCAR): Monitor closely. Discontinue if rash progresses. ( 5.2 ) Clostridioides
+    difficile -associated diarrhea (CDAD) (ranging from mild diarrhea to fatal colitis): Evaluate
+    if diarrhea occurs. ( 5.3 ) 5.1 Anaphylactic Reactions Serious and occasionally fatal
+    hypersensitivity (anaphylactic) reactions have been reported in patients on penicillin
+    therapy including amoxicillin. Although anaphylaxis is more frequent following parenteral
+    therapy, it has occurred in patients on oral penicillins. These reactions are more likely
+    to occur in individuals with a history of penicillin hypersensitivity and/or a history
+    of sensitivity to multiple allergens. There have been reports of individuals with a history
+    of penicillin hypers...'
+  claim_matches_source: ''
+  answer_reflects_claim: ''
+  skip: false
+  labeler_notes: ''
+- item: 52
+  question_id: q12_interaction_omeprazole_clopidogrel
+  question: Can I take omeprazole with clopidogrel?
+  response: 'The retrieved drug labels point toward **avoiding the combination**: omeprazole’s
+    label says it **decreases exposure to clopidogrel’s active metabolite**, and clopidogrel’s
+    label says to **avoid concomitant use of omeprazole or esomeprazole** because CYP2C19
+    inhibition can reduce clopidogrel’s effect. The RxNorm relationship summary did **not**
+    show a clinical interaction by itself; the interaction signal comes from the label text.'
+  limitations:
+  - RxNorm terminology overlap is not evidence of a clinical interaction.
+  - The retrieved labels do not provide a patient-specific recommendation or a substitute
+    medication choice.
+  claim: 'Omeprazole’s label says **clopidogrel: omeprazole decreases exposure to the active
+    metabolite of clopidogrel**.'
+  cited_source:
+    source_id: 0cc267bf-8650-40e3-a05d-e102e275c4c2
+    section: drug_interactions
+  cited_text: '7 DRUG INTERACTIONS • Atazanavir and nelfinavir: Omeprazole reduces plasma
+    levels of atazanavir and nelfinavir. Concomitant use is not recommended ( 7.1 ) • Saquinavir:
+    Omeprazole increases plasma levels of saquinavir. Monitor for toxicity and consider dose
+    reduction of saquinavir ( 7.1 ) • May interfere with drugs for which gastric pH affects
+    bioavailability (e.g., ketoconazole, iron salts, erlotinib, ampicillin esters, and digoxin).
+    Patients treated with omeprazole and digoxin may need to be monitored for increases in
+    digoxin toxicity ( 7.2 ) • Clopidogrel: Omeprazole decreases exposure to the active metabolite
+    of clopidogrel. ( 7.3 , 12.3 ) • Cilostazol: Omeprazole increases systemic exposure of
+    cilostazol and one of its active metabolites. Consider dose reduction of cilostazol. (
+    7.3 ) • Drugs metabolized by cytochrome P450 (e.g., diazepam, warfarin, phenytoin, cyclosporine,
+    disulfiram, benzodiazepines): omeprazole can prolong their elimination. Monitor and determine
+    need for do...'
+  claim_matches_source: ''
+  answer_reflects_claim: ''
+  skip: false
+  labeler_notes: ''
+- item: 53
+  question_id: q08_side_effect_cetirizine_drowsy
+  question: Does cetirizine make you drowsy?
+  response: The retrieved labels say **drowsiness may occur** with cetirizine, and they also
+    warn that alcohol, sedatives, and tranquilizers may increase that drowsiness. The labels
+    further advise caution with driving or operating machinery, so the overall takeaway is
+    that sleepiness is a recognized label warning rather than something the labels rule out.
+  limitations:
+  - The retrieved labels do not quantify how often drowsiness happens or how strong it tends
+    to be.
+  - The label text is product-specific, so the exact wording may vary by cetirizine product.
+  - This is retrieved label information, not personal medical advice.
+  - One retrieved label section says cetirizine hydrochloride oral solution is contraindicated
+    (should not be used) in people with a known hypersensitivity (allergic reaction) to it,
+    its ingredients, or hydroxyzine.
+  claim: The retrieved labels also list cetirizine as relieving hay fever or other upper respiratory
+    allergy symptoms such as runny nose, sneezing, and itchy, watery eyes.
+  cited_source:
+    source_id: 322eb217-089d-e92d-e063-6394a90a6566
+    section: indications_and_usage
+  cited_text: 'Uses temporarily relieves these symptoms due to hay fever or other upper respiratory
+    allergies: runny nose sneezing itchy, watery eyes itching of the nose or throat'
+  claim_matches_source: ''
+  answer_reflects_claim: ''
+  skip: false
+  labeler_notes: ''
+- item: 54
+  question_id: q17_allergy_amoxicillin_penicillin
+  question: Is amoxicillin a problem if I have a penicillin allergy?
+  response: 'The retrieved labels point toward **caution** with amoxicillin in someone with
+    a penicillin allergy: amoxicillin labeling says serious hypersensitivity reactions are
+    more likely in people with a history of penicillin hypersensitivity, and the contraindications
+    section says amoxicillin is contraindicated (should not be used) after a serious hypersensitivity
+    reaction to amoxicillin or other beta-lactams such as penicillins. The retrieved evidence
+    also includes a penicillin G label that says a history of hypersensitivity to any penicillin
+    is a contraindication, which supports the allergy concern, but the exact reaction history
+    matters because the labels focus on **serious** reactions.'
+  limitations:
+  - The retrieved labels focus on **serious** hypersensitivity reactions; they do not classify
+    every possible penicillin allergy history.
+  - No patient-specific reaction details were provided, so the retrieved labels cannot determine
+    the risk for a particular person.
+  - The retrieved evidence is label text only and does not replace clinician evaluation of
+    an allergy history.
+  claim: The retrieved penicillin G labels also say that a history of hypersensitivity to
+    any penicillin is a contraindication, which is consistent with the amoxicillin label’s
+    allergy warning.
+  cited_source:
+    source_id: 2cc9e113-4939-08d2-e063-6294a90ad0e9
+    section: contraindications
+  cited_text: CONTRAINDICATIONS A history of a hypersensitivity (anaphylactic) reaction to
+    any penicillin is a contraindication.
+  claim_matches_source: ''
+  answer_reflects_claim: ''
+  skip: false
+  labeler_notes: ''
+- item: 55
+  question_id: q19_allergy_hctz_sulfa
+  question: I'm allergic to sulfa drugs — can I take hydrochlorothiazide?
+  response: 'The retrieved hydrochlorothiazide-related labels point toward **caution** in
+    people with a sulfonamide-related allergy: the hydrochlorothiazide-containing product
+    labels list **hypersensitivity to other sulfonamide-derived drugs** as a contraindication
+    (should not be used), but the retrieved labels do **not** explicitly discuss "sulfa drugs"
+    by name. Because only the primary medication dossier was retrieved here, this is a label-based
+    flag to review with a clinician or pharmacist rather than a personal yes/no answer.'
+  limitations:
+  - Only the primary medication dossier was retrieved; sulfa drugs was recognized but not
+    retrieved in this version.
+  - The retrieved labels did not explicitly mention sulfa drugs.
+  - This is label-based information only and does not determine whether a specific allergy
+    history matches the label wording.
+  - The hydrochlorothiazide-only labels in the retrieved set describe the drug as a **sulfonamide**
+    chemically, but they do not add a separate allergy warning section about sulfa allergy.
+  claim: The retrieved labels also warn about **angioedema** (swelling of the face, lips,
+    tongue, or throat) with the ACE-inhibitor part of the combination, which is a separate
+    safety issue from the sulfonamide-allergy question.
+  cited_source:
+    source_id: 47d238b7-b5d5-0e63-e063-6294a90a8027
+    section: warnings
+  cited_text: 'WARNINGS Lisinopril Anaphylactoid and Possibly Related Reactions: Presumably
+    because angiotensin-converting enzyme inhibitors affect the metabolism of eicosanoids
+    and polypeptides, including endogenous bradykinin, patients receiving ACE inhibitors (including
+    lisinopril and hydrochlorothiazide) may be subject to a variety of adverse reactions,
+    some of them serious. Head and Neck Angioedema: Angioedema of the face, extremities, lips,
+    tongue, glottis and/or larynx has been reported in patients treated with angiotensin-converting
+    enzyme inhibitors, including lisinopril. This may occur at any time during treatment.
+    ACE inhibitors have been associated with a higher rate of angioedema in black than in
+    nonblack patients. Lisinopril and hydrochlorothiazide should be promptly discontinued
+    and the appropriate therapy and monitoring should be provided until complete and sustained
+    resolution of signs and symptoms has occurred. Even in those instances where swelling
+    of only the tongue is involved...'
+  claim_matches_source: ''
+  answer_reflects_claim: ''
+  skip: false
+  labeler_notes: ''
+- item: 56
+  question_id: q14_interaction_cetirizine_ibuprofen_aspirin
+  question: Can I take cetirizine and ibuprofen together if I'm also taking aspirin?
+  response: The retrieved labels point to **caution with ibuprofen when aspirin is already
+    being used**, because ibuprofen’s label says it can interfere with aspirin’s antiplatelet
+    (blood-thinning) effect and that taking multiple NSAIDs (nonsteroidal anti-inflammatory
+    drugs) raises stomach-bleeding risk. The cetirizine label does not add a specific ibuprofen/aspirin
+    interaction signal in the retrieved text; its warnings focus on allergy, drowsiness, liver/kidney
+    disease, sedatives, and pregnancy/breast-feeding.
+  limitations:
+  - RxNorm terminology overlap is not evidence of a clinical interaction.
+  - The retrieved labels do not provide a full, patient-specific dosing plan for combining
+    these medicines.
+  - The retrieved evidence is limited to the label sections shown here; it does not cover
+    every possible formulation or all real-world interaction scenarios.
+  claim: Ibuprofen’s contraindications say it should not be given to people who have had **asthma,
+    hives (urticaria), or allergic-type reactions** after aspirin or other NSAIDs, and its
+    allergy warning says aspirin-sensitive people may have a severe allergic reaction.
+  cited_source:
+    source_id: 5e595111-8477-4ec7-8d32-a0aeabc04e1a
+    section: contraindications
+  cited_text: CONTRAINDICATIONS Ibuprofen tablets are contraindicated in patients with known
+    hypersensitivity to Ibuprofen. Ibuprofen tablets should not be given to patients who have
+    experienced asthma, urticaria, or allergic-type reactions after taking aspirin or other
+    NSAIDs. Severe, rarely fatal, anaphylactic-like reactions to NSAIDs have been reported
+    in such patients (see WARNINGS , Anaphylactoid Reactions , and PRECAUTIONS , Preexisting
+    Asthma ). In the setting of coronary artery bypass graft (CABG) surgery [see Warnings
+    ]
+  claim_matches_source: ''
+  answer_reflects_claim: ''
+  skip: false
+  labeler_notes: ''
+- item: 57
+  question_id: q13_interaction_amoxicillin_warfarin
+  question: Do amoxicillin and warfarin interact?
+  response: 'The retrieved labels **do describe an interaction concern** between amoxicillin
+    and oral anticoagulants like warfarin: they report increased prothrombin time, which means
+    the blood may take longer to clot, and they call for monitoring when the drugs are used
+    together. The warfarin label also notes that antibiotics and other drugs can affect INR
+    (a blood-clotting test), so the labels point toward **closer INR monitoring and possible
+    dose adjustment** rather than a simple no-interaction answer.'
+  limitations:
+  - RxNorm terminology overlap is not evidence of a clinical interaction.
+  - The retrieved labels do not provide a patient-specific recommendation or a quantified
+    risk for this exact drug pair.
+  - The amoxicillin label text refers to oral anticoagulants generally; it does not name every
+    anticoagulant in that sentence.
+  claim: The same amoxicillin label says **dose adjustments of oral anticoagulants may be
+    necessary** to keep the desired level of anticoagulation.
+  cited_source:
+    source_id: 156fa79e-91a6-460c-8f93-af5115b9588a
+    section: drug_interactions
+  cited_text: 7 DRUG INTERACTIONS Co-administration with probenicid is not recommended. (7.1)
+    Concomitant use of amoxicillin and oral anticoagulants may increase the prolongation of
+    prothrombin time. (7.2) Co-administration with allopurinol increases the risk of rash.
+    (7.3) Amoxicillin may reduce the efficacy of oral contraceptives. (7.4) 7.1 Probenecid
+    Probenecid decreases the renal tubular secretion of amoxicillin. Concurrent use of amoxicillin
+    and probenecid may result in increased and prolonged blood levels of amoxicillin. 7.2
+    Oral Anticoagulants Abnormal prolongation of prothrombin time (increased international
+    normalized ratio [INR]) has been reported in patients receiving amoxicillin and oral anticoagulants.
+    Appropriate monitoring should be undertaken when anticoagulants are prescribed concurrently.
+    Adjustments in the dose of oral anticoagulants may be necessary to maintain the desired
+    level of anticoagulation. 7.3 Allopurinol The concurrent administration of allopurinol
+    and amoxicillin in...
+  claim_matches_source: ''
+  answer_reflects_claim: ''
+  skip: false
+  labeler_notes: ''
+- item: 58
+  question_id: q11_interaction_sertraline_ibuprofen
+  question: Is it okay to combine sertraline and ibuprofen?
+  response: The retrieved sertraline label points toward **caution** with ibuprofen because
+    it says sertraline can increase the risk of **bleeding**, and that risk may be higher
+    with **NSAIDs** (nonsteroidal anti-inflammatory drugs) like ibuprofen. The retrieved ibuprofen
+    labels also warn that ibuprofen itself can cause **stomach bleeding** and other serious
+    bleeding-related problems, so this combination is worth discussing with a clinician or
+    pharmacist before use.
+  limitations:
+  - RxNorm terminology overlap is not evidence of a clinical interaction.
+  - The retrieved labels do not provide a patient-specific risk estimate for this combination.
+  - The retrieved evidence is limited to label text; it does not replace individualized medical
+    guidance.
+  claim: Ibuprofen’s labels warn that NSAIDs can cause **serious gastrointestinal bleeding**
+    (bleeding in the stomach or intestines), sometimes without warning symptoms.
+  cited_source:
+    source_id: 5e595111-8477-4ec7-8d32-a0aeabc04e1a
+    section: boxed_warning
+  cited_text: Cardiovascular Thrombotic Events Nonsteroidal anti-inflammatory drugs (NSAIDs)
+    cause an increased risk of serious cardiovascular thrombotic events, including myocardial
+    infarction and stroke, which can be fatal. This risk may occur early in treatment and
+    may increase with duration of use [see Warnings and Precautions ]. Ibuprofen tablets are
+    contraindicated in the setting of coronary artery bypass graft (CABG) surgery [see Contraindications
+    and Warnings ]. Gastrointestinal Risk NSAIDs cause an increased risk of serious gastrointestinal
+    adverse events including bleeding, ulceration, and perforation of the stomach or intestines,
+    which can be fatal. These events can occur at any time during use and without warning
+    symptoms. Elderly patients are at greater risk for serious gastrointestinal events (see
+    WARNINGS ).
+  claim_matches_source: ''
+  answer_reflects_claim: ''
+  skip: false
+  labeler_notes: ''
+- item: 59
+  question_id: q16_allergy_tretinoin_clindamycin
+  question: Can I use a tretinoin cream if I have a clindamycin allergy?
+  response: The retrieved labels point to **tretinoin cream** as a topical acne medicine,
+    and the clindamycin allergy label text does **not** show a direct clindamycin–tretinoin
+    allergy link. What the labels do show is that some **combined clindamycin/tretinoin**
+    products are contraindicated (should not be used) in people with clindamycin or lincomycin
+    hypersensitivity, so the combination product is a different issue from tretinoin alone.
+  limitations:
+  - The retrieved topical tretinoin label text is limited and does not explicitly discuss
+    clindamycin allergy cross-reactivity with tretinoin cream.
+  - Some retrieved tretinoin label text is for oral tretinoin capsules, so it is not directly
+    applicable to a topical cream question.
+  - This is retrieved label information only and not personal medical advice.
+  claim: The retrieved topical tretinoin label text also describes tretinoin cream as a **topical
+    acne** treatment and gives once-daily application directions, which helps identify the
+    product but does not add allergy-specific safety information.
+  cited_source:
+    source_id: 8f5850a4-4294-418c-8b1f-65f229e5973f
+    section: lactation
+  cited_text: Nursing Mothers It is not known whether this drug is excreted in human milk.
+    Because many drugs are excreted in human milk, caution should be exercised when tretinoin
+    is administered to a nursing woman.
+  claim_matches_source: ''
+  answer_reflects_claim: ''
+  skip: false
+  labeler_notes: ''
+- item: 60
+  question_id: q24_context_ibuprofen_hypertension
+  question: Is ibuprofen okay for someone with high blood pressure?
+  response: The retrieved labels point to **caution** with ibuprofen in people with high blood
+    pressure because NSAIDs can raise cardiovascular risk and may blunt the effect of ACE-inhibitor
+    blood pressure medicines. The label text does not say that high blood pressure alone is
+    a formal contraindication (should not be used), but it does support discussing use with
+    a clinician if blood pressure treatment is involved.
+  limitations:
+  - RxNorm terminology overlap is not evidence of a clinical interaction.
+  - The retrieved labels do not provide patient-specific guidance for a particular blood pressure
+    reading, diagnosis severity, or which antihypertensive medicine is being used.
+  - The context-targeted lookup found label coverage for high blood pressure, but the retrieved
+    text is limited to the sections shown here.
+  claim: The retrieved drug-interaction section says NSAIDs may **diminish the antihypertensive
+    effect** of ACE-inhibitors, meaning some blood pressure medicines may work less well when
+    taken with ibuprofen.
+  cited_source:
+    source_id: 56fb8ceb-3a90-44df-881b-9d93606bbac6
+    section: drug_interactions
+  cited_text: Drug Interactions ACE-inhibitors Reports suggest that NSAIDs may diminish the
+    antihypertensive effect of ACE-inhibitors. This interaction should be given consideration
+    in patients taking NSAIDs concomitantly with ACE-inhibitors. Aspirin Pharmacodynamic studies
+    have demonstrated interference with the antiplatelet activity of aspirin when ibuprofen
+    400 mg, given three times daily, is administered with enteric-coated low-dose aspirin.
+    The interaction exists even following a once-daily regimen of ibuprofen 400 mg, particularly
+    when ibuprofen is dosed prior to aspirin. The interaction is alleviated if immediate-release
+    low-dose aspirin is dosed at least 2 hours prior to a once-daily regimen of ibuprofen;
+    however, this finding cannot be extended to enteric-coated low-dose aspirin [see Clinical
+    Pharmacology/Pharmacodynamics ]. Because there may be an increased risk of cardiovascular
+    events due to the interference of ibuprofen with the antiplatelet effect of aspirin, for
+    patients taking low...
+  claim_matches_source: ''
+  answer_reflects_claim: ''
+  skip: false
+  labeler_notes: ''
+- item: 61
+  question_id: q06_side_effect_amoxicillin_diarrhea
+  question: Can amoxicillin cause diarrhea?
+  response: The retrieved amoxicillin labels **do list diarrhea as a reported adverse effect**,
+    and they also flag **Clostridioides difficile–associated diarrhea** as a warning to evaluate
+    if diarrhea occurs. The evidence is limited to label text, but it clearly points to diarrhea
+    being a known issue with amoxicillin-containing products.
+  limitations:
+  - The retrieved labels do not say whether any specific person's diarrhea is caused by amoxicillin;
+    they only show that diarrhea is a known reported effect and a warning sign to evaluate.
+  - The label-context evidence is limited to product-label text for amoxicillin and amoxicillin-containing
+    products; it does not provide patient-specific guidance.
+  claim: In the adverse-reactions sections, diarrhea is listed among the most common reported
+    effects for amoxicillin products, including **diarrhea/loose stools (9%)** in one label
+    and **diarrhea** among the most common reactions in another.
+  cited_source:
+    source_id: a2a30785-599c-4436-a3cc-b4db011b7a87
+    section: adverse_reactions
+  cited_text: '6 ADVERSE REACTIONS The following are discussed in more detail in other sections
+    of the labeling: Anaphylactic reactions [see Warnings and Precautions (5.1) ] Severe Cutaneous
+    Adverse Reactions [see Warnings and Precautions ( 5.2 )] Hepatic Dysfunction [see Warnings
+    and Precautions (5.3) ] Clostridioides difficile Associated Diarrhea (CDAD) [see Warnings
+    and Precautions (5.4) ] The most frequently reported adverse effects were diarrhea/loose
+    stools (9%), nausea (3%), skin rashes and urticaria (3%), vomiting (1%) and vaginitis
+    (1%). ( 6.1 ) To report SUSPECTED ADVERSE REACTIONS, contact USAntibiotics, LLC at 1-844-454-5532
+    or FDA at 1-800-FDA-1088 or www.fda.gov/medwatch . 6.1 Clinical Trial Experience Because
+    clinical trials are conducted under widely varying conditions, adverse reaction rates
+    observed in the clinical trials of a drug cannot be directly compared to rates in the
+    clinical trials of another drug and may not reflect the rates observed in practice. The
+    most frequently re...'
+  claim_matches_source: ''
+  answer_reflects_claim: ''
+  skip: false
+  labeler_notes: ''
+- item: 62
+  question_id: q15_interaction_lisinopril_metformin_naproxen
+  question: I take lisinopril and metformin — is it a problem to add naproxen?
+  response: The retrieved labels point to **caution** with naproxen in someone taking lisinopril
+    and metformin, mainly because naproxen is an NSAID with label warnings for **kidney effects**,
+    **blood pressure effects**, and **serious stomach bleeding**. The lisinopril label also
+    includes an NSAID interaction section, and the metformin label warns that **kidney problems**
+    raise the risk of metformin-associated lactic acidosis, so this combination is worth reviewing
+    with a clinician or pharmacist before use.
+  limitations:
+  - RxNorm terminology overlap is not evidence of a clinical interaction.
+  - The retrieved lisinopril interaction text is truncated, so it does not show the full NSAID
+    section wording.
+  - The retrieved labels do not provide patient-specific kidney function, blood pressure control,
+    or dosing details for this situation.
+  claim: The metformin label warns that **kidney impairment** is a risk factor for metformin-associated
+    lactic acidosis, and its boxed warning says this condition has been reported with serious
+    outcomes; that makes naproxen’s kidney-related warnings especially relevant to review.
+  cited_source:
+    source_id: 19e4bfb8-2ed1-4a6b-adf5-853ad2953362
+    section: boxed_warning
+  cited_text: 'BOXED WARNING WARNING: LACTIC ACIDOSIS Postmarketing cases of metformin-associated
+    lactic acidosis have resulted in death, hypothermia, hypotension, and resistant bradyarrhythmias.
+    The onset of metformin­ associated lactic acidosis is often subtle, accompanied only by
+    nonspecific symptoms such as malaise, myalgias, respiratory distress, somnolence, and
+    abdominal pain. Metformin­ associated lactic acidosis was characterized by elevated blood
+    lactate levels (>5 mmol/Liter), anion gap acidosis (without evidence of ketonuria or ketonemia),
+    an increased lactate/pyruvate ratio; and metformin plasma levels generally >5 mcg/mL [see
+    Warnings and Precautions (5.1) ]. Risk factors for metformin-associated lactic acidosis
+    include renal impairment, concomitant use of certain drugs (e.g. carbonic anhydrase inhibitors
+    such as topiramate), age 65 years old or greater, having a radiological study with contrast,
+    surgery and other procedures, hypoxic states (e.g., acute congestive heart failure), exce...'
+  claim_matches_source: ''
+  answer_reflects_claim: ''
+  skip: false
+  labeler_notes: ''
+- item: 63
+  question_id: q11_interaction_sertraline_ibuprofen
+  question: Is it okay to combine sertraline and ibuprofen?
+  response: The retrieved sertraline label points toward **caution** with ibuprofen because
+    it says sertraline can increase the risk of **bleeding**, and that risk may be higher
+    with **NSAIDs** (nonsteroidal anti-inflammatory drugs) like ibuprofen. The retrieved ibuprofen
+    labels also warn that ibuprofen itself can cause **stomach bleeding** and other serious
+    bleeding-related problems, so this combination is worth discussing with a clinician or
+    pharmacist before use.
+  limitations:
+  - RxNorm terminology overlap is not evidence of a clinical interaction.
+  - The retrieved labels do not provide a patient-specific risk estimate for this combination.
+  - The retrieved evidence is limited to label text; it does not replace individualized medical
+    guidance.
+  claim: Ibuprofen’s labels warn that NSAIDs can cause **serious gastrointestinal bleeding**
+    (bleeding in the stomach or intestines), sometimes without warning symptoms.
+  cited_source:
+    source_id: 4bd1345d-d116-426e-825f-bbf29381746a
+    section: warnings
+  cited_text: 'Warnings Allergy alert: Ibuprofen may cause a severe allergic reaction, especially
+    in people allergic to aspirin. Symptoms may include: rash facial swelling asthma (wheezing)
+    hives skin reddening shock blisters If an allergic reaction occurs, stop use and seek
+    medical help right away. Stomach bleeding warning: This product contains an NSAID, which
+    may cause severe stomach bleeding. The chance is higher if you: take more or for a longer
+    time than directed take a blood thinning (anticoagulant) or steroid drug have had stomach
+    ulcers or bleeding problems have 3 or more alcoholic drinks every day while using this
+    product are age 60 or older take other drugs containing prescription or nonprescription
+    NSAIDs [aspirin, ibuprofen, naproxen, or others] Heart attack and stroke warning: NSAIDs,
+    except aspirin, increase the risk of heart attack, heart failure, and stroke. These can
+    be fatal. The risk is higher if you use more than directed or for longer than directed.
+    Do not use if you have eve...'
+  claim_matches_source: ''
+  answer_reflects_claim: ''
+  skip: false
+  labeler_notes: ''
+- item: 64
+  question_id: q08_side_effect_cetirizine_drowsy
+  question: Does cetirizine make you drowsy?
+  response: The retrieved labels say **drowsiness may occur** with cetirizine, and they also
+    warn that alcohol, sedatives, and tranquilizers may increase that drowsiness. The labels
+    further advise caution with driving or operating machinery, so the overall takeaway is
+    that sleepiness is a recognized label warning rather than something the labels rule out.
+  limitations:
+  - The retrieved labels do not quantify how often drowsiness happens or how strong it tends
+    to be.
+  - The label text is product-specific, so the exact wording may vary by cetirizine product.
+  - This is retrieved label information, not personal medical advice.
+  - One retrieved label section says cetirizine hydrochloride oral solution is contraindicated
+    (should not be used) in people with a known hypersensitivity (allergic reaction) to it,
+    its ingredients, or hydroxyzine.
+  claim: The warnings section explicitly says **“drowsiness may occur”** and adds that alcohol,
+    sedatives, and tranquilizers may increase drowsiness.
+  cited_source:
+    source_id: 9b19f466-3796-44b8-a637-092926c275f1
+    section: warnings
+  cited_text: 'Do not use if you have ever had an allergic reaction to this product or any
+    of its ingredients or an antihistamine containing hydroxyzine Ask a doctor before useif
+    you have liver or kidney disease. Your doctor should determine if you need a different
+    dose. Ask a doctor or pharmacist before use if you are taking tranquilizers or sedatives
+    When using this product • drowsiness may occur • avoid alcoholic drinks • alcohol, sedatives,
+    and tranquilizers may increase drowsiness • be careful when driving a motor vehicle or
+    operating machinery Stop use and ask a doctor if an allergic reaction to this product
+    occurs. Seek medical help right away. If pregnant or breast-feeding: • If breast-feeding:
+    not recommended • if pregnant: ask a health professional before use. Keep out of reach
+    of children. In case of overdose, get medical help or contact a Poison Control Center
+    right away (1-800-222-1222)'
+  claim_matches_source: ''
+  answer_reflects_claim: ''
+  skip: false
+  labeler_notes: ''
+- item: 65
+  question_id: q10_interaction_ibuprofen_aspirin_allergy
+  question: Can I take ibuprofen for my migraine if I'm allergic to aspirin?
+  response: The retrieved labels point toward **caution** with ibuprofen in someone who has
+    had an aspirin allergy, because the ibuprofen label says it may cause a severe allergic
+    reaction especially in people allergic to aspirin, and its contraindications say it should
+    not be given after aspirin-related asthma, hives (hives), or other allergic-type reactions.
+    The same labels also note ibuprofen is used for general pain relief, but the allergy warning
+    is the key issue here rather than the migraine use itself.
+  limitations:
+  - RxNorm name overlap or terminology links are not clinical interaction evidence.
+  - The retrieved labels do not provide a patient-specific allergy history beyond the aspirin
+    allergy context in the query.
+  - The retrieved evidence is label-based and does not replace clinician evaluation for aspirin-sensitive
+    reactions.
+  - RxNorm terminology overlap is not evidence of a clinical interaction.
+  claim: The ibuprofen label’s **warnings** also say it may cause a severe allergic reaction,
+    especially in people allergic to aspirin, with symptoms such as rash, facial swelling,
+    wheezing (asthma), hives, and shock.
+  cited_source:
+    source_id: 4bd1345d-d116-426e-825f-bbf29381746a
+    section: warnings
+  cited_text: 'Warnings Allergy alert: Ibuprofen may cause a severe allergic reaction, especially
+    in people allergic to aspirin. Symptoms may include: rash facial swelling asthma (wheezing)
+    hives skin reddening shock blisters If an allergic reaction occurs, stop use and seek
+    medical help right away. Stomach bleeding warning: This product contains an NSAID, which
+    may cause severe stomach bleeding. The chance is higher if you: take more or for a longer
+    time than directed take a blood thinning (anticoagulant) or steroid drug have had stomach
+    ulcers or bleeding problems have 3 or more alcoholic drinks every day while using this
+    product are age 60 or older take other drugs containing prescription or nonprescription
+    NSAIDs [aspirin, ibuprofen, naproxen, or others] Heart attack and stroke warning: NSAIDs,
+    except aspirin, increase the risk of heart attack, heart failure, and stroke. These can
+    be fatal. The risk is higher if you use more than directed or for longer than directed.
+    Do not use if you have eve...'
+  claim_matches_source: ''
+  answer_reflects_claim: ''
+  skip: false
+  labeler_notes: ''
+- item: 66
+  question_id: q06_side_effect_amoxicillin_diarrhea
+  question: Can amoxicillin cause diarrhea?
+  response: The retrieved amoxicillin labels **do list diarrhea as a reported adverse effect**,
+    and they also flag **Clostridioides difficile–associated diarrhea** as a warning to evaluate
+    if diarrhea occurs. The evidence is limited to label text, but it clearly points to diarrhea
+    being a known issue with amoxicillin-containing products.
+  limitations:
+  - The retrieved labels do not say whether any specific person's diarrhea is caused by amoxicillin;
+    they only show that diarrhea is a known reported effect and a warning sign to evaluate.
+  - The label-context evidence is limited to product-label text for amoxicillin and amoxicillin-containing
+    products; it does not provide patient-specific guidance.
+  claim: The retrieved label text for amoxicillin also includes a **contraindication (should
+    not be used)** for people with a history of serious hypersensitivity reactions such as
+    **anaphylaxis** or **Stevens-Johnson syndrome** to amoxicillin or other beta-lactam antibiotics.
+  cited_source:
+    source_id: 156fa79e-91a6-460c-8f93-af5115b9588a
+    section: contraindications
+  cited_text: 4 CONTRAINDICATIONS Amoxicillin tablets are contraindicated in patients who
+    have experienced a serious hypersensitivity reaction (e.g., anaphylaxis or Stevens-Johnson
+    syndrome) to amoxicillin tablets or to other β-lactam antibacterial drugs (e.g., penicillins
+    and cephalosporins). History of a serious hypersensitivity reaction (e.g., anaphylaxis
+    or Stevens-Johnson syndrome) to amoxicillin tablets or to other beta-lactams (e.g., penicillins
+    or cephalosporins). (4)
+  claim_matches_source: ''
+  answer_reflects_claim: ''
+  skip: false
+  labeler_notes: ''
+- item: 67
+  question_id: q13_interaction_amoxicillin_warfarin
+  question: Do amoxicillin and warfarin interact?
+  response: 'The retrieved labels **do describe an interaction concern** between amoxicillin
+    and oral anticoagulants like warfarin: they report increased prothrombin time, which means
+    the blood may take longer to clot, and they call for monitoring when the drugs are used
+    together. The warfarin label also notes that antibiotics and other drugs can affect INR
+    (a blood-clotting test), so the labels point toward **closer INR monitoring and possible
+    dose adjustment** rather than a simple no-interaction answer.'
+  limitations:
+  - RxNorm terminology overlap is not evidence of a clinical interaction.
+  - The retrieved labels do not provide a patient-specific recommendation or a quantified
+    risk for this exact drug pair.
+  - The amoxicillin label text refers to oral anticoagulants generally; it does not name every
+    anticoagulant in that sentence.
+  claim: Amoxicillin’s label says **oral anticoagulants** can be associated with abnormal
+    prolongation of prothrombin time and increased INR, and that monitoring should be done
+    when they are prescribed together.
+  cited_source:
+    source_id: 156fa79e-91a6-460c-8f93-af5115b9588a
+    section: drug_interactions
+  cited_text: 7 DRUG INTERACTIONS Co-administration with probenicid is not recommended. (7.1)
+    Concomitant use of amoxicillin and oral anticoagulants may increase the prolongation of
+    prothrombin time. (7.2) Co-administration with allopurinol increases the risk of rash.
+    (7.3) Amoxicillin may reduce the efficacy of oral contraceptives. (7.4) 7.1 Probenecid
+    Probenecid decreases the renal tubular secretion of amoxicillin. Concurrent use of amoxicillin
+    and probenecid may result in increased and prolonged blood levels of amoxicillin. 7.2
+    Oral Anticoagulants Abnormal prolongation of prothrombin time (increased international
+    normalized ratio [INR]) has been reported in patients receiving amoxicillin and oral anticoagulants.
+    Appropriate monitoring should be undertaken when anticoagulants are prescribed concurrently.
+    Adjustments in the dose of oral anticoagulants may be necessary to maintain the desired
+    level of anticoagulation. 7.3 Allopurinol The concurrent administration of allopurinol
+    and amoxicillin in...
+  claim_matches_source: ''
+  answer_reflects_claim: ''
+  skip: false
+  labeler_notes: ''
+- item: 68
+  question_id: q09_interaction_ibuprofen_aspirin
+  question: Can I take ibuprofen and aspirin together?
+  response: 'The retrieved ibuprofen labels **do describe an interaction with aspirin**: they
+    say ibuprofen can interfere with aspirin’s **antiplatelet effect** (the blood-thinning/anti-clotting
+    action), and that this may raise cardiovascular risk. The labels also point to extra caution
+    about **stomach bleeding** when NSAIDs are combined, and they note that aspirin-sensitive
+    asthma can cross-react with ibuprofen.'
+  limitations:
+  - RxNorm terminology overlap is not evidence of a clinical interaction.
+  - The retrieved labels do not cover every aspirin product or every dosing schedule, so the
+    timing details are limited to the specific ibuprofen label text retrieved.
+  - This is label-based educational information, not personal medical advice.
+  claim: The ibuprofen drug-interactions section says ibuprofen 400 mg with low-dose aspirin
+    can interfere with aspirin’s antiplatelet activity, especially when ibuprofen is taken
+    before aspirin; it says the effect is lessened if immediate-release low-dose aspirin is
+    taken at least 2 hours before once-daily ibuprofen, but that this does **not** extend
+    to enteric-coated aspirin.
+  cited_source:
+    source_id: 5e595111-8477-4ec7-8d32-a0aeabc04e1a
+    section: lactation
+  cited_text: Drug Interactions ACE-inhibitors Reports suggest that NSAIDs may diminish the
+    antihypertensive effect of ACE-inhibitors. This interaction should be given consideration
+    in patients taking NSAIDs concomitantly with ACE-inhibitors. Aspirin Pharmacodynamic studies
+    have demonstrated interference with the antiplatelet activity of aspirin when ibuprofen
+    400 mg, given three times daily, is administered with enteric­-coated low-dose aspirin.
+    The interaction exists even following a once-daily regimen of ibuprofen 400 mg, particularly
+    when ibuprofen is dosed prior to aspirin. The interaction is alleviated if immediate-release
+    low-dose aspirin is dosed at least 2 hours prior to a once-daily regimen of ibuprofen;
+    however, this finding cannot be extended to enteric-coated low-dose aspirin [see Clinical
+    Pharmacology/Pharmacodynamics ]. Because there may be an increased risk of cardiovascular
+    events due to the interference of ibuprofen with the antiplatelet effect of aspirin, for
+    patients taking lo...
+  claim_matches_source: ''
+  answer_reflects_claim: ''
+  skip: false
+  labeler_notes: ''
+- item: 69
+  question_id: q05_side_effects_ibuprofen
+  question: What are common side effects of ibuprofen?
+  response: The retrieved labels point to **gastrointestinal (stomach/intestinal) complaints**
+    as the most frequent adverse reaction with ibuprofen, and they also list **allergic-type
+    reactions** and **serious stomach bleeding** as important warnings. The label evidence
+    is limited to what is explicitly listed in the retrieved sections, so it does not provide
+    a full side-effect frequency list beyond those points.
+  limitations:
+  - The retrieved label sections do not give a complete, ranked list of all common side effects
+    beyond the gastrointestinal complaints and the warning-listed reactions.
+  - The label text here is product-label language, so it does not separate mild side effects
+    from rare but serious harms in a full consumer-friendly list.
+  claim: The retrieved label text also notes **heart attack, heart failure, and stroke** as
+    NSAID warnings, but those are warning risks rather than the common side effects asked
+    about.
+  cited_source:
+    source_id: 5e595111-8477-4ec7-8d32-a0aeabc04e1a
+    section: boxed_warning
+  cited_text: Cardiovascular Thrombotic Events Nonsteroidal anti-inflammatory drugs (NSAIDs)
+    cause an increased risk of serious cardiovascular thrombotic events, including myocardial
+    infarction and stroke, which can be fatal. This risk may occur early in treatment and
+    may increase with duration of use [see Warnings and Precautions ]. Ibuprofen tablets are
+    contraindicated in the setting of coronary artery bypass graft (CABG) surgery [see Contraindications
+    and Warnings ]. Gastrointestinal Risk NSAIDs cause an increased risk of serious gastrointestinal
+    adverse events including bleeding, ulceration, and perforation of the stomach or intestines,
+    which can be fatal. These events can occur at any time during use and without warning
+    symptoms. Elderly patients are at greater risk for serious gastrointestinal events (see
+    WARNINGS ).
+  claim_matches_source: ''
+  answer_reflects_claim: ''
+  skip: false
+  labeler_notes: ''
+- item: 70
+  question_id: q14_interaction_cetirizine_ibuprofen_aspirin
+  question: Can I take cetirizine and ibuprofen together if I'm also taking aspirin?
+  response: The retrieved labels point to **caution with ibuprofen when aspirin is already
+    being used**, because ibuprofen’s label says it can interfere with aspirin’s antiplatelet
+    (blood-thinning) effect and that taking multiple NSAIDs (nonsteroidal anti-inflammatory
+    drugs) raises stomach-bleeding risk. The cetirizine label does not add a specific ibuprofen/aspirin
+    interaction signal in the retrieved text; its warnings focus on allergy, drowsiness, liver/kidney
+    disease, sedatives, and pregnancy/breast-feeding.
+  limitations:
+  - RxNorm terminology overlap is not evidence of a clinical interaction.
+  - The retrieved labels do not provide a full, patient-specific dosing plan for combining
+    these medicines.
+  - The retrieved evidence is limited to the label sections shown here; it does not cover
+    every possible formulation or all real-world interaction scenarios.
+  claim: Ibuprofen’s retrieved label says **aspirin** can have its antiplatelet activity interfered
+    with when ibuprofen is taken together, and that the interaction is reduced if immediate-release
+    low-dose aspirin is taken at least 2 hours before a once-daily ibuprofen regimen; it also
+    says this timing finding does **not** extend to enteric-coated low-dose aspirin.
+  cited_source:
+    source_id: 5e595111-8477-4ec7-8d32-a0aeabc04e1a
+    section: drug_interactions
+  cited_text: Preexisting asthma Patients with asthma may have aspirin-sensitive asthma. The
+    use of aspirin in patients with aspirin-sensitive asthma has been associated with severe
+    bronchospasm, which can be fatal. Since cross reactivity, including bronchospasm, between
+    aspirin and NSAIDs has been reported in such aspirin-sensitive patients, ibuprofen tablets
+    should not be administered to patients with this form of aspirin sensitivity and should
+    be used with caution in patients with preexisting asthma.
+  claim_matches_source: ''
+  answer_reflects_claim: ''
+  skip: false
+  labeler_notes: ''
+- item: 71
+  question_id: q17_allergy_amoxicillin_penicillin
+  question: Is amoxicillin a problem if I have a penicillin allergy?
+  response: 'The retrieved labels point toward **caution** with amoxicillin in someone with
+    a penicillin allergy: amoxicillin labeling says serious hypersensitivity reactions are
+    more likely in people with a history of penicillin hypersensitivity, and the contraindications
+    section says amoxicillin is contraindicated (should not be used) after a serious hypersensitivity
+    reaction to amoxicillin or other beta-lactams such as penicillins. The retrieved evidence
+    also includes a penicillin G label that says a history of hypersensitivity to any penicillin
+    is a contraindication, which supports the allergy concern, but the exact reaction history
+    matters because the labels focus on **serious** reactions.'
+  limitations:
+  - The retrieved labels focus on **serious** hypersensitivity reactions; they do not classify
+    every possible penicillin allergy history.
+  - No patient-specific reaction details were provided, so the retrieved labels cannot determine
+    the risk for a particular person.
+  - The retrieved evidence is label text only and does not replace clinician evaluation of
+    an allergy history.
+  claim: The amoxicillin contraindications section says it is contraindicated (should not
+    be used) in patients with a history of a **serious hypersensitivity reaction** such as
+    anaphylaxis (severe allergic reaction) or Stevens-Johnson syndrome to amoxicillin or to
+    other beta-lactams, including penicillins and cephalosporins.
+  cited_source:
+    source_id: 156fa79e-91a6-460c-8f93-af5115b9588a
+    section: contraindications
+  cited_text: 4 CONTRAINDICATIONS Amoxicillin tablets are contraindicated in patients who
+    have experienced a serious hypersensitivity reaction (e.g., anaphylaxis or Stevens-Johnson
+    syndrome) to amoxicillin tablets or to other β-lactam antibacterial drugs (e.g., penicillins
+    and cephalosporins). History of a serious hypersensitivity reaction (e.g., anaphylaxis
+    or Stevens-Johnson syndrome) to amoxicillin tablets or to other beta-lactams (e.g., penicillins
+    or cephalosporins). (4)
+  claim_matches_source: ''
+  answer_reflects_claim: ''
+  skip: false
+  labeler_notes: ''
+- item: 72
+  question_id: q05_side_effects_ibuprofen
+  question: What are common side effects of ibuprofen?
+  response: The retrieved labels point to **gastrointestinal (stomach/intestinal) complaints**
+    as the most frequent adverse reaction with ibuprofen, and they also list **allergic-type
+    reactions** and **serious stomach bleeding** as important warnings. The label evidence
+    is limited to what is explicitly listed in the retrieved sections, so it does not provide
+    a full side-effect frequency list beyond those points.
+  limitations:
+  - The retrieved label sections do not give a complete, ranked list of all common side effects
+    beyond the gastrointestinal complaints and the warning-listed reactions.
+  - The label text here is product-label language, so it does not separate mild side effects
+    from rare but serious harms in a full consumer-friendly list.
+  claim: The warnings sections say ibuprofen may cause **severe allergic reactions**, with
+    symptoms such as **rash, hives (itchy welts), facial swelling, wheezing/asthma, blisters,
+    skin reddening,** or **shock**.
+  cited_source:
+    source_id: ec4746b3-2707-40c5-bb70-58a42f46c249
+    section: warnings
+  cited_text: 'Warnings Allergy alert: Ibuprofen may cause a severe allergic reaction, especially
+    in people allergic to aspirin. Symptoms may include: • hives • facial swelling • asthma
+    (wheezing) • shock • skin reddening • rash • blisters If an allergic reaction occurs,
+    stop use and seek medical help right away. Stomach bleeding warning: This product contains
+    an NSAID, which may cause severe stomach bleeding. The chance is higher if you • are age
+    60 or older • have had stomach ulcers or bleeding problems • take a blood thinning (anticoagulant)
+    or steroid drug • take other drugs containing prescription or nonprescription NSAIDs [aspirin,
+    ibuprofen, naproxen, or others] • have 3 or more alcoholic drinks every day while using
+    this product • take more or for a longer time than directed Heart attack and stroke warning:
+    NSAIDs, except aspirin, increase the risk of heart attack, heart failure, and stroke.
+    These can be fatal. The risk is higher if you use more than directed or for longer than
+    directed. D...'
+  claim_matches_source: ''
+  answer_reflects_claim: ''
+  skip: false
+  labeler_notes: ''
+- item: 73
+  question_id: q09_interaction_ibuprofen_aspirin
+  question: Can I take ibuprofen and aspirin together?
+  response: 'The retrieved ibuprofen labels **do describe an interaction with aspirin**: they
+    say ibuprofen can interfere with aspirin’s **antiplatelet effect** (the blood-thinning/anti-clotting
+    action), and that this may raise cardiovascular risk. The labels also point to extra caution
+    about **stomach bleeding** when NSAIDs are combined, and they note that aspirin-sensitive
+    asthma can cross-react with ibuprofen.'
+  limitations:
+  - RxNorm terminology overlap is not evidence of a clinical interaction.
+  - The retrieved labels do not cover every aspirin product or every dosing schedule, so the
+    timing details are limited to the specific ibuprofen label text retrieved.
+  - This is label-based educational information, not personal medical advice.
+  claim: The contraindications section says ibuprofen should not be given to people who have
+    had **asthma, hives, or allergic-type reactions** after aspirin or other NSAIDs, and the
+    warnings repeat that ibuprofen may cause a severe allergic reaction in people allergic
+    to aspirin.
+  cited_source:
+    source_id: 5e595111-8477-4ec7-8d32-a0aeabc04e1a
+    section: contraindications
+  cited_text: CONTRAINDICATIONS Ibuprofen tablets are contraindicated in patients with known
+    hypersensitivity to Ibuprofen. Ibuprofen tablets should not be given to patients who have
+    experienced asthma, urticaria, or allergic-type reactions after taking aspirin or other
+    NSAIDs. Severe, rarely fatal, anaphylactic-like reactions to NSAIDs have been reported
+    in such patients (see WARNINGS , Anaphylactoid Reactions , and PRECAUTIONS , Preexisting
+    Asthma ). In the setting of coronary artery bypass graft (CABG) surgery [see Warnings
+    ]
+  claim_matches_source: ''
+  answer_reflects_claim: ''
+  skip: false
+  labeler_notes: ''
+- item: 74
+  question_id: q16_allergy_tretinoin_clindamycin
+  question: Can I use a tretinoin cream if I have a clindamycin allergy?
+  response: The retrieved labels point to **tretinoin cream** as a topical acne medicine,
+    and the clindamycin allergy label text does **not** show a direct clindamycin–tretinoin
+    allergy link. What the labels do show is that some **combined clindamycin/tretinoin**
+    products are contraindicated (should not be used) in people with clindamycin or lincomycin
+    hypersensitivity, so the combination product is a different issue from tretinoin alone.
+  limitations:
+  - The retrieved topical tretinoin label text is limited and does not explicitly discuss
+    clindamycin allergy cross-reactivity with tretinoin cream.
+  - Some retrieved tretinoin label text is for oral tretinoin capsules, so it is not directly
+    applicable to a topical cream question.
+  - This is retrieved label information only and not personal medical advice.
+  claim: The retrieved clindamycin labels say clindamycin products are **contraindicated (should
+    not be used)** in people with a history of hypersensitivity to clindamycin or lincomycin.
+  cited_source:
+    source_id: 82336e93-d012-4057-87c4-4202b5ccdcb8
+    section: contraindications
+  cited_text: CONTRAINDICATIONS Clindamycin phosphate topical lotion is contraindicated in
+    individuals with a history of hypersensitivity to preparations containing clindamycin
+    or lincomycin, a history of regional enteritis or ulcerative colitis, or a history of
+    antibiotic-associated colitis.
+  claim_matches_source: ''
+  answer_reflects_claim: ''
+  skip: false
+  labeler_notes: ''
+- item: 75
+  question_id: q15_interaction_lisinopril_metformin_naproxen
+  question: I take lisinopril and metformin — is it a problem to add naproxen?
+  response: The retrieved labels point to **caution** with naproxen in someone taking lisinopril
+    and metformin, mainly because naproxen is an NSAID with label warnings for **kidney effects**,
+    **blood pressure effects**, and **serious stomach bleeding**. The lisinopril label also
+    includes an NSAID interaction section, and the metformin label warns that **kidney problems**
+    raise the risk of metformin-associated lactic acidosis, so this combination is worth reviewing
+    with a clinician or pharmacist before use.
+  limitations:
+  - RxNorm terminology overlap is not evidence of a clinical interaction.
+  - The retrieved lisinopril interaction text is truncated, so it does not show the full NSAID
+    section wording.
+  - The retrieved labels do not provide patient-specific kidney function, blood pressure control,
+    or dosing details for this situation.
+  claim: The naproxen label warns of **serious stomach bleeding** (bleeding in the stomach
+    or intestines), and says the risk is higher with higher-than-directed use or longer use;
+    the OTC naproxen sodium label also says the chance is higher when taking other NSAIDs.
+  cited_source:
+    source_id: 8c45ef1f-f708-485b-bc20-60aa87ce6289
+    section: boxed_warning
+  cited_text: 'WARNING: RISK OF SERIOUS CARDIOVASCULAR AND GASTROINTESTINAL EVENTS Cardiovascular
+    Thrombotic Events • Nonsteroidal anti-inflammatory drugs (NSAIDs) cause an increased risk
+    of serious cardiovascular thrombotic events, including myocardial infarction and stroke,
+    which can be fatal. This risk may occur early in treatment and may increase with duration
+    of use [ see Warnings and Precautions ( 5.1 ) ]. • Naproxen tablets and naproxen sodium
+    tablets are contraindicated in the setting of coronary artery bypass graft (CABG) surgery
+    [ see Contraindications ( 4 ), Warnings and Precautions ( 5.1 ) ]. Gastrointestinal Bleeding,
+    Ulceration, and Perforation • NSAIDs cause an increased risk of serious gastrointestinal
+    (GI) adverse events including bleeding, ulceration, and perforation of the stomach or
+    intestines, which can be fatal. These events can occur at any time during use and without
+    warning symptoms. Elderly patients and patients with a prior history of peptic ulcer disease
+    and/or GI bleed...'
+  claim_matches_source: ''
+  answer_reflects_claim: ''
+  skip: false
+  labeler_notes: ''

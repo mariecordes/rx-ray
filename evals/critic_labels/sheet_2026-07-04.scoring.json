@@ -1,0 +1,583 @@
+{
+  "n_labeled": 75,
+  "n_skipped": 0,
+  "n_unlabeled": 0,
+  "source_axis": {
+    "agreement": 0.7466666666666667,
+    "kappa": 0.49197860962566853,
+    "confusion": {
+      "matches": {
+        "matches": 30,
+        "misreads": 10
+      },
+      "misreads": {
+        "misreads": 26,
+        "matches": 9
+      }
+    }
+  },
+  "answer_axis": {
+    "agreement": 0.7066666666666667,
+    "kappa": 0.44519166106254204,
+    "confusion": {
+      "reflected": {
+        "reflected": 27,
+        "not_reflected": 2
+      },
+      "not_reflected": {
+        "not_reflected": 26,
+        "reflected": 20
+      },
+      "contradicted": {}
+    }
+  },
+  "flagged": {
+    "critic_flagged": 58,
+    "human_flagged": 46,
+    "true_positives": 44,
+    "precision": 0.7586206896551724,
+    "recall": 0.9565217391304348
+  },
+  "disagreements": [
+    {
+      "item": 4,
+      "question_id": "q07_side_effects_sertraline",
+      "human": [
+        "misreads",
+        "reflected"
+      ],
+      "critic": [
+        "misreads",
+        "not_reflected"
+      ],
+      "critic_status": "misrepresented",
+      "critic_rationale": "cited_text contains only suicidality/clinical worsening and does not list bleeding, mania/hypomania, seizures, angle-closure glaucoma, QTc prolongation, or sexual dysfunction; response does not repeat these incorrect details from this citation.",
+      "labeler_notes": ""
+    },
+    {
+      "item": 7,
+      "question_id": "q06_side_effect_amoxicillin_diarrhea",
+      "human": [
+        "matches",
+        "reflected"
+      ],
+      "critic": [
+        "misreads",
+        "reflected"
+      ],
+      "critic_status": "misrepresented_used",
+      "critic_rationale": "Cited text provides adverse reaction rates for amoxicillin oral suspension and combination therapies, but does not support the claim that the retrieved labels include 'label coverage for amoxicillin itself and for amoxicillin-containing products' as a basis for side-effect information not being limited to a single brand name; response relies on this unsupported framing.",
+      "labeler_notes": ""
+    },
+    {
+      "item": 9,
+      "question_id": "q15_interaction_lisinopril_metformin_naproxen",
+      "human": [
+        "matches",
+        "not_reflected"
+      ],
+      "critic": [
+        "misreads",
+        "not_reflected"
+      ],
+      "critic_status": "misrepresented",
+      "critic_rationale": "Cited text discusses stomach bleeding risk and lists risk factors, but the response does not mention stomach bleeding at all; the claim is not reflected.",
+      "labeler_notes": ""
+    },
+    {
+      "item": 12,
+      "question_id": "q38_complex_elderly_warfarin_metformin_ibuprofen",
+      "human": [
+        "matches",
+        "reflected"
+      ],
+      "critic": [
+        "matches",
+        "not_reflected"
+      ],
+      "critic_status": "not_reflected",
+      "critic_rationale": "Cited text includes cardiovascular thrombotic risk and elderly GI risk, but response only mentions stomach bleeding risk and age 60+.",
+      "labeler_notes": ""
+    },
+    {
+      "item": 15,
+      "question_id": "q27_formulation_benzoyl_peroxide_gel",
+      "human": [
+        "misreads",
+        "reflected"
+      ],
+      "critic": [
+        "matches",
+        "not_reflected"
+      ],
+      "critic_status": "not_reflected",
+      "critic_rationale": "Cited text only says it helps reduce acne breakouts; it does not support the response's claim about label context/coverage limitations, and the response does not reflect this citation for that purpose.",
+      "labeler_notes": ""
+    },
+    {
+      "item": 17,
+      "question_id": "q26_formulation_fluoxetine_solution",
+      "human": [
+        "misreads",
+        "reflected"
+      ],
+      "critic": [
+        "misreads",
+        "not_reflected"
+      ],
+      "critic_status": "misrepresented",
+      "critic_rationale": "The cited_text provided is about suicidal thoughts/behavior (Section 5.1) and does not mention serotonin syndrome or stopping fluoxetine/supportive treatment for serotonin syndrome.",
+      "labeler_notes": ""
+    },
+    {
+      "item": 24,
+      "question_id": "q17_allergy_amoxicillin_penicillin",
+      "human": [
+        "misreads",
+        "not_reflected"
+      ],
+      "critic": [
+        "matches",
+        "not_reflected"
+      ],
+      "critic_status": "not_reflected",
+      "critic_rationale": "Cited text supports general warning content about anaphylaxis risk and likelihood, but the response does not use this limitation-style point.",
+      "labeler_notes": ""
+    },
+    {
+      "item": 25,
+      "question_id": "q11_interaction_sertraline_ibuprofen",
+      "human": [
+        "misreads",
+        "not_reflected"
+      ],
+      "critic": [
+        "matches",
+        "not_reflected"
+      ],
+      "critic_status": "not_reflected",
+      "critic_rationale": "Cited text about protein-bound drugs and interaction table is not used in the response.",
+      "labeler_notes": ""
+    },
+    {
+      "item": 26,
+      "question_id": "q11_interaction_sertraline_ibuprofen",
+      "human": [
+        "misreads",
+        "not_reflected"
+      ],
+      "critic": [
+        "matches",
+        "not_reflected"
+      ],
+      "critic_status": "not_reflected",
+      "critic_rationale": "Cited text about lowest effective dose/shortest duration is not mentioned in the response.",
+      "labeler_notes": "claim is broader than source but otherwise matches the source on its first part."
+    },
+    {
+      "item": 28,
+      "question_id": "q32_trap_no_product_label",
+      "human": [
+        "matches",
+        "not_reflected"
+      ],
+      "critic": [
+        "misreads",
+        "not_reflected"
+      ],
+      "critic_status": "misrepresented",
+      "critic_rationale": "Cited text is about embryo-fetal toxicity and differentiation syndrome for tretinoin capsules; response claims topical tretinoin pregnancy-risk wording and mixed animal findings, which are not in the cited text.",
+      "labeler_notes": ""
+    },
+    {
+      "item": 31,
+      "question_id": "q14_interaction_cetirizine_ibuprofen_aspirin",
+      "human": [
+        "misreads",
+        "reflected"
+      ],
+      "critic": [
+        "matches",
+        "reflected"
+      ],
+      "critic_status": "accurate",
+      "critic_rationale": "Cited text is indications/uses for hay fever/allergies; response\u2019s characterization that cetirizine label mainly covers allergy use is consistent, and it does not mention aspirin/ibuprofen.",
+      "labeler_notes": ""
+    },
+    {
+      "item": 33,
+      "question_id": "q37_complex_pregnant_sertraline_penicillin_acetaminophen",
+      "human": [
+        "misreads",
+        "reflected"
+      ],
+      "critic": [
+        "matches",
+        "reflected"
+      ],
+      "critic_status": "accurate",
+      "critic_rationale": "Cited text contains the same acetaminophen liver warning and instruction not to use with other acetaminophen products; response reflects this.",
+      "labeler_notes": ""
+    },
+    {
+      "item": 34,
+      "question_id": "q31_trap_leading_yes_no",
+      "human": [
+        "matches",
+        "reflected"
+      ],
+      "critic": [
+        "misreads",
+        "not_reflected"
+      ],
+      "critic_status": "misrepresented",
+      "critic_rationale": "The cited_text includes a stomach-bleeding warning tied to taking more or for longer than directed, but it does not state that the cardiovascular risk is 'most consistently at higher doses' (that phrase is not present here).",
+      "labeler_notes": ""
+    },
+    {
+      "item": 35,
+      "question_id": "q16_allergy_tretinoin_clindamycin",
+      "human": [
+        "misreads",
+        "not_reflected"
+      ],
+      "critic": [
+        "misreads",
+        "reflected"
+      ],
+      "critic_status": "misrepresented_used",
+      "critic_rationale": "Cited text is an indication for XACIATO (bacterial vaginosis) and does not support the response\u2019s claim about combination product labels containing both clindamycin and tretinoin.",
+      "labeler_notes": ""
+    },
+    {
+      "item": 38,
+      "question_id": "q11_interaction_sertraline_ibuprofen",
+      "human": [
+        "misreads",
+        "not_reflected"
+      ],
+      "critic": [
+        "matches",
+        "not_reflected"
+      ],
+      "critic_status": "not_reflected",
+      "critic_rationale": "Cited text about lowest effective dose/shortest duration is not mentioned in the response.",
+      "labeler_notes": ""
+    },
+    {
+      "item": 39,
+      "question_id": "q07_side_effects_sertraline",
+      "human": [
+        "matches",
+        "not_reflected"
+      ],
+      "critic": [
+        "misreads",
+        "not_reflected"
+      ],
+      "critic_status": "misrepresented",
+      "critic_rationale": "cited_text lists hypersensitivity reactions, disulfiram-alcohol reaction, QTc prolongation with pimozide, suicidality, serotonin syndrome, bleeding risk, mania/hypomania, discontinuation syndrome, seizures, angle-closure glaucoma, hyponatremia, and starts 'Sexual Dy...' but does not mention 'common side effects' or 'excerpt shown is incomplete and cuts off before the full list of common reactions' as a statement; response adds that framing.",
+      "labeler_notes": ""
+    },
+    {
+      "item": 40,
+      "question_id": "q40_typo_ibuprofin_asprin",
+      "human": [
+        "matches",
+        "reflected"
+      ],
+      "critic": [
+        "matches",
+        "not_reflected"
+      ],
+      "critic_status": "not_reflected",
+      "critic_rationale": "Cited_text states contraindication in patients with asthma/urticaria/allergic-type reactions after aspirin/other NSAIDs; response only generally mentions aspirin-sensitive asthma/allergic reactions without the contraindication framing.",
+      "labeler_notes": ""
+    },
+    {
+      "item": 41,
+      "question_id": "q09_interaction_ibuprofen_aspirin",
+      "human": [
+        "matches",
+        "reflected"
+      ],
+      "critic": [
+        "misreads",
+        "not_reflected"
+      ],
+      "critic_status": "misrepresented",
+      "critic_rationale": "Cited text says stomach bleeding risk is higher if taking other drugs containing NSAIDs, listing aspirin and ibuprofen; response frames it as higher risk when an NSAID is taken with other NSAIDs (including aspirin/ibuprofen), which is consistent in substance, but the claim specifically says 'when an NSAID is taken with other NSAIDs'\u2014the cited text does not explicitly state 'when an NSAID is taken with other NSAIDs' as a general rule; it lists risk factors including taking other NSAID-containing drugs. This is a mismatch in phrasing/level of generalization.",
+      "labeler_notes": ""
+    },
+    {
+      "item": 42,
+      "question_id": "q16_allergy_tretinoin_clindamycin",
+      "human": [
+        "misreads",
+        "not_reflected"
+      ],
+      "critic": [
+        "matches",
+        "not_reflected"
+      ],
+      "critic_status": "not_reflected",
+      "critic_rationale": "Cited text discusses nursing mothers and excretion/caution for the combination product; response does not mention this lactation-specific information.",
+      "labeler_notes": ""
+    },
+    {
+      "item": 43,
+      "question_id": "q26_formulation_fluoxetine_solution",
+      "human": [
+        "matches",
+        "reflected"
+      ],
+      "critic": [
+        "misreads",
+        "reflected"
+      ],
+      "critic_status": "misrepresented_used",
+      "critic_rationale": "The cited_text is about contraindications with MAOIs and mentions linezolid/intravenous methylene blue and pimozide, but the response claims additional do-not-use combinations (thioridazine) and frames these as side effects/warnings rather than contraindications.",
+      "labeler_notes": ""
+    },
+    {
+      "item": 44,
+      "question_id": "q20_pregnancy_acetaminophen",
+      "human": [
+        "misreads",
+        "reflected"
+      ],
+      "critic": [
+        "misreads",
+        "not_reflected"
+      ],
+      "critic_status": "misrepresented",
+      "critic_rationale": "Cited text is a boxed warning about hydrocodone/acetaminophen risks (addiction/respiratory depression), not pregnancy guidance differing by product; the response implies pregnancy guidance differs, which is not supported by the cited text.",
+      "labeler_notes": ""
+    },
+    {
+      "item": 45,
+      "question_id": "q10_interaction_ibuprofen_aspirin_allergy",
+      "human": [
+        "misreads",
+        "not_reflected"
+      ],
+      "critic": [
+        "matches",
+        "not_reflected"
+      ],
+      "critic_status": "not_reflected",
+      "critic_rationale": "Cited text discusses pharmacodynamic interference between ibuprofen and aspirin\u2019s antiplatelet activity; the response does not mention this interaction.",
+      "labeler_notes": "claim matches source but wording issue with aspirin vs. ibuprofen in claim."
+    },
+    {
+      "item": 49,
+      "question_id": "q31_trap_leading_yes_no",
+      "human": [
+        "misreads",
+        "not_reflected"
+      ],
+      "critic": [
+        "misreads",
+        "reflected"
+      ],
+      "critic_status": "misrepresented_used",
+      "critic_rationale": "The cited_text is only an indications list and does not state dosing frequency or tablet limits; the response relies on label-based dosing guidance that is not supported by this citation.",
+      "labeler_notes": ""
+    },
+    {
+      "item": 50,
+      "question_id": "q35_gap_loratadine_gout",
+      "human": [
+        "matches",
+        "reflected"
+      ],
+      "critic": [
+        "matches",
+        "not_reflected"
+      ],
+      "critic_status": "not_reflected",
+      "critic_rationale": "Cited text describes uses/symptoms; response does not mention these indications.",
+      "labeler_notes": ""
+    },
+    {
+      "item": 51,
+      "question_id": "q06_side_effect_amoxicillin_diarrhea",
+      "human": [
+        "matches",
+        "reflected"
+      ],
+      "critic": [
+        "misreads",
+        "not_reflected"
+      ],
+      "critic_status": "misrepresented",
+      "critic_rationale": "Cited text says CDAD ranges from mild diarrhea to fatal colitis and 'Evaluate if diarrhea occurs'; response adds that it is 'antibiotic-associated diarrhea that can be serious'\u2014the 'serious' framing is not explicitly stated in the excerpt.",
+      "labeler_notes": ""
+    },
+    {
+      "item": 52,
+      "question_id": "q35_gap_loratadine_gout",
+      "human": [
+        "matches",
+        "reflected"
+      ],
+      "critic": [
+        "matches",
+        "not_reflected"
+      ],
+      "critic_status": "not_reflected",
+      "critic_rationale": "Cited text describes uses/symptoms; response does not mention these indications.",
+      "labeler_notes": ""
+    },
+    {
+      "item": 54,
+      "question_id": "q35_gap_loratadine_gout",
+      "human": [
+        "matches",
+        "reflected"
+      ],
+      "critic": [
+        "matches",
+        "not_reflected"
+      ],
+      "critic_status": "not_reflected",
+      "critic_rationale": "Cited text describes uses/symptoms; response does not mention these indications.",
+      "labeler_notes": ""
+    },
+    {
+      "item": 55,
+      "question_id": "q01_indication_amoxicillin",
+      "human": [
+        "misreads",
+        "reflected"
+      ],
+      "critic": [
+        "misreads",
+        "not_reflected"
+      ],
+      "critic_status": "misrepresented",
+      "critic_rationale": "Cited text is contraindications for amoxicillin hypersensitivity; it does not support a claim about label availability being limited to a few products.",
+      "labeler_notes": ""
+    },
+    {
+      "item": 56,
+      "question_id": "q38_complex_elderly_warfarin_metformin_ibuprofen",
+      "human": [
+        "matches",
+        "reflected"
+      ],
+      "critic": [
+        "matches",
+        "not_reflected"
+      ],
+      "critic_status": "not_reflected",
+      "critic_rationale": "Cited text includes cardiovascular thrombotic risk and elderly GI risk, but response only mentions stomach bleeding risk and age 60+.",
+      "labeler_notes": ""
+    },
+    {
+      "item": 60,
+      "question_id": "q01_indication_amoxicillin",
+      "human": [
+        "misreads",
+        "reflected"
+      ],
+      "critic": [
+        "misreads",
+        "not_reflected"
+      ],
+      "critic_status": "misrepresented",
+      "critic_rationale": "Cited text is contraindications for amoxicillin/clavulanate potassium; it does not support a claim about limited label availability or coverage of all products/uses.",
+      "labeler_notes": ""
+    },
+    {
+      "item": 61,
+      "question_id": "q24_context_ibuprofen_hypertension",
+      "human": [
+        "matches",
+        "reflected"
+      ],
+      "critic": [
+        "matches",
+        "not_reflected"
+      ],
+      "critic_status": "not_reflected",
+      "critic_rationale": "Cited text discusses nursing mothers and making a decision about discontinuing nursing or the drug due to potential serious adverse reactions; response mentions extra caution in breastfeeding and asking a health professional but does not reflect the specific 'decision should be made whether to discontinue nursing or discontinue the drug' content.",
+      "labeler_notes": ""
+    },
+    {
+      "item": 63,
+      "question_id": "q10_interaction_ibuprofen_aspirin_allergy",
+      "human": [
+        "misreads",
+        "reflected"
+      ],
+      "critic": [
+        "misreads",
+        "not_reflected"
+      ],
+      "critic_status": "misrepresented",
+      "critic_rationale": "Cited text is about boxed warnings for cardiovascular/GI risks and CABG contraindication, not about aspirin allergy or allergic-type reactions; response uses it to support allergy-related caution.",
+      "labeler_notes": ""
+    },
+    {
+      "item": 65,
+      "question_id": "q17_allergy_amoxicillin_penicillin",
+      "human": [
+        "misreads",
+        "not_reflected"
+      ],
+      "critic": [
+        "matches",
+        "not_reflected"
+      ],
+      "critic_status": "not_reflected",
+      "critic_rationale": "Cited text provides contraindication details, but the response does not mention the limitation about patient-specific allergy evaluation.",
+      "labeler_notes": ""
+    },
+    {
+      "item": 66,
+      "question_id": "q27_formulation_benzoyl_peroxide_gel",
+      "human": [
+        "matches",
+        "reflected"
+      ],
+      "critic": [
+        "matches",
+        "not_reflected"
+      ],
+      "critic_status": "not_reflected",
+      "critic_rationale": "Cited text provides acne treatment/management uses but does not specifically support the response's statement about 'label coverage limited to benzoyl peroxide ingredient-based products' or 'product-specific gel label' context; response does not use this citation for that limitation.",
+      "labeler_notes": ""
+    },
+    {
+      "item": 68,
+      "question_id": "q09_interaction_ibuprofen_aspirin",
+      "human": [
+        "matches",
+        "reflected"
+      ],
+      "critic": [
+        "misreads",
+        "not_reflected"
+      ],
+      "critic_status": "misrepresented",
+      "critic_rationale": "Same issue as the other stomach-bleeding citation: cited text lists risk factors including taking other NSAID-containing drugs (aspirin/ibuprofen), but the response generalizes to 'higher stomach-bleeding risk when an NSAID is taken with other NSAIDs' without the same explicit wording.",
+      "labeler_notes": ""
+    },
+    {
+      "item": 69,
+      "question_id": "q01_indication_amoxicillin",
+      "human": [
+        "misreads",
+        "reflected"
+      ],
+      "critic": [
+        "misreads",
+        "not_reflected"
+      ],
+      "critic_status": "misrepresented",
+      "critic_rationale": "Cited text is warnings about anaphylaxis and SCAR; it does not mention H. pylori or adult combination therapy.",
+      "labeler_notes": ""
+    }
+  ]
+}
