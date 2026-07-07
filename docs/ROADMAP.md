@@ -63,7 +63,7 @@ These determine first impressions.
 | [D2f](#d2f--more-direct-answer-tone-two-axis-support-badges-remove-critique-clutter) | More direct answer tone, two-axis support badges, remove critique clutter | Safety | S–M | Med | ✅ done | D2e |
 | [D2g](#d2g--cover-the-misreads-source--contradicted-gap-in-the-critic-taxonomy) | Cover the "misreads + contradicted" gap in the critic taxonomy | Safety | S | Low | todo | D2e, D2f |
 | [D2h](#d2h--joint-multi-citation-judgment-in-the-critic) | Joint multi-citation judgment in the critic | Safety | S–M | Med–High | todo | D2e, D3b |
-| [D3a](#d3a--evaluation-harness--curated-question-set) | Evaluation harness | Safety | L | High | in progress | — |
+| [D3a](#d3a--evaluation-harness--curated-question-set) | Evaluation harness | Safety | L | High | ✅ done | — |
 | [D3b](#d3b--critic-accuracy-labeling-study) | Critic accuracy labeling study | Safety | S–M | High | ✅ done | D3a |
 | [D4](#d4--neural-vs-symbolic-vs-combined) | Neural vs symbolic vs combined | Safety | L | High | todo | D3a |
 | [D5](#d5--reasoning--execution-traces) | Reasoning/execution traces | Safety | M | Med | todo | — |
@@ -707,9 +707,9 @@ the D3b disagreement list.
 
 ---
 
-### D3a — Evaluation harness & curated question set
+### ✅ D3a — Evaluation harness & curated question set
 
-**Effort:** L · **Impact:** High · **Status:** in progress
+**Effort:** L · **Impact:** High · **Status:** done
 
 **Goal:** A reproducible eval over a curated question set, tracking citation coverage and state coverage as quality metrics.
 
@@ -723,12 +723,20 @@ the D3b disagreement list.
 
 **Done when:** `make eval` produces the metrics report over the question set, including all-trap abstention results and repeat-stability, and the README Results section quotes it.
 
-> **Progress:** harness (`src/evals/`), 42-question set, run modes
+> **Done.** Harness (`src/evals/`), 42-question set, run modes
 > (`combined` / `combined_extraction_only` / `symbolic`), metrics with
 > match-quality tiers and the per-question matrix, `make eval` /
-> `make eval-offline`, and 16 unit tests have landed. Remaining to close:
-> the headline combined run (`--repeats 3`) committed to
-> `evals/results/latest.{json,md}` and the README **Results** section.
+> `make eval-offline`, and 16 unit tests landed via PR #17. Closed out with
+> the headline combined run (42 × 3 repeats): **40/42 questions pass every
+> check in every repeat** (99% of 504 checks, 1 verdict flip, 0 errors),
+> all 5 traps abstain correctly in every repeat, yes/no framing 0%.
+> Committed to `evals/results/latest.{json,md}` alongside per-mode reports
+> (`latest_symbolic`, `latest_combined_extraction_only`) backing the
+> three-mode progression 28/42 → 39/42 → 40/42; headline numbers quoted in
+> the README Results block and `docs/EVALUATION.md`. Both persistent
+> failures are documented known gaps (q41 paracetamol resolver synonym;
+> q18 intermittent pollen→`unspecified` revision regression — also the one
+> verdict flip).
 
 ---
 
@@ -921,6 +929,27 @@ Do these opportunistically, when a concrete query exposes a problem — not pree
 ## Shipped
 
 A record of completed work.
+
+**D3a — Evaluation harness & curated question set**
+- Behavioral eval harness in `src/evals/` consuming the pipeline's structured
+  `QueryAnswerResponse` (no production changes): extraction P/R/F1 with
+  match-quality tiers (exact/extra/partial/none + per-question 🟢🔵🟡🔴
+  matrix), coverage assertions, trap/abstention checks, guardrail
+  intervention rates, latency, and repeat-stability.
+- 42-question curated set stratified across 12 categories, incl. traps,
+  expected-gap, complex, and typo probes; behavioral expectations only,
+  calibrated to the extractor's normalized vocabulary.
+- Run modes isolating each layer: `symbolic` (keyless/deterministic),
+  `combined_extraction_only`, `combined`; `make eval` / `make eval-offline`;
+  `scripts/run_eval.py` with `--repeats/--only/--category/--update-latest`.
+- Headline run (42 × 3 repeats) committed to `evals/results/latest.{json,md}`:
+  40/42 questions pass every check in every repeat (99% of 504 checks,
+  1 verdict flip, 0 errors), 5/5 traps abstain in every repeat, yes/no
+  framing 0%; drugs F1 0.99. Persistent failures are the two documented
+  known gaps (q41 resolver synonym, q18 intermittent revision regression).
+- README Results block and `docs/EVALUATION.md` headline section quote the
+  numbers; the harness found real bugs during construction (pronoun→
+  itraconazole resolution, revision regression, resolver synonym gap).
 
 **D3b — Critic accuracy labeling study**
 - One-off experiment against the frozen 2026-07-04 combined run over the
