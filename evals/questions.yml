@@ -1,7 +1,7 @@
-# rx-ray D3 evaluation question set — DRAFT for review.
+# rx-ray evaluation question set
 #
 # 42 questions stratified by intent category
-# Expectations are behavioral and structured — never golden answer text — so they
+# Expectations are behavioral and structured (never golden answer text) so they
 # are robust to LLM nondeterminism.
 #
 # Schema per question:
@@ -31,7 +31,7 @@
 #
 # Expectation terms use the extractor's NORMALIZED vocabulary, calibrated via
 # offline runs (e.g. "pregnancy" not "pregnant", "child" not "8-year-old",
-# "senior" not "70-year-old") — matching is normalized substring containment,
+# "senior" not "70-year-old") - matching is normalized substring containment,
 # not stemming.
 #
 # Coverage-assertion policy for interaction questions: every interaction

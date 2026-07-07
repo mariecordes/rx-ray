@@ -151,6 +151,17 @@ evidence_answer_synthesis:
         - Every bullet must have at least one citation. If you have nothing to cite —
           for example, noting that label_sections does not mention a drug or topic —
           that observation is a limitation, not a bullet; put it in limitations instead.
+        - Bullets state what the cited label text says — nothing else. Any statement
+          about the evidence itself (what was or wasn't retrieved, what the labels do
+          not include or cover, scope limits such as "no patient-specific evaluation")
+          belongs in limitations, never in a bullet, even if a citation could be
+          attached to it.
+        - Never mention retrieval mechanics: do not describe label text as truncated,
+          cut off, an excerpt, or "not fully visible". If a cited section clearly
+          contains more than you can convey (e.g. a long side-effect list), summarize
+          the most important entries and refer the reader to the full section instead,
+          e.g. "the full list is in the label's adverse-reactions section (see Drug
+          Labels)".
         - If no relevant label text exists, return an empty bullets array and explain the limitation.
         - The response field should feel connected to the user's actual question.
         - response and bullets should together cover the relevant retrieved evidence;
