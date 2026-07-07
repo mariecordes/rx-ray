@@ -148,7 +148,20 @@ The guardrails are measured, not just asserted, in two complementary ways:
   labels, with a bucketed error analysis that produced concrete follow-up
   work).
 
-Methodology, results, and analysis: [docs/EVALUATION.md](docs/EVALUATION.md).
+**Headline results** (full pipeline, 42 questions × 3 repeats):
+
+- **40/42** questions pass every behavioral check in every repeat
+  (**99%** of 504 checks; 1 verdict flip; 0 errors) — both persistent
+  failures are documented known gaps, kept in the set as quantified probes.
+- **Abstention holds**: all 5 trap questions (fictional drug, false premise,
+  leading yes/no, …) pass in every repeat; personal yes/no advice framing: 0%.
+- Extraction: drugs F1 0.99 · conditions 1.00 · allergies 1.00.
+- The deterministic layer visibly earns its keep: per run, the critic flagged
+  17% of citations, 42% of answers were regenerated after a critic flag, and
+  12% had a dropped caveat re-appended deterministically.
+
+Methodology, results, and analysis: [docs/EVALUATION.md](docs/EVALUATION.md) ·
+full report: [evals/results/latest.md](evals/results/latest.md).
 
 ## Tech stack
 
