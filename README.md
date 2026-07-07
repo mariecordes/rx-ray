@@ -133,6 +133,23 @@ the safety properties are enforced in code:
 - **Graceful degradation**: every LLM call is behind env config and falls back
   to deterministic behavior, so the app runs (and demos) without an API key.
 
+## Evaluation
+
+The guardrails are measured, not just asserted, in two complementary ways:
+
+- **A repeatable evaluation harness**: 42 curated questions (including trap
+  questions where the correct behavior is to *refuse*) with behavioral,
+  structured expectations, run via `make eval` / `make eval-offline` across
+  isolated pipeline modes (deterministic-only, extraction-LLM-only, full
+  pipeline) so each layer's contribution is measurable.
+- **One-off experiments**: designed studies against a frozen system state —
+  most notably a blind human labeling study of the LLM faithfulness critic
+  (the judge gets judged: flag precision 0.76, flag recall 0.96 vs. human
+  labels, with a bucketed error analysis that produced concrete follow-up
+  work).
+
+Methodology, results, and analysis: [docs/EVALUATION.md](docs/EVALUATION.md).
+
 ## Tech stack
 
 - **Frontend:** Next.js, React, TypeScript, Tailwind CSS, D3 force layouts for

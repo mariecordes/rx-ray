@@ -213,6 +213,51 @@ export function AboutPage() {
             </CollapsibleSection>
 
             <CollapsibleSection
+              title="How it's evaluated"
+              isOpen={isOpen("How it's evaluated")}
+              onToggle={() => handleToggle("How it's evaluated")}
+            >
+              <p className="mb-3">
+                Guardrails you can&apos;t measure are just promises. So a good
+                part of the work behind <RxRay /> went into evaluation, in two
+                complementary ways:
+              </p>
+              <p className="mb-3">
+                🔁 <strong>A repeatable evaluation harness:</strong> 42 curated
+                questions, including <em>trap questions</em>{" "}
+                where the only
+                correct behavior is to refuse, like asking about a drug that
+                doesn&apos;t exist, with structured, behavioral expectations:
+                what must resolve, what the coverage audit must say, which
+                guardrails must fire. The harness runs the pipeline in isolated
+                modes (deterministic-only, extraction-LLM-only, full pipeline),
+                so each layer&apos;s contribution is measured rather than
+                assumed.
+              </p>
+              <p className="mb-3">
+                🧪 <strong>One-off experiments:</strong> designed studies
+                against a frozen system state. The largest so far: the
+                faithfulness critic is an LLM judging an LLM, so I hand-labeled
+                its verdicts blind and scored the judge itself. Flag precision
+                0.76, flag recall 0.96 against my labels, with an error
+                analysis that turned the disagreements into concrete follow-up
+                work on the roadmap.
+              </p>
+              <p>
+                Full methodology, metrics, and results:{" "}
+                <a
+                  href="https://github.com/mariecordes/rx-ray/blob/main/docs/EVALUATION.md"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={link}
+                >
+                  docs/EVALUATION.md
+                </a>
+                .
+              </p>
+            </CollapsibleSection>
+
+            <CollapsibleSection
               title="Goal & impact"
               isOpen={isOpen("Goal & impact")}
               onToggle={() => handleToggle("Goal & impact")}
