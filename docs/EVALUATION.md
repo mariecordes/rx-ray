@@ -93,27 +93,52 @@ make eval                                          # combined + refresh evals/re
 - **Stability**: `--repeats N` reports verdict flips and worst-of-repeats
   match quality; LLM nondeterminism is reported, not averaged away.
 
-### Headline results
+### Headline results (combined mode, 42 questions × 3 repeats, July 2026)
 
-_To be filled from `evals/results/latest.md` after the headline combined run
-(`--repeats 3`)._
+Full report: [`evals/results/latest.md`](../evals/results/latest.md)
+(committed output of `make eval`).
 
-<!-- TODO(D3a close-out): headline table (questions passed, check pass rate,
-verdict flips, latency), extraction P/R/F1 table, guardrail intervention
-rates, per-category table. -->
+| metric | value |
+|---|---|
+| Questions passing all behavioral checks in every repeat | **40/42** |
+| Behavioral checks passed | **499/504 (99%)** |
+| Verdict flips across repeats | 1 |
+| Abstention: trap questions passing (every repeat) | **5/5** |
+| Yes/no personal-advice framing | **0%** |
+| Errors | 0 |
 
-### Three-mode progression (single-repeat development runs)
+Guardrail intervention rates (share of answered runs): critic flagged 17%
+of citations, 42% of answers regenerated once after a critic flag, 12% had
+a required caveat re-appended deterministically, 26% had an uncited bullet
+relocated to limitations. Extraction (macro): drugs F1 0.99, conditions
+1.00, allergies 1.00, intents recall 1.00.
 
-| Mode | Questions passing | Checks passing |
-|---|---|---|
-| symbolic | 28/42 | 86% |
-| combined_extraction_only | 39/42 | 98% |
-| combined | 39/42 | 98% |
+Both persistent failures are documented known gaps, not surprises: **q41**
+("paracetamol" doesn't resolve — resolver synonym gap) and **q18** (the
+LLM-revision layer intermittently rewrites a correctly-extracted `pollen`
+allergy to `unspecified`; this is also the single verdict flip —
+repeat-stability surfacing that the regression is nondeterministic).
+
+### Three-mode progression
+
+All three modes measured against the same system state as the headline run;
+committed reports linked per row.
+
+| Mode | Questions passing | Checks passing | Repeats | Report |
+|---|---|---|---|---|
+| symbolic | 28/42 | 86% | 1 (deterministic) | [`latest_symbolic.md`](../evals/results/latest_symbolic.md) |
+| combined_extraction_only | 39/42 | 99% | 3 (2 verdict flips) | [`latest_combined_extraction_only.md`](../evals/results/latest_combined_extraction_only.md) |
+| combined | **40/42** | 99% | 3 (1 verdict flip) | [`latest.md`](../evals/results/latest.md) |
 
 The extraction-LLM layer recovers 11 questions over the symbolic floor
 (intent phrasings like "can X *cause*…", role assignment for current
-medications, condition extraction); the synthesis/critic layers add
-answer-side guarantees rather than extraction fixes.
+medications, condition extraction). The full pipeline's checks-passing rate
+holds at 99% even though it carries the answer-side checks the cheaper
+modes can't run at all (limitations wording, guardrail floors); its +1
+question over extraction-only is within run-to-run nondeterminism (q29
+flickers in extraction mode), so the honest reading is: the neural
+extraction layer buys extraction quality, the synthesis/critic layers buy
+audited, cited answers at no loss of behavioral compliance.
 
 ### Selected findings from development runs
 
@@ -211,7 +236,7 @@ citations in the underlying run).
   3. Already landed during the study: synthesis-prompt rules moving evidence-scope statements to limitations and banning retrieval-mechanics narration. 
   4. The product conclusion: flag-level badges are trustworthy enough to display; fine-grained five-tier wording is not — consistent with the earlier D2f decision to render two coarse axes instead of the raw tier.
 
-## 5. Neural vs symbolic vs combined (D4)
+## 3. Neural vs symbolic vs combined
 
 _Planned._ The harness gains a `neural` mode (one neutral, un-sabotaged LLM
 call — no retrieval, no whitelist, no validation) and a property table
@@ -233,7 +258,7 @@ prevents" framing.
 <!-- TODO(D4): comparison table + 2–3 headline contrast numbers + live link
 to /compare. -->
 
-## 6. Design principles (why the eval looks like this)
+## Design principles (why the eval looks like this)
 
 - **Behavioral expectations over golden text**: assertions on structured
   facts survive model swaps and nondeterminism; snapshot text does not.
