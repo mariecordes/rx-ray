@@ -74,28 +74,81 @@ WATCH_HINTS = {
 OUT_PATH = REPO_ROOT / "apps" / "frontend" / "src" / "data" / "compare-fixtures.json"
 
 
-def trim_combined(response: QueryAnswerResponse) -> dict:
+def _source_labels_from_packet(packet: dict) -> dict[str, str]:
+    source_labels: dict[str, str] = {}
+    for entry in packet.get("label_sections", []):
+        source_id = entry.get("source_id")
+        if source_id and source_id not in source_labels:
+            drug = entry.get("drug_name") or "label"
+            source_labels[source_id] = f"{drug} label {len(source_labels) + 1}"
+    return source_labels
+
+
+def trim_combined(response: QueryAnswerResponse, service) -> dict:
+    """Trim the full production pipeline result for the neuro-symbolic column.
+
+    Includes the *combined* (LLM-revised) understanding and coverage so the
+    page can render the same understood/coverage panels as the Ask page —
+    these deliberately differ from the deterministic-only symbolic column.
+    """
+    understanding = response.understanding
+    state = understanding.state
+    packet = service.synthesizer.build_evidence_packet(
+        understanding,
+        secondary_evidence=response.secondary_evidence,
+        context_evidence=response.context_evidence,
+        contract=response.contract,
+    )
+    understanding_dict = {
+        "state": {
+            "primary_drug": state.primary_drug,
+            "drugs": list(state.all_drugs_mentioned),
+            "current_medications": list(state.current_medications),
+            "allergies": list(state.allergies),
+            "conditions": list(state.conditions),
+            "patient_context": list(state.patient_context),
+            "intents": list(state.intents),
+        },
+    }
+    coverage = [
+        {
+            "category": item.category,
+            "label": item.label,
+            "status": item.status,
+            "reason": item.reason,
+        }
+        for item in response.coverage.items
+    ]
+    source_labels = _source_labels_from_packet(packet)
+
     answer = response.answer
     if answer is None:
-        return {"response": "", "bullets": [], "limitations": [], "safety_note": ""}
+        base = {"response": "", "bullets": [], "limitations": [], "safety_note": ""}
+    else:
+        base = {
+            "response": answer.response,
+            "bullets": [
+                {
+                    "text": bullet.text,
+                    "citations": [
+                        {
+                            "source_id": c.source_id,
+                            "section": c.section,
+                            "support_status": c.support_status,
+                        }
+                        for c in bullet.citations
+                    ],
+                }
+                for bullet in answer.bullets
+            ],
+            "limitations": list(answer.limitations),
+            "safety_note": answer.safety_note,
+        }
     return {
-        "response": answer.response,
-        "bullets": [
-            {
-                "text": bullet.text,
-                "citations": [
-                    {
-                        "source_id": c.source_id,
-                        "section": c.section,
-                        "support_status": c.support_status,
-                    }
-                    for c in bullet.citations
-                ],
-            }
-            for bullet in answer.bullets
-        ],
-        "limitations": list(answer.limitations),
-        "safety_note": answer.safety_note,
+        **base,
+        "understanding": understanding_dict,
+        "coverage": coverage,
+        "source_labels": source_labels,
     }
 
 
@@ -159,10 +212,13 @@ def main() -> int:
         print(f"Unknown showcase ids: {missing}", file=sys.stderr)
         return 2
 
-    # Phase 1: everything that needs LLM env config.
+    # Phase 1: everything that needs LLM env config. Trim the combined result
+    # here too, while combined_service still has its synthesizer available
+    # (Phase 2 strips extraction-LLM env for the whole process).
     print("Phase 1/2: neural + combined runs (LLM)...", flush=True)
     neural_texts: dict[str, str] = {}
     combined_responses: dict[str, QueryAnswerResponse] = {}
+    combined_trimmed: dict[str, dict] = {}
     combined_service = build_service("combined")
     for qid in SHOWCASE_IDS:
         question = questions[qid]
@@ -170,6 +226,9 @@ def main() -> int:
         neural_texts[qid] = generate_neural_answer(question.question)
         print(f"  [combined] {qid}", flush=True)
         combined_responses[qid] = combined_service.answer(question.question)
+        combined_trimmed[qid] = trim_combined(
+            combined_responses[qid], combined_service
+        )
 
     # Phase 2: symbolic (strips extraction-LLM env for this process).
     print("Phase 2/2: symbolic runs (deterministic)...", flush=True)
@@ -190,7 +249,7 @@ def main() -> int:
                     "advice_phrases": personal_advice_hits(neural_texts[qid]),
                 },
                 "symbolic": trim_symbolic(symbolic_response, symbolic_service),
-                "combined": trim_combined(combined_responses[qid]),
+                "combined": combined_trimmed[qid],
                 "scorecard": build_scorecard(
                     question,
                     neural_text=neural_texts[qid],

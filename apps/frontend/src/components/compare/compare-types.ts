@@ -11,11 +11,29 @@ export interface CompareBullet {
   citations: CompareCitation[];
 }
 
+export interface CombinedUnderstanding {
+  state: {
+    primary_drug?: string | null;
+    drugs: string[];
+    current_medications: string[];
+    allergies: string[];
+    conditions: string[];
+    patient_context: string[];
+    intents: string[];
+  };
+}
+
 export interface CombinedView {
   response: string;
   bullets: CompareBullet[];
   limitations: string[];
   safety_note: string;
+  // Present once fixtures are regenerated with the extended builder. The
+  // combined (LLM-revised) understanding and coverage differ on purpose from
+  // the deterministic-only symbolic column.
+  understanding?: CombinedUnderstanding;
+  coverage?: SymbolicCoverageItem[];
+  source_labels?: Record<string, string>;
 }
 
 export interface SymbolicResolved {
