@@ -1,10 +1,11 @@
 "use client";
 
-import { Check, Minus, X } from "lucide-react";
-import { useState } from "react";
+import { Check, ChevronDown, Minus, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 
 import fixturesJson from "@/data/compare-fixtures.json";
-import { Card } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
+import { InfoTooltip } from "@/components/ui/info-tooltip";
 import { cn } from "@/lib/utils";
 
 import {
@@ -32,13 +33,20 @@ const categoryLabels: Record<string, string> = {
   complex: "Complex",
 };
 
-const MODES: CompareMode[] = ["neural", "symbolic", "combined"];
+// Column / scorecard order: raw LLM on the left, rx-ray highlighted in the
+// middle (it combines the two), deterministic layer on the right.
+const MODE_ORDER: CompareMode[] = ["neural", "combined", "symbolic"];
 
 const MODE_HEADINGS: Record<CompareMode, string> = {
-  neural: "LLM only",
+  neural: "Neural only",
   symbolic: "Symbolic only",
-  combined: "rx-ray",
+  combined: "rx-ray (neuro-symbolic)",
 };
+
+// Hidden per user feedback: the scorecard sits far down the page and its
+// current rows don't clearly tell the "raw LLM looks reckless" story. Code
+// kept intact to revisit later rather than deleted.
+const SHOW_SCORECARD = false;
 
 interface ScorecardRowConfig {
   key: keyof Pick<
@@ -88,91 +96,164 @@ export function ComparePage() {
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      <Card className="p-4">
-        <h1 className="text-lg font-semibold text-slate-900">
-          Neural vs symbolic vs neuro-symbolic
-        </h1>
-        <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">
-          The same question, three ways: an unconstrained LLM, rx-ray&apos;s
-          deterministic layer alone, and the full neuro-symbolic pipeline
-          where the symbolic layer grounds and audits the model. Every output
-          below is a precomputed run of the real system — pick a question and
-          compare what each approach can and cannot back up.
-        </p>
-      </Card>
-
-      <div className="flex flex-wrap gap-2">
-        {fixtures.questions.map((question) => (
-          <QuestionButton
-            key={question.id}
-            question={question}
-            selected={question.id === selected.id}
-            onSelect={() => setSelectedId(question.id)}
+    <div className="flex flex-col gap-5">
+      <Card>
+        <CardContent className="pb-7 pt-6">
+          <div className="flex items-center justify-center gap-2">
+            <h1 className="text-sm font-semibold uppercase tracking-wide text-slate-600">
+              Ask a Question
+            </h1>
+            <InfoTooltip text="The same question run three ways: an unconstrained LLM API call, rx-ray's deterministic layer alone, and the full neuro-symbolic pipeline where the symbolic layer grounds and audits the model." />
+          </div>
+          <p className="mx-auto mt-1 text-center text-sm leading-6 text-slate-500">
+            Every output below is a precomputed run of the real system. Pick a
+            question and compare what each approach can and cannot back up.
+          </p>
+          <QuestionPicker
+            questions={fixtures.questions}
+            selectedId={selected.id}
+            onSelect={setSelectedId}
           />
-        ))}
-      </div>
-
-      <p className="text-sm leading-5 text-slate-600">
-        <span className="font-medium text-slate-800">
-          &ldquo;{selected.question}&rdquo;
-        </span>
-        {selected.hint ? <span> — {selected.hint}</span> : null}
-      </p>
+        </CardContent>
+      </Card>
 
       <div className="grid gap-4 lg:grid-cols-3">
         <NeuralColumn neural={selected.neural} />
+        <CombinedColumn
+          combined={selected.combined}
+          question={selected.question}
+          highlighted
+        />
         <SymbolicColumn symbolic={selected.symbolic} />
-        <CombinedColumn combined={selected.combined} />
       </div>
 
-      <ScorecardCard scorecard={selected.scorecard} />
+      {SHOW_SCORECARD ? (
+        <ScorecardCard scorecard={selected.scorecard} />
+      ) : null}
 
       <p className="text-xs leading-5 text-slate-500">
         Precomputed outputs of the real pipeline, generated{" "}
         {fixtures.generated_at.slice(0, 10)}
         {fixtures.synthesis_model
           ? ` with ${fixtures.synthesis_model}`
-          : ""}{" "}
-        — see the About page for how rx-ray works. Educational demonstration
-        only; none of the columns are medical advice.
+          : ""}
+        {". "}
+        See the About page for how rx-ray works. Educational demonstration only;
+        none of the columns are medical advice.
       </p>
     </div>
   );
 }
 
-function QuestionButton({
-  question,
-  selected,
+function QuestionPicker({
+  questions,
+  selectedId,
   onSelect,
 }: {
-  question: CompareQuestion;
-  selected: boolean;
-  onSelect: () => void;
+  questions: CompareQuestion[];
+  selectedId: string;
+  onSelect: (id: string) => void;
 }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const selected =
+    questions.find((question) => question.id === selectedId) ?? questions[0];
+
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+    function handlePointerDown(event: MouseEvent) {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(event.target as Node)
+      ) {
+        setIsOpen(false);
+      }
+    }
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isOpen]);
+
   return (
-    <button
-      type="button"
-      onClick={onSelect}
-      className={cn(
-        "flex items-center gap-2 rounded-md border px-3 py-1.5 text-left text-sm transition",
-        selected
-          ? "border-[#3B2478] bg-[#EEE7FA] text-[#3B2478] shadow-sm"
-          : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50"
-      )}
-    >
-      <span
-        className={cn(
-          "rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
-          selected
-            ? "bg-[#3B2478]/10 text-[#3B2478]"
-            : "bg-slate-100 text-slate-500"
-        )}
+    <div ref={containerRef} className="relative mx-auto mt-5 max-w-4xl">
+      <button
+        type="button"
+        onClick={() => setIsOpen((current) => !current)}
+        aria-haspopup="listbox"
+        aria-expanded={isOpen}
+        className="flex min-h-11 w-full items-center gap-2 rounded-md border border-[#C7B4EF] bg-white px-3 py-2 text-left shadow-sm outline-none transition focus:border-[#371E8F] focus:ring-2 focus:ring-[#E8DDF9]"
       >
-        {categoryLabels[question.category] ?? question.category}
-      </span>
-      <span className="max-w-64 truncate">{question.question}</span>
-    </button>
+        {selected ? (
+          <>
+            <CategoryChip category={selected.category} />
+            <span
+              className="flex-1 truncate text-slate-950"
+              style={{ fontSize: "15px" }}
+            >
+              {selected.question}
+            </span>
+          </>
+        ) : null}
+        <ChevronDown
+          className={cn(
+            "size-4 shrink-0 text-slate-500 transition-transform",
+            isOpen && "rotate-180"
+          )}
+        />
+      </button>
+
+      {isOpen ? (
+        <div
+          role="listbox"
+          className="absolute z-20 mt-1 max-h-96 w-full overflow-y-auto rounded-md border border-slate-200 bg-white p-1 shadow-lg"
+        >
+          <div className="cursor-not-allowed px-3 py-2 text-sm italic text-slate-400">
+            Type your own question… (coming soon)
+          </div>
+          {questions.map((question) => (
+            <button
+              key={question.id}
+              type="button"
+              role="option"
+              aria-selected={question.id === selectedId}
+              onClick={() => {
+                onSelect(question.id);
+                setIsOpen(false);
+              }}
+              className={cn(
+                "flex w-full items-start gap-2 rounded-md px-3 py-2 text-left transition",
+                question.id === selectedId
+                  ? "bg-[#F1ECFB]"
+                  : "hover:bg-slate-50"
+              )}
+            >
+              <CategoryChip category={question.category} />
+              <span className="text-sm leading-5 text-slate-800">
+                {question.question}
+              </span>
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function CategoryChip({ category }: { category: string }) {
+  return (
+    <span className="mt-0.5 shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+      {categoryLabels[category] ?? category}
+    </span>
   );
 }
 
@@ -185,9 +266,8 @@ function ScorecardCard({ scorecard }: { scorecard: Scorecard }) {
         </h2>
         <p className="mt-0.5 text-xs leading-4 text-slate-500">
           Every cell is computed deterministically from the outputs above
-          (framing-rule regexes and structured pipeline data) — no judgment
-          calls. &ldquo;—&rdquo; means the property does not apply to that
-          mode.
+          (framing-rule regexes and structured pipeline data). &ldquo;—&rdquo;
+          means the property does not apply to that mode.
         </p>
       </div>
       <div className="overflow-x-auto p-4">
@@ -195,19 +275,36 @@ function ScorecardCard({ scorecard }: { scorecard: Scorecard }) {
           <thead>
             <tr className="text-left text-xs uppercase tracking-wide text-slate-500">
               <th className="pb-2 pr-4 font-medium">Property</th>
-              {MODES.map((mode) => (
-                <th key={mode} className="pb-2 pr-4 font-medium">
+              {MODE_ORDER.map((mode) => (
+                <th
+                  key={mode}
+                  className={cn(
+                    "pb-2 pr-4 font-medium",
+                    mode === "combined" &&
+                      "rounded-t-md border-x border-t border-[#D7C8F4] bg-[#FBF9FE] px-3 pt-2 text-[#3B2478]"
+                  )}
+                >
                   {MODE_HEADINGS[mode]}
                 </th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {SCORECARD_ROWS.map((row) => (
+            {SCORECARD_ROWS.map((row, rowIndex) => (
               <tr key={row.key} className="border-t border-slate-100">
                 <td className="py-2 pr-4 text-slate-700">{row.label}</td>
-                {MODES.map((mode) => (
-                  <td key={mode} className="py-2 pr-4">
+                {MODE_ORDER.map((mode) => (
+                  <td
+                    key={mode}
+                    className={cn(
+                      "py-2 pr-4",
+                      mode === "combined" &&
+                        "border-x border-[#D7C8F4] bg-[#FBF9FE] px-3",
+                      mode === "combined" &&
+                        rowIndex === SCORECARD_ROWS.length - 1 &&
+                        "rounded-b-md border-b"
+                    )}
+                  >
                     <ScorecardCell
                       kind={row.kind}
                       value={scorecard[row.key][mode]}

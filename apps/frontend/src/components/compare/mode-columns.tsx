@@ -1,54 +1,49 @@
 "use client";
 
-import { AlertTriangle } from "lucide-react";
+import Link from "next/link";
+import { AlertTriangle, ArrowUpRight, FileText } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { Card } from "@/components/ui/card";
+import {
+  AnswerSection,
+  CaveatsList,
+  CitationSupportBadges,
+  CoverageStatusChips,
+  EvidenceAnswerBox,
+  EvidenceCoverageList,
+  InlineBoldMarkdown,
+  UnderstoodPanel,
+  coverageStatusCounts,
+} from "@/components/dossier/generated-response";
 import { sectionLabels } from "@/lib/format";
+import type { CitationSupportStatus } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
+import { toCoverageReport, toQueryState } from "./compare-adapters";
 import type {
   CombinedView,
+  CompareBullet,
   NeuralView,
   SymbolicView,
 } from "./compare-types";
 
-const coverageStatusClasses: Record<string, string> = {
-  addressed: "border-emerald-200 bg-emerald-50 text-emerald-800",
-  not_found_in_evidence: "border-amber-200 bg-amber-50 text-amber-800",
-  not_retrieved: "border-slate-200 bg-slate-50 text-slate-600",
-  out_of_scope: "border-slate-200 bg-slate-50 text-slate-500",
-};
+// Marks the middle (rx-ray) column: a colored top accent bar plus a
+// noticeably stronger, tinted shadow, distinct from the light violet used
+// throughout the answer panels so it doesn't just blend into the page.
+// The `!` forces the shadow to win over Card's own `shadow-sm` — same CSS
+// property, and cn() here is a plain clsx with no conflict resolution.
+const HIGHLIGHT_ACCENT =
+  "border-t-4 border-t-[#4F46E5] shadow-[0_22px_45px_-15px_rgba(67,56,202,0.45)]!";
 
-const coverageStatusLabels: Record<string, string> = {
-  addressed: "Addressed",
-  not_found_in_evidence: "Not found in evidence",
-  not_retrieved: "Not retrieved",
-  out_of_scope: "Out of scope",
-};
+const noop = () => {};
 
 function sectionLabel(section: string): string {
   return sectionLabels[section] ?? section.replaceAll("_", " ");
 }
 
-/** Minimal **bold** renderer, same behavior as the Ask flow's helper. */
-function InlineBold({ text }: { text: string }) {
-  const segments = text.split(/(\*\*[^*]+\*\*)/g);
-  return (
-    <>
-      {segments.map((segment, index) => {
-        const isBold = segment.startsWith("**") && segment.endsWith("**");
-        return isBold ? (
-          <strong key={index}>{segment.slice(2, -2)}</strong>
-        ) : (
-          segment
-        );
-      })}
-    </>
-  );
-}
-
-/** Split text on detected advice phrases (case-insensitive) and mark them. */
+/** Minimal **bold** renderer with red highlighting of detected advice phrases,
+ *  used only for the raw-LLM column. */
 function HighlightedProse({
   text,
   phrases,
@@ -57,7 +52,7 @@ function HighlightedProse({
   phrases: string[];
 }) {
   if (phrases.length === 0) {
-    return <InlineBold text={text} />;
+    return <InlineBoldMarkdown text={text} />;
   }
   const nodes: ReactNode[] = [];
   let remaining = text;
@@ -74,11 +69,13 @@ function HighlightedProse({
       }
     }
     if (earliest === -1) {
-      nodes.push(<InlineBold key={key++} text={remaining} />);
+      nodes.push(<InlineBoldMarkdown key={key++} text={remaining} />);
       break;
     }
     if (earliest > 0) {
-      nodes.push(<InlineBold key={key++} text={remaining.slice(0, earliest)} />);
+      nodes.push(
+        <InlineBoldMarkdown key={key++} text={remaining.slice(0, earliest)} />
+      );
     }
     nodes.push(
       <mark
@@ -94,241 +91,306 @@ function HighlightedProse({
   return <>{nodes}</>;
 }
 
-function ColumnShell({
+function ColumnTitle({
   title,
   subtitle,
-  children,
+  highlighted = false,
 }: {
   title: string;
   subtitle: string;
-  children: ReactNode;
+  highlighted?: boolean;
 }) {
   return (
-    <Card className="flex h-full flex-col">
-      <div className="border-b border-slate-100 p-4">
-        <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
-        <p className="mt-0.5 text-xs leading-4 text-slate-500">{subtitle}</p>
-      </div>
-      <div className="flex flex-1 flex-col gap-3 p-4">{children}</div>
+    <Card
+      className={cn(
+        "flex min-h-[5.5rem] flex-col justify-center p-4",
+        highlighted && HIGHLIGHT_ACCENT
+      )}
+    >
+      <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
+      <p className="mt-1 text-xs leading-4 text-slate-500">{subtitle}</p>
     </Card>
   );
 }
 
-function Chip({
+function ColumnContent({
+  highlighted = false,
   children,
-  className,
 }: {
+  highlighted?: boolean;
   children: ReactNode;
-  className?: string;
 }) {
   return (
-    <span
+    <Card
       className={cn(
-        "inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium",
-        className ?? "border-slate-200 bg-slate-50 text-slate-700"
+        "flex flex-1 flex-col gap-3 p-4",
+        highlighted && HIGHLIGHT_ACCENT
       )}
     >
       {children}
-    </span>
+    </Card>
   );
 }
 
-export function NeuralColumn({ neural }: { neural: NeuralView }) {
+export function NeuralColumn({
+  neural,
+  highlighted,
+}: {
+  neural: NeuralView;
+  highlighted?: boolean;
+}) {
   return (
-    <ColumnShell
-      title="LLM only"
-      subtitle="One unconstrained model call — nothing retrieved, nothing checked."
-    >
-      {/* This banner is part of the column by construction: never render
-          unconstrained model output without this framing. */}
-      <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">
-        <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
-        <span>
-          Unconstrained model output — no retrieval, no citations, no
-          guardrails. Shown to demonstrate what rx-ray prevents; not medical
-          information.
-        </span>
-      </div>
-      <div className="whitespace-pre-line text-sm leading-6 text-slate-800">
-        <HighlightedProse text={neural.text} phrases={neural.advice_phrases} />
-      </div>
-      {neural.advice_phrases.length > 0 ? (
-        <p className="text-xs leading-5 text-red-800">
-          {neural.advice_phrases.length} phrase
-          {neural.advice_phrases.length === 1 ? "" : "s"} highlighted above
-          would be blocked or caveated by rx-ray&apos;s framing rules.
-        </p>
-      ) : null}
-    </ColumnShell>
-  );
-}
-
-export function SymbolicColumn({ symbolic }: { symbolic: SymbolicView }) {
-  const stateGroups: Array<[string, string[]]> = [
-    ["Drugs", symbolic.state.drugs],
-    ["Current medications", symbolic.state.current_medications],
-    ["Allergies", symbolic.state.allergies],
-    ["Conditions", symbolic.state.conditions],
-    ["Patient context", symbolic.state.patient_context],
-    ["Intents", symbolic.state.intents],
-  ];
-  const sectionEntries = Object.entries(symbolic.section_counts);
-  return (
-    <ColumnShell
-      title="Symbolic only"
-      subtitle="What the deterministic layer knows — before any text is generated."
-    >
-      <div className="flex flex-col gap-1.5">
-        {stateGroups
-          .filter(([, values]) => values.length > 0)
-          .map(([label, values]) => (
-            <div key={label} className="flex flex-wrap items-center gap-1">
-              <span className="text-[11px] font-medium uppercase tracking-wide text-slate-500">
-                {label}
-              </span>
-              {values.map((value) => (
-                <Chip key={value}>{value}</Chip>
-              ))}
-            </div>
-          ))}
-      </div>
-
-      <div>
-        <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-slate-500">
-          Resolved RxNorm concepts
-        </p>
-        <ul className="flex flex-col gap-1 text-xs leading-5 text-slate-700">
-          {symbolic.resolved.map((item) => (
-            <li key={`${item.text}-${item.rxcui ?? "none"}`}>
-              <span className="font-medium">{item.text}</span>
-              {item.rxcui ? (
-                <>
-                  {" "}
-                  → {item.name}{" "}
-                  <span className="text-slate-400">
-                    (RXCUI {item.rxcui}
-                    {item.tty ? ` · ${item.tty}` : ""})
-                  </span>
-                </>
-              ) : (
-                <span className="text-amber-700"> → not resolved</span>
-              )}
-            </li>
-          ))}
-          {symbolic.resolved.length === 0 ? (
-            <li className="text-slate-500">No drug mentions resolved.</li>
-          ) : null}
-        </ul>
-      </div>
-
-      {sectionEntries.length > 0 ? (
-        <div>
-          <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-slate-500">
-            Retrieved label sections
+    <div className="flex h-full flex-col gap-3">
+      <ColumnTitle
+        title="Neural only"
+        subtitle="One unconstrained LLM API call. Nothing retrieved, nothing checked."
+        highlighted={highlighted}
+      />
+      <ColumnContent highlighted={highlighted}>
+        {/* This banner is part of the column by construction: never render
+            unconstrained model output without this framing. */}
+        <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">
+          <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+          <span>
+            Unconstrained model output without retrieval, citations, and
+            guardrails. Shown to demonstrate what rx-ray prevents; not medical
+            information.
+          </span>
+        </div>
+        <EvidenceAnswerBox title="Generated answer">
+          <div className="whitespace-pre-line">
+            <HighlightedProse
+              text={neural.text}
+              phrases={neural.advice_phrases}
+            />
+          </div>
+        </EvidenceAnswerBox>
+        {neural.advice_phrases.length > 0 ? (
+          <p className="text-xs leading-5 text-red-800">
+            {neural.advice_phrases.length} phrase
+            {neural.advice_phrases.length === 1 ? "" : "s"} highlighted above
+            would be blocked or caveated by rx-ray&apos;s framing rules.
           </p>
-          <div className="flex flex-wrap gap-1">
-            {sectionEntries.map(([section, count]) => (
-              <Chip key={section}>
-                {sectionLabel(section)} × {count}
-              </Chip>
+        ) : null}
+      </ColumnContent>
+    </div>
+  );
+}
+
+export function SymbolicColumn({
+  symbolic,
+  highlighted,
+}: {
+  symbolic: SymbolicView;
+  highlighted?: boolean;
+}) {
+  const coverageReport = toCoverageReport(symbolic.coverage);
+  return (
+    <div className="flex h-full flex-col gap-3">
+      <ColumnTitle
+        title="Symbolic only"
+        subtitle="What the deterministic layer alone knows, before any text is generated."
+        highlighted={highlighted}
+      />
+      <ColumnContent highlighted={highlighted}>
+        <UnderstoodPanel
+          state={toQueryState(symbolic.state)}
+          infoText="The deterministic extraction only — rules plus RxNorm resolution, with no LLM revision. This is what the symbolic layer alone commits to."
+        />
+        {symbolic.coverage.length > 0 ? (
+          <AnswerSection
+            title="Find out what the retrieved evidence covers"
+            tone="audit"
+            headerExtra={
+              <CoverageStatusChips
+                counts={coverageStatusCounts(coverageReport)}
+              />
+            }
+          >
+            <EvidenceCoverageList
+              coverage={coverageReport}
+              onCitationClick={noop}
+              onCoverageTargetClick={noop}
+            />
+          </AnswerSection>
+        ) : null}
+        <DossierLinks resolved={symbolic.resolved} />
+      </ColumnContent>
+    </div>
+  );
+}
+
+function DossierLinks({
+  resolved,
+}: {
+  resolved: SymbolicView["resolved"];
+}) {
+  const drugs = resolved.filter((item) => (item.name ?? item.text)?.trim());
+  if (drugs.length === 0) {
+    return null;
+  }
+  return (
+    <div className="mt-auto rounded-md border border-slate-200 bg-slate-50 px-3 py-3">
+      <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+        Review the retrieved evidence
+      </p>
+      <p className="mt-1 text-xs leading-5 text-slate-600">
+        The symbolic layer resolved these concepts and retrieved their public
+        labels. Open the full label evidence in the Drug Dossier:
+      </p>
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        {drugs.map((item) => {
+          const name = item.name ?? item.text;
+          return (
+            <Link
+              key={`${item.text}-${item.rxcui ?? "none"}`}
+              href={`/dossier?drug=${encodeURIComponent(name)}&auto=1`}
+              className="inline-flex items-center gap-1 rounded-full border border-[#D7C8F4] bg-white px-2.5 py-1 text-xs font-medium text-[#3B2478] transition hover:border-[#C7B4EF] hover:bg-[#F8F4FC]"
+            >
+              {name}
+              <ArrowUpRight className="size-3.5" />
+            </Link>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+export function CombinedColumn({
+  combined,
+  question,
+  highlighted,
+}: {
+  combined: CombinedView;
+  question: string;
+  highlighted?: boolean;
+}) {
+  const understanding = combined.understanding;
+  const coverage = combined.coverage;
+  const coverageReport =
+    coverage && coverage.length > 0 ? toCoverageReport(coverage) : null;
+  const citedBullets = combined.bullets.filter(
+    (bullet) => bullet.citations.length > 0
+  );
+
+  return (
+    <div className="flex h-full flex-col gap-3">
+      <ColumnTitle
+        title="rx-ray (neuro-symbolic)"
+        subtitle="The full pipeline: neural drafting grounded and audited by the symbolic layer."
+        highlighted={highlighted}
+      />
+      <ColumnContent highlighted={highlighted}>
+        {understanding ? (
+          <UnderstoodPanel
+            state={toQueryState(understanding.state)}
+            infoText="The deterministic extraction after the LLM revises it — what the full pipeline commits to, and it can differ from the symbolic-only column."
+          />
+        ) : null}
+        {coverageReport ? (
+          <AnswerSection
+            title="Find out what the retrieved evidence covers"
+            tone="audit"
+            headerExtra={
+              <CoverageStatusChips
+                counts={coverageStatusCounts(coverageReport)}
+              />
+            }
+          >
+            <EvidenceCoverageList
+              coverage={coverageReport}
+              onCitationClick={noop}
+              onCoverageTargetClick={noop}
+            />
+          </AnswerSection>
+        ) : null}
+        {combined.response ? (
+          <EvidenceAnswerBox title="Evidence-based answer">
+            <InlineBoldMarkdown text={combined.response} />
+          </EvidenceAnswerBox>
+        ) : null}
+        {citedBullets.length > 0 ? (
+          <AnswerSection title="Sources" badgeCount={citedBullets.length}>
+            <CompareSources
+              bullets={citedBullets}
+              sourceLabels={combined.source_labels ?? {}}
+            />
+          </AnswerSection>
+        ) : null}
+        {combined.limitations.length > 0 ? (
+          <AnswerSection
+            title="Caveats & limitations"
+            badgeCount={combined.limitations.length}
+          >
+            <CaveatsList limitations={combined.limitations} />
+          </AnswerSection>
+        ) : null}
+        <div className="mt-auto flex flex-col gap-2 pt-1">
+          {combined.safety_note ? (
+            <p className="text-center text-xs leading-5 text-slate-500">
+              {combined.safety_note}
+            </p>
+          ) : null}
+          <RunLiveLink question={question} />
+        </div>
+      </ColumnContent>
+    </div>
+  );
+}
+
+function CompareSources({
+  bullets,
+  sourceLabels,
+}: {
+  bullets: CompareBullet[];
+  sourceLabels: Record<string, string>;
+}) {
+  return (
+    <div className="space-y-2">
+      {bullets.map((bullet, index) => (
+        <div
+          key={`${bullet.text}-${index}`}
+          className="rounded-md border border-[#D7C8F4] bg-white px-3 py-3"
+        >
+          <div className="mb-1.5 flex flex-col gap-1">
+            {bullet.citations.map((citation, citationIndex) => (
+              <div
+                key={`${citation.source_id}-${citation.section}-${citationIndex}`}
+                className="flex items-start gap-2 font-semibold leading-5 text-slate-800"
+                style={{ fontSize: "14px" }}
+              >
+                <FileText className="mt-0.5 size-4 shrink-0 text-slate-700" />
+                <span>
+                  {sourceLabels[citation.source_id] ?? "Label"} ·{" "}
+                  {sectionLabel(citation.section)}
+                </span>
+                <CitationSupportBadges
+                  status={citation.support_status as CitationSupportStatus | null}
+                />
+              </div>
             ))}
           </div>
+          <p
+            className="pl-6 leading-6 text-slate-800"
+            style={{ fontSize: "14px" }}
+          >
+            <InlineBoldMarkdown text={bullet.text} />
+          </p>
         </div>
-      ) : null}
-
-      <div>
-        <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-slate-500">
-          Deterministic coverage audit
-        </p>
-        <ul className="flex flex-col gap-1.5">
-          {symbolic.coverage.map((item, index) => (
-            <li key={index} className="flex flex-wrap items-center gap-1.5">
-              <Chip
-                className={
-                  coverageStatusClasses[item.status] ??
-                  "border-slate-200 bg-slate-50 text-slate-600"
-                }
-              >
-                {coverageStatusLabels[item.status] ?? item.status}
-              </Chip>
-              <span className="text-xs leading-5 text-slate-700">
-                {item.label}
-                <span className="text-slate-400"> · {item.category}</span>
-              </span>
-            </li>
-          ))}
-        </ul>
-      </div>
-    </ColumnShell>
+      ))}
+    </div>
   );
 }
 
-export function CombinedColumn({ combined }: { combined: CombinedView }) {
+function RunLiveLink({ question }: { question: string }) {
   return (
-    <ColumnShell
-      title="rx-ray (neuro-symbolic)"
-      subtitle="Grounded synthesis with whitelisted citations, audits, and enforced caveats."
+    <Link
+      href={`/?q=${encodeURIComponent(question)}`}
+      className="mt-1 inline-flex items-center justify-center gap-1.5 rounded-md border border-[#C7B4EF] bg-[#FBF9FE] px-3 py-2 text-center text-xs font-medium text-[#3B2478] transition hover:bg-[#F1ECFB]"
     >
-      <p className="text-sm leading-6 text-slate-800">
-        <InlineBold text={combined.response} />
-      </p>
-
-      {combined.bullets.length > 0 ? (
-        <ul className="flex flex-col gap-2">
-          {combined.bullets.map((bullet, index) => (
-            <li
-              key={index}
-              className="rounded-md border border-slate-100 bg-slate-50/60 px-3 py-2"
-            >
-              <p className="text-xs leading-5 text-slate-800">
-                <InlineBold text={bullet.text} />
-              </p>
-              <div className="mt-1 flex flex-wrap gap-1">
-                {bullet.citations.map((citation, citationIndex) => (
-                  <Chip
-                    key={citationIndex}
-                    className={
-                      citation.support_status === "accurate"
-                        ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-                        : citation.support_status
-                          ? "border-amber-200 bg-amber-50 text-amber-800"
-                          : undefined
-                    }
-                  >
-                    {sectionLabel(citation.section)}
-                    {citation.support_status === "accurate"
-                      ? " · verified"
-                      : citation.support_status
-                        ? " · flagged"
-                        : ""}
-                  </Chip>
-                ))}
-              </div>
-            </li>
-          ))}
-        </ul>
-      ) : null}
-
-      {combined.limitations.length > 0 ? (
-        <div>
-          <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-slate-500">
-            Stated limitations
-          </p>
-          <ul className="list-disc pl-4 text-xs leading-5 text-slate-600">
-            {combined.limitations.map((limitation, index) => (
-              <li key={index}>
-                <InlineBold text={limitation} />
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
-
-      {combined.safety_note ? (
-        <p className="mt-auto text-[11px] leading-4 text-slate-500">
-          {combined.safety_note}
-        </p>
-      ) : null}
-    </ColumnShell>
+      Run this question live to explore the full evidence
+      <ArrowUpRight className="size-3.5 shrink-0" />
+    </Link>
   );
 }
