@@ -1,10 +1,11 @@
 import type {
   EvidenceCoverageReport,
   EvidenceCoverageStatus,
+  OpenFDALabelRecord,
   QueryState,
 } from "@/lib/types";
 
-import type { SymbolicCoverageItem } from "./compare-types";
+import type { CompareSourceRecord, SymbolicCoverageItem } from "./compare-types";
 
 /** The trimmed state shape shared by the symbolic and combined fixtures. */
 type CompareState = {
@@ -62,4 +63,43 @@ export function toCoverageReport(
     })),
     summary_counts: summaryCounts,
   };
+}
+
+/**
+ * Adapt trimmed source records into the `Map<source_id, OpenFDALabelRecord>`
+ * shape citationDisplayLabel() expects, so /compare's Sources list renders
+ * "Brand · Manufacturer · Section" exactly like the Ask page instead of a
+ * synthetic "label N" placeholder. Only brand/generic/manufacturer names are
+ * captured server-side; the rest of OpenFDALabelRecord is padded empty since
+ * citationDisplayLabel() never reads it.
+ */
+export function toSourceById(
+  sourceRecords: Record<string, CompareSourceRecord> | undefined
+): Map<string, OpenFDALabelRecord> {
+  const entries = Object.entries(sourceRecords ?? {}).map(
+    ([sourceId, record]): [string, OpenFDALabelRecord] => [
+      sourceId,
+      {
+        source_id: sourceId,
+        spl_ids: [],
+        spl_set_ids: [],
+        brand_names: record.brand_names,
+        generic_names: record.generic_names,
+        manufacturer_names: record.manufacturer_names,
+        product_ndcs: [],
+        product_types: [],
+        routes: [],
+        substance_names: [],
+        descriptions: [],
+        package_label_principal_display_panels: [],
+        active_ingredients: [],
+        inactive_ingredients: [],
+        purposes: [],
+        dosages: [],
+        rxcuis: [],
+        provenance_tags: [],
+      },
+    ]
+  );
+  return new Map(entries);
 }

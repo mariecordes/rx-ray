@@ -23,6 +23,14 @@ export interface CombinedUnderstanding {
   };
 }
 
+/** Trimmed OpenFDA product metadata for a cited source, keyed by source_id.
+ *  Only the fields citationDisplayLabel() reads. */
+export interface CompareSourceRecord {
+  brand_names: string[];
+  generic_names: string[];
+  manufacturer_names: string[];
+}
+
 export interface CombinedView {
   response: string;
   bullets: CompareBullet[];
@@ -33,7 +41,7 @@ export interface CombinedView {
   // the deterministic-only symbolic column.
   understanding?: CombinedUnderstanding;
   coverage?: SymbolicCoverageItem[];
-  source_labels?: Record<string, string>;
+  source_records?: Record<string, CompareSourceRecord>;
 }
 
 export interface SymbolicResolved {
@@ -63,7 +71,6 @@ export interface SymbolicView {
   resolved: SymbolicResolved[];
   coverage: SymbolicCoverageItem[];
   section_counts: Record<string, number>;
-  source_labels: Record<string, string>;
 }
 
 export interface NeuralView {

@@ -74,17 +74,42 @@ WATCH_HINTS = {
 OUT_PATH = REPO_ROOT / "apps" / "frontend" / "src" / "data" / "compare-fixtures.json"
 
 
-def _source_labels_from_packet(packet: dict) -> dict[str, str]:
-    source_labels: dict[str, str] = {}
-    for entry in packet.get("label_sections", []):
-        source_id = entry.get("source_id")
-        if source_id and source_id not in source_labels:
-            drug = entry.get("drug_name") or "label"
-            source_labels[source_id] = f"{drug} label {len(source_labels) + 1}"
-    return source_labels
+def _cited_source_records(response: QueryAnswerResponse) -> dict[str, dict]:
+    """OpenFDA product metadata for cited sources, trimmed to the fields
+    citationDisplayLabel() (apps/frontend/.../dossier/display.ts) uses so the
+    compare page's Sources list can render "Brand · Manufacturer · Section"
+    the same way the Ask page does, instead of a synthetic "label N" name.
+    """
+    answer = response.answer
+    if answer is None:
+        return {}
+    cited_ids = {
+        citation.source_id for bullet in answer.bullets for citation in bullet.citations
+    }
+    if not cited_ids:
+        return {}
+    records = list(
+        response.understanding.primary_dossier.label_evidence.label_records
+        if response.understanding.primary_dossier
+        and response.understanding.primary_dossier.label_evidence
+        else []
+    )
+    for item in response.secondary_evidence or []:
+        if item.label_evidence:
+            records.extend(item.label_evidence.label_records)
+
+    result: dict[str, dict] = {}
+    for record in records:
+        if record.source_id in cited_ids and record.source_id not in result:
+            result[record.source_id] = {
+                "brand_names": list(record.brand_names),
+                "generic_names": list(record.generic_names),
+                "manufacturer_names": list(record.manufacturer_names),
+            }
+    return result
 
 
-def trim_combined(response: QueryAnswerResponse, service) -> dict:
+def trim_combined(response: QueryAnswerResponse) -> dict:
     """Trim the full production pipeline result for the neuro-symbolic column.
 
     Includes the *combined* (LLM-revised) understanding and coverage so the
@@ -93,12 +118,6 @@ def trim_combined(response: QueryAnswerResponse, service) -> dict:
     """
     understanding = response.understanding
     state = understanding.state
-    packet = service.synthesizer.build_evidence_packet(
-        understanding,
-        secondary_evidence=response.secondary_evidence,
-        context_evidence=response.context_evidence,
-        contract=response.contract,
-    )
     understanding_dict = {
         "state": {
             "primary_drug": state.primary_drug,
@@ -119,7 +138,7 @@ def trim_combined(response: QueryAnswerResponse, service) -> dict:
         }
         for item in response.coverage.items
     ]
-    source_labels = _source_labels_from_packet(packet)
+    source_records = _cited_source_records(response)
 
     answer = response.answer
     if answer is None:
@@ -148,7 +167,7 @@ def trim_combined(response: QueryAnswerResponse, service) -> dict:
         **base,
         "understanding": understanding_dict,
         "coverage": coverage,
-        "source_labels": source_labels,
+        "source_records": source_records,
     }
 
 
@@ -161,14 +180,9 @@ def trim_symbolic(response: QueryAnswerResponse, service) -> dict:
         contract=response.contract,
     )
     section_counts: dict[str, int] = {}
-    source_labels: dict[str, str] = {}
     for entry in packet.get("label_sections", []):
         section = entry.get("section", "")
         section_counts[section] = section_counts.get(section, 0) + 1
-        source_id = entry.get("source_id")
-        if source_id and source_id not in source_labels:
-            drug = entry.get("drug_name") or "label"
-            source_labels[source_id] = f"{drug} label {len(source_labels) + 1}"
     return {
         "state": {
             "drugs": list(state.all_drugs_mentioned),
@@ -198,7 +212,6 @@ def trim_symbolic(response: QueryAnswerResponse, service) -> dict:
             for item in response.coverage.items
         ],
         "section_counts": section_counts,
-        "source_labels": source_labels,
     }
 
 
@@ -226,9 +239,7 @@ def main() -> int:
         neural_texts[qid] = generate_neural_answer(question.question)
         print(f"  [combined] {qid}", flush=True)
         combined_responses[qid] = combined_service.answer(question.question)
-        combined_trimmed[qid] = trim_combined(
-            combined_responses[qid], combined_service
-        )
+        combined_trimmed[qid] = trim_combined(combined_responses[qid])
 
     # Phase 2: symbolic (strips extraction-LLM env for this process).
     print("Phase 2/2: symbolic runs (deterministic)...", flush=True)

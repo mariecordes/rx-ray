@@ -5,6 +5,7 @@ import { AlertTriangle, ArrowUpRight, FileText } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { Card } from "@/components/ui/card";
+import { citationDisplayLabel } from "@/components/dossier/display";
 import {
   AnswerSection,
   CaveatsList,
@@ -16,11 +17,10 @@ import {
   UnderstoodPanel,
   coverageStatusCounts,
 } from "@/components/dossier/generated-response";
-import { sectionLabels } from "@/lib/format";
-import type { CitationSupportStatus } from "@/lib/types";
+import type { CitationSupportStatus, OpenFDALabelRecord } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-import { toCoverageReport, toQueryState } from "./compare-adapters";
+import { toCoverageReport, toQueryState, toSourceById } from "./compare-adapters";
 import type {
   CombinedView,
   CompareBullet,
@@ -37,10 +37,6 @@ const HIGHLIGHT_ACCENT =
   "border-t-4 border-t-[#4F46E5] shadow-[0_22px_45px_-15px_rgba(67,56,202,0.45)]!";
 
 const noop = () => {};
-
-function sectionLabel(section: string): string {
-  return sectionLabels[section] ?? section.replaceAll("_", " ");
-}
 
 /** Minimal **bold** renderer with red highlighting of detected advice phrases,
  *  used only for the raw-LLM column. */
@@ -273,6 +269,7 @@ export function CombinedColumn({
   const citedBullets = combined.bullets.filter(
     (bullet) => bullet.citations.length > 0
   );
+  const sourceById = toSourceById(combined.source_records);
 
   return (
     <div className="flex h-full flex-col gap-3">
@@ -312,10 +309,7 @@ export function CombinedColumn({
         ) : null}
         {citedBullets.length > 0 ? (
           <AnswerSection title="Sources" badgeCount={citedBullets.length}>
-            <CompareSources
-              bullets={citedBullets}
-              sourceLabels={combined.source_labels ?? {}}
-            />
+            <CompareSources bullets={citedBullets} sourceById={sourceById} />
           </AnswerSection>
         ) : null}
         {combined.limitations.length > 0 ? (
@@ -341,10 +335,10 @@ export function CombinedColumn({
 
 function CompareSources({
   bullets,
-  sourceLabels,
+  sourceById,
 }: {
   bullets: CompareBullet[];
-  sourceLabels: Record<string, string>;
+  sourceById: Map<string, OpenFDALabelRecord>;
 }) {
   return (
     <div className="space-y-2">
@@ -362,8 +356,10 @@ function CompareSources({
               >
                 <FileText className="mt-0.5 size-4 shrink-0 text-slate-700" />
                 <span>
-                  {sourceLabels[citation.source_id] ?? "Label"} ·{" "}
-                  {sectionLabel(citation.section)}
+                  {citationDisplayLabel(
+                    { source_id: citation.source_id, section: citation.section },
+                    sourceById
+                  )}
                 </span>
                 <CitationSupportBadges
                   status={citation.support_status as CitationSupportStatus | null}
