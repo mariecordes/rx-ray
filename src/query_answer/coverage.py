@@ -105,32 +105,80 @@ def build_evidence_coverage(
     ]
     items: list[EvidenceCoverageItem] = []
 
+    # Query understanding can fall back to building the dossier around a
+    # *different* mentioned drug when the stated primary drug itself never
+    # resolves (see QueryUnderstandingService._select_primary). Detect that
+    # by RXCUI identity, not by comparing name strings — a normal resolution
+    # commonly renames "tretinoin cream" to "tretinoin 1 MG/ML Topical
+    # Cream", which is the same concept, not a fallback substitution.
+    primary_drug_mention = next(
+        (
+            mention
+            for mention in understanding.resolved_drugs
+            if mention.role == "primary_drug"
+        ),
+        None,
+    )
+    if primary_drug_mention is None:
+        # resolved_drugs wasn't populated (e.g. a QueryUnderstandingResponse
+        # built directly rather than via the service) — there's no positive
+        # evidence of a fallback substitution, so trust primary_dossier as
+        # the direct resolution rather than assuming one happened.
+        primary_drug_resolved_directly = True
+    else:
+        primary_drug_resolved_directly = bool(
+            primary_drug_mention.selected_concept
+            and dossier
+            and dossier.resolved_drug
+            and primary_drug_mention.selected_concept.rxcui
+            == dossier.resolved_drug.rxcui
+        )
+
+    def resolved_dossier_item(category: str, label: str) -> EvidenceCoverageItem:
+        assert primary_name is not None
+        return EvidenceCoverageItem(
+            category=category,
+            label=label,
+            status="addressed" if has_label_text else "not_found_in_evidence",
+            reason=(
+                primary_addressed_reason(
+                    primary_name,
+                    is_ingredient_fallback,
+                    ingredient_fallback_names,
+                )
+                if has_label_text
+                else f"Resolved to {primary_name}, but no label text was retrieved."
+            ),
+            target_rxcui=(
+                dossier.resolved_drug.rxcui
+                if dossier and dossier.resolved_drug
+                else None
+            ),
+        )
+
     if understanding.state.primary_drug:
-        if primary_name:
+        if primary_name and primary_drug_resolved_directly:
+            items.append(
+                resolved_dossier_item("primary_drug", understanding.state.primary_drug)
+            )
+        elif primary_name:
+            # The stated primary drug itself didn't resolve, but query
+            # understanding fell back to a different mentioned drug's
+            # dossier. Report both honestly instead of crediting the
+            # fallback drug's evidence to the drug that was never found.
             items.append(
                 EvidenceCoverageItem(
                     category="primary_drug",
                     label=understanding.state.primary_drug,
-                    status="addressed" if has_label_text else "not_found_in_evidence",
+                    status="not_retrieved",
                     reason=(
-                        primary_addressed_reason(
-                            primary_name,
-                            is_ingredient_fallback,
-                            ingredient_fallback_names,
-                        )
-                        if has_label_text
-                        else (
-                            f"Resolved to {primary_name}, "
-                            "but no label text was retrieved."
-                        )
-                    ),
-                    target_rxcui=(
-                        dossier.resolved_drug.rxcui
-                        if dossier and dossier.resolved_drug
-                        else None
+                        f"{understanding.state.primary_drug} was not recognized "
+                        "as a specific medication, so no evidence specific to "
+                        "it was retrieved."
                     ),
                 )
             )
+            items.append(resolved_dossier_item("mentioned_drug", primary_name))
         else:
             items.append(
                 EvidenceCoverageItem(
