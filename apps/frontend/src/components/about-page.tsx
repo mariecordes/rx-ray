@@ -1,6 +1,7 @@
 "use client";
 
 import { ChevronDown, ChevronRight } from "lucide-react";
+import Link from "next/link";
 import { useState, type ReactNode } from "react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -109,12 +110,14 @@ export function AboutPage() {
               onToggle={() => handleToggle("What you can do here")}
             >
               <p className="mb-3">
-                <RxRay /> has two entry points into the same underlying evidence
-                layer:
+                <RxRay /> has three entry points into the same underlying
+                evidence layer:
+              </p><br />
+              <p className="mb-3">
+                💬 <strong>Ask a Question</strong> 
               </p>
               <p className="mb-3">
-                💬 <strong>Ask a Question</strong>: the main experience. Ask a
-                natural-language medication question and get a grounded answer,
+                Ask a natural-language medication question and get a grounded answer,
                 plus a compact view of what the system understood, what evidence
                 it used, how faithfully each cited source is reflected, and where
                 it falls short.
@@ -135,14 +138,26 @@ export function AboutPage() {
                   drug network and the specific FDA label text, with source
                   provenance for every claim.
                 </li>
-              </ul>
+              </ul><br />
               <p className="mb-3">
-                🔎 <strong>Drug Dossier</strong>: search a single medication and
-                inspect its raw evidence directly: the RxNorm concept network and
-                its public FDA label sections, with no generated answer in
-                between.
+                ⚖️ <strong>Compare</strong> 
               </p>
-              
+              <p>
+                A handful of curated questions run through three
+                modes side by side: an unconstrained LLM call (neural only), the symbolic
+                layer alone based on purely deterministic rules with no generation, 
+                and the full neuro-symbolic pipeline grounding and auditing the model. 
+                To avoid LLM cost and reduce page load, this page uses precomputed 
+                real pipeline outputs.
+              </p><br />
+              <p className="mb-3">
+                🔎 <strong>Drug Dossier</strong> 
+              </p>
+              <p className="mb-3">
+                Search a single medication and inspect its raw evidence directly: 
+                the RxNorm concept network and its public FDA label sections to explore
+                the drug and its labels and relationships to other medications yourself.
+              </p>
             </CollapsibleSection>
 
             <CollapsibleSection
@@ -243,7 +258,7 @@ export function AboutPage() {
                 analysis that turned the disagreements into concrete follow-up
                 work on the roadmap.
               </p>
-              <p>
+              <p className="mb-3">
                 Full methodology, metrics, and results:{" "}
                 <a
                   href="https://github.com/mariecordes/rx-ray/blob/main/docs/EVALUATION.md"
@@ -254,6 +269,15 @@ export function AboutPage() {
                   docs/EVALUATION.md
                 </a>
                 .
+              </p>
+              <p>
+                For a hands-on version of that same ablation, the{" "}
+                <Link href="/compare" className={link}>
+                  Compare
+                </Link>{" "}
+                page runs curated questions through the isolated modes side by
+                side, so you can see what each layer contributes on a specific
+                example rather than just in the aggregate numbers.
               </p>
             </CollapsibleSection>
 
