@@ -1,0 +1,107 @@
+export type CompareMode = "neural" | "symbolic" | "combined";
+
+export interface CompareCitation {
+  source_id: string;
+  section: string;
+  support_status: string | null;
+}
+
+export interface CompareBullet {
+  text: string;
+  citations: CompareCitation[];
+}
+
+export interface CombinedUnderstanding {
+  state: {
+    primary_drug?: string | null;
+    drugs: string[];
+    current_medications: string[];
+    allergies: string[];
+    conditions: string[];
+    patient_context: string[];
+    intents: string[];
+  };
+}
+
+/** Trimmed OpenFDA product metadata for a cited source, keyed by source_id.
+ *  Only the fields citationDisplayLabel() reads. */
+export interface CompareSourceRecord {
+  brand_names: string[];
+  generic_names: string[];
+  manufacturer_names: string[];
+}
+
+export interface CombinedView {
+  response: string;
+  bullets: CompareBullet[];
+  limitations: string[];
+  safety_note: string;
+  // Present once fixtures are regenerated with the extended builder. The
+  // combined (LLM-revised) understanding and coverage differ on purpose from
+  // the deterministic-only symbolic column.
+  understanding?: CombinedUnderstanding;
+  coverage?: SymbolicCoverageItem[];
+  source_records?: Record<string, CompareSourceRecord>;
+}
+
+export interface SymbolicResolved {
+  text: string;
+  role: string;
+  rxcui: string | null;
+  name: string | null;
+  tty: string | null;
+}
+
+export interface SymbolicCoverageItem {
+  category: string;
+  label: string;
+  status: string;
+  reason: string;
+}
+
+export interface SymbolicView {
+  state: {
+    drugs: string[];
+    current_medications: string[];
+    allergies: string[];
+    conditions: string[];
+    patient_context: string[];
+    intents: string[];
+  };
+  resolved: SymbolicResolved[];
+  coverage: SymbolicCoverageItem[];
+  section_counts: Record<string, number>;
+}
+
+export interface NeuralView {
+  text: string;
+  advice_phrases: string[];
+}
+
+export type ScorecardRow<T> = Record<CompareMode, T | null>;
+
+export interface Scorecard {
+  cited_sources: ScorecardRow<number>;
+  advice_language_hits: ScorecardRow<number>;
+  advice_language_phrases: ScorecardRow<string[]>;
+  trap_handled: ScorecardRow<boolean>;
+  stated_limitations: ScorecardRow<number>;
+  safety_note: ScorecardRow<boolean>;
+}
+
+export interface CompareQuestion {
+  id: string;
+  question: string;
+  category: string;
+  hint: string;
+  neural: NeuralView;
+  symbolic: SymbolicView;
+  combined: CombinedView;
+  scorecard: Scorecard;
+}
+
+export interface CompareFixtures {
+  generated_at: string;
+  synthesis_model: string;
+  questions: CompareQuestion[];
+}

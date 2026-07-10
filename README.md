@@ -42,7 +42,7 @@ user question
 
 ## What it does
 
-The app has two entry points into the same evidence layer:
+The app has three entry points into the same evidence layer:
 
 1. **Ask a Question** (primary experience): ask a natural-language medication
   question and get a grounded summary, plus a compact view of what the system
@@ -56,10 +56,10 @@ Behind every answer, the evidence packet exposes:
 - **Supporting Evidence**: the underlying RxNorm drug network and the specific
   FDA label text, with source provenance for every claim.
 
+2. **Compare**: a handful of curated questions run through three modes side by side: an unconstrained LLM call (neural only), the symbolic layer alone based on purely deterministic rules with no generation, and the full neuro-symbolic pipeline grounding and auditing the model. To avoid LLM cost and reduce page load, this page uses precomputed real pipeline outputs.
 
-2. **Drug Dossier**: search a single medication and inspect its raw evidence
-  directly — the RxNorm concept network and public FDA label sections — with no
-  generated answer in between.
+3. **Drug Dossier**: search a single medication and inspect its raw evidence
+  directly — the RxNorm concept network and public FDA label sections — with no generated answer in between.
 
 
 ## How it works (technical)
@@ -166,6 +166,8 @@ The guardrails are measured, not just asserted, in two complementary ways:
 
 Methodology, results, and analysis: [docs/EVALUATION.md](docs/EVALUATION.md) ·
 full report: [evals/results/latest.md](evals/results/latest.md).
+
+For a hands-on version of that same ablation, the [Compare](https://rx-ray.vercel.app/compare) page runs curated questions through the isolated modes side by side, so you can see what each layer contributes on a specific example rather than just in the aggregate numbers.
 
 ## Tech stack
 

@@ -96,6 +96,7 @@ class QuestionResult(BaseModel):
     bullet_count: int = 0
     citation_count: int = 0
     limitation_count: int = 0
+    properties: dict = Field(default_factory=dict)
     error: str | None = None
 
     @property

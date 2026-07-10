@@ -94,8 +94,8 @@ MENTION_PATTERNS: tuple[tuple[str, str], ...] = (
 )
 
 FRAGMENT_STOP_PATTERN = re.compile(
-    r"\b(?:if|while|because|before|after|for|with|but|and|or|now|when|that|"
-    r"can|should|could|is|are|i|i'm|im|i’ve|ive|i have|have)\b",
+    r"\b(?:if|while|because|before|after|for|with|together|but|and|or|now|"
+    r"when|that|can|should|could|is|are|i|i'm|im|i’ve|ive|i have|have)\b",
     re.IGNORECASE,
 )
 

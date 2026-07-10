@@ -431,7 +431,7 @@ questions:
       forbid_yes_no_framing: true
 
   - id: q38_complex_elderly_warfarin_metformin_ibuprofen
-    question: "My 70-year-old father takes warfarin and metformin — is it risky to add ibuprofen for his knee pain?"
+    question: "My 70-year-old father takes warfarin and metformin. Is it risky to add ibuprofen for his knee pain?"
     category: complex
     notes: "Third-person phrasing + age context; warfarin+NSAID is prominently label-documented."
     expected:
