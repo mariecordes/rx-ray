@@ -194,9 +194,11 @@ function AskPageNavigation({
 }
 
 export function AskQuestionExperience() {
-  const [question, setQuestion] = useState(
-    "Can I take ibuprofen for my migraine if I'm allergic to aspirin?"
-  );
+  const searchParams = useSearchParams();
+  const initialQuestion =
+    searchParams.get("q")?.trim() ||
+    "Can I take ibuprofen for my migraine if I'm allergic to aspirin?";
+  const [question, setQuestion] = useState(initialQuestion);
   const [queryUnderstanding, setQueryUnderstanding] =
     useState<QueryUnderstandingResponse | null>(null);
   const [queryAnswer, setQueryAnswer] = useState<QueryAnswerResponse | null>(null);
@@ -219,6 +221,7 @@ export function AskQuestionExperience() {
   const drugNetworkNavRef = useRef<HTMLDivElement>(null);
   const drugLabelsNavRef = useRef<HTMLDivElement>(null);
   const queryRequestRef = useRef(0);
+  const didAutoRunRef = useRef(false);
   const evidenceMapSourceProfilesById = useMemo(
     () => labelSourceProfilesFromEvidence(dossier, queryAnswer),
     [dossier, queryAnswer]
@@ -304,8 +307,12 @@ export function AskQuestionExperience() {
     });
   }
 
-  async function handleQuestionSubmit(event: FormEvent<HTMLFormElement>) {
+  function handleQuestionSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    void runQuery(question);
+  }
+
+  async function runQuery(queryText: string) {
     const requestId = queryRequestRef.current + 1;
     queryRequestRef.current = requestId;
     setIsUnderstandingLoading(true);
@@ -342,7 +349,7 @@ export function AskQuestionExperience() {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            query: question,
+            query: queryText,
           }),
         },
         {
@@ -415,6 +422,21 @@ export function AskQuestionExperience() {
       }
     }
   }
+
+  useEffect(() => {
+    if (didAutoRunRef.current) {
+      return;
+    }
+    const initial = searchParams.get("q")?.trim();
+    if (!initial) {
+      return;
+    }
+    // Deep link from /compare's "run this question live" link: prefill and run
+    // the real pipeline once on mount.
+    didAutoRunRef.current = true;
+    void runQuery(initial);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   return (
     <div>

@@ -311,23 +311,9 @@ function EvidenceAnswerCard({
         </AnswerSection>
       ) : null}
 
-      <div className="rounded-md border border-[#C7B4EF] bg-[#FBF9FE] px-4 py-4 shadow-sm">
-        <section>
-          <h3
-            className="mb-2 font-semibold text-slate-800"
-            style={{ fontSize: "15px", lineHeight: "24px" }}
-          >
-            Evidence-based answer
-          </h3>
-
-          <p
-            className="text-slate-700"
-            style={{ fontSize: "15px", lineHeight: "26px" }}
-          >
-            <InlineBoldMarkdown text={directResponse} />
-          </p>
-        </section>
-      </div>
+      <EvidenceAnswerBox title="Evidence-based answer">
+        <InlineBoldMarkdown text={directResponse} />
+      </EvidenceAnswerBox>
 
       {citedBullets.length ? (
         <AnswerSection
@@ -378,20 +364,7 @@ function EvidenceAnswerCard({
           title="Caveats & limitations"
           badgeCount={answer.limitations.length}
         >
-          <div className="space-y-2">
-            {answer.limitations.map((limitation) => (
-              <div
-                key={limitation}
-                className="flex items-start gap-2 rounded-md border border-[#D7C8F4] bg-white px-3 py-2 leading-6 text-slate-800"
-                style={{ fontSize: "14px" }}
-              >
-                <TriangleAlert className="mt-1 size-4 shrink-0 text-slate-700" />
-                <span>
-                  <InlineBoldMarkdown text={limitation} />
-                </span>
-              </div>
-            ))}
-          </div>
+          <CaveatsList limitations={answer.limitations} />
         </AnswerSection>
       ) : null}
 
@@ -409,7 +382,7 @@ function EvidenceAnswerCard({
   );
 }
 
-function InlineBoldMarkdown({ text }: { text: string }) {
+export function InlineBoldMarkdown({ text }: { text: string }) {
   const segments = text.split(/(\*\*[^*]+\*\*)/g);
   return (
     <>
@@ -422,7 +395,55 @@ function InlineBoldMarkdown({ text }: { text: string }) {
   );
 }
 
-function EvidenceCoverageList({
+/** The highlighted "answer" panel. Title varies (e.g. "Generated answer"
+ *  for the raw-LLM comparison column); body content is caller-supplied. */
+export function EvidenceAnswerBox({
+  title,
+  children,
+}: {
+  title: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="rounded-md border border-[#C7B4EF] bg-[#FBF9FE] px-4 py-4 shadow-sm">
+      <section>
+        <h3
+          className="mb-2 font-semibold text-slate-800"
+          style={{ fontSize: "15px", lineHeight: "24px" }}
+        >
+          {title}
+        </h3>
+        <div
+          className="text-slate-700"
+          style={{ fontSize: "15px", lineHeight: "26px" }}
+        >
+          {children}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+export function CaveatsList({ limitations }: { limitations: string[] }) {
+  return (
+    <div className="space-y-2">
+      {limitations.map((limitation) => (
+        <div
+          key={limitation}
+          className="flex items-start gap-2 rounded-md border border-[#D7C8F4] bg-white px-3 py-2 leading-6 text-slate-800"
+          style={{ fontSize: "14px" }}
+        >
+          <TriangleAlert className="mt-1 size-4 shrink-0 text-slate-700" />
+          <span>
+            <InlineBoldMarkdown text={limitation} />
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export function EvidenceCoverageList({
   coverage,
   onCitationClick,
   onCoverageTargetClick,
@@ -622,7 +643,7 @@ function escapeRegExp(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function AnswerSection({
+export function AnswerSection({
   badgeCount,
   children,
   headerExtra,
@@ -682,7 +703,7 @@ function AnswerSection({
   );
 }
 
-function coverageStatusCounts(coverage: EvidenceCoverageReport) {
+export function coverageStatusCounts(coverage: EvidenceCoverageReport) {
   const counts: Partial<Record<EvidenceCoverageStatus, number>> = {};
   for (const item of coverage.items) {
     if (isLowSignalCoverageItem(item)) {
@@ -693,7 +714,7 @@ function coverageStatusCounts(coverage: EvidenceCoverageReport) {
   return counts;
 }
 
-function CoverageStatusChips({
+export function CoverageStatusChips({
   counts,
 }: {
   counts: Partial<Record<EvidenceCoverageStatus, number>>;
@@ -785,7 +806,7 @@ const answerUseClasses: Record<CitationAnswerUse, string> = {
 
 const VERIFIED_CLASSES = "border-emerald-200 bg-emerald-50 text-emerald-800";
 
-function CitationSupportBadges({
+export function CitationSupportBadges({
   status,
 }: {
   status: CitationSupportStatus | null | undefined;
@@ -1000,7 +1021,34 @@ function QueryUnderstandingResult({
 }: {
   result: QueryUnderstandingResponse;
 }) {
+  return (
+    <UnderstoodPanel
+      state={result.state}
+      infoText="The app first extracts medication concepts and context with deterministic rules, then asks an LLM to revise the extracted parameters before using it to retrieve evidence."
+      statusSlot={<QueryUnderstandingStatus result={result} />}
+    />
+  );
+}
+
+/** The "Find out what the system understood" collapsible. Shared by the Ask
+ *  page and the /compare columns; `statusSlot` lets the Ask page inject its
+ *  "could not build dossier" warning, and `infoText` customizes the tooltip
+ *  (the deterministic-only compare column tells a different story). */
+export function UnderstoodPanel({
+  state,
+  infoText = "The extracted medication concepts, patient context, and intent used to retrieve evidence.",
+  statusSlot,
+}: {
+  state: QueryState;
+  infoText?: string;
+  statusSlot?: ReactNode;
+}) {
   const [isExpanded, setIsExpanded] = useState(false);
+  const intents = state.intents?.length
+    ? state.intents
+    : state.intent
+      ? [state.intent]
+      : [];
 
   return (
     <div className="rounded-md border border-slate-200 bg-slate-50">
@@ -1020,47 +1068,40 @@ function QueryUnderstandingResult({
               <div className="text-xs font-medium uppercase text-slate-500">
                 Find out what the system understood
               </div>
-              <InfoTooltip text="The app first extracts medication concepts and context with deterministic rules, then asks an LLM to revise the extracted parameters before using it to retrieve evidence." />
+              <InfoTooltip text={infoText} />
             </div>
           </div>
         </div>
       </button>
 
-      <QueryUnderstandingStatus result={result} />
+      {statusSlot ?? null}
 
       {isExpanded ? (
         <div className="space-y-3 border-t border-slate-200 p-3">
           <ParameterGroup title="Medication concepts">
             <ParameterRow
               label="Current medications"
-              values={result.state.current_medications}
+              values={state.current_medications}
             />
             <ParameterRow
               label="All drugs mentioned"
-              values={allDrugsMentionedWithPrimary(result.state)}
+              values={allDrugsMentionedWithPrimary(state)}
             />
           </ParameterGroup>
 
           <ParameterGroup title="Patient context">
-            <ParameterRow label="Allergies" values={result.state.allergies} />
-            <ParameterRow label="Conditions" values={result.state.conditions} />
+            <ParameterRow label="Allergies" values={state.allergies} />
+            <ParameterRow label="Conditions" values={state.conditions} />
             <ParameterRow
               label="Patient details"
-              values={result.state.patient_context}
+              values={state.patient_context}
             />
           </ParameterGroup>
 
           <ParameterGroup title="Intent">
             <ParameterRow
               label="User intent"
-              values={
-                (result.state.intents?.length
-                  ? result.state.intents
-                  : result.state.intent
-                    ? [result.state.intent]
-                    : []
-                ).map(displayStateLabel)
-              }
+              values={intents.map(displayStateLabel)}
             />
           </ParameterGroup>
         </div>
