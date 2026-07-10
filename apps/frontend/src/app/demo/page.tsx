@@ -4,7 +4,6 @@ import { Suspense } from "react";
 import { AskQuestionExperience } from "@/components/dossier-explorer";
 
 export const metadata: Metadata = {
-  title: "Demo — rx-ray",
   robots: { index: false, follow: false },
 };
 
