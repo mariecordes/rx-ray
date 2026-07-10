@@ -230,7 +230,7 @@ function DossierLinks({
     return null;
   }
   return (
-    <div className="mt-auto rounded-md border border-slate-200 bg-slate-50 px-3 py-3">
+    <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-3">
       <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
         Review the retrieved evidence
       </p>
