@@ -65,7 +65,7 @@ These determine first impressions.
 | [D2h](#d2h--joint-multi-citation-judgment-in-the-critic) | Joint multi-citation judgment in the critic | Safety | S–M | Med–High | todo | D2e, D3b |
 | [D3a](#d3a--evaluation-harness--curated-question-set) | Evaluation harness | Safety | L | High | ✅ done | — |
 | [D3b](#d3b--critic-accuracy-labeling-study) | Critic accuracy labeling study | Safety | S–M | High | ✅ done | D3a |
-| [D4](#d4--neural-vs-symbolic-vs-combined) | Neural vs symbolic vs combined | Safety | L | High | todo | D3a |
+| [D4](#d4--neural-vs-symbolic-vs-combined) | Neural vs symbolic vs combined | Safety | L | High | ✅ done | D3a |
 | [D5](#d5--reasoning--execution-traces) | Reasoning/execution traces | Safety | M | Med | todo | — |
 | [D6](#d6--ablation-studies-on-the-eval-harness) | Ablation studies | Safety | M | Med | todo | D3a |
 | [D7](#d7--evaluation-docs--plan-cleanup) | Evaluation docs & plan cleanup | Safety | S | Med | in progress | D3a, D3b, D4 |
@@ -766,9 +766,9 @@ the D3b disagreement list.
 
 ---
 
-### D4 — Neural vs symbolic vs combined
+### ✅ D4 — Neural vs symbolic vs combined
 
-**Effort:** L · **Impact:** High · **Status:** todo · **Depends on:** D3a
+**Effort:** L · **Impact:** High · **Status:** ✅ done · **Depends on:** D3a
 
 **Goal:** For a given question, compare neural-only, symbolic-only, and combined outputs side by side.
 
@@ -777,11 +777,11 @@ the D3b disagreement list.
 **Scope:**
 - **Showcase deliverable: a `/compare` page in the UI** (replaces the previously planned notebook 06). Precomputed fixtures, not live calls: ~8 curated questions from `evals/questions.yml` (traps included) run through all three modes once by `scripts/build_compare_fixtures.py`, committed as static JSON, rendered as three mode columns + question picker. Default question: the fictional-drug trap, so every visitor sees the unconstrained LLM overclaim while rx-ray abstains. Zero backend/deployment changes; works in demo mode; no per-visitor LLM cost.
 - Neural mode: one neutral, un-sabotaged LLM call (`neural_only_answer` prompt, neutrality requirement documented in the YAML) in `src/evals/neural.py`, shared by the fixture script and a new `run_eval.py --mode neural`.
-- Deterministic property scorecard per question (`src/evals/compare.py`, unit-tested): cited-source count, personal-advice / definitive-language hits (reusing `YES_NO_FRAMING_PATTERNS`), trap handling, limitations count, safety-note presence — rendered on the page and aggregated into the eval report's three-mode table. No single shared quality score (neural-only has no citations by construction) and no LLM-graded hallucination scoring (a second unvalidated judge — the D3b pattern applies first).
+- Deterministic property scorecard per question (`src/evals/compare.py`, unit-tested): cited-source count, personal-advice / definitive-language hits (reusing `YES_NO_FRAMING_PATTERNS`), trap handling, limitations count, safety-note presence — kept in the fixtures and the eval report's three-mode table, but not currently rendered on the page (see Shipped note). No single shared quality score (neural-only has no citations by construction) and no LLM-graded hallucination scoring (a second unvalidated judge — the D3b pattern applies first).
 - The neural column always renders with a banner framing it as a demonstration of what the guardrails prevent (component-level, per the careful-framing invariant); all fixture content is eyeballed before commit.
 - Phase 2 (explicitly out of scope now): env-gated, rate-limited live compare.
 
-**Done when:** `/compare` on the live deployment shows the curated questions across all three modes with the deterministic scorecard, defaulting to the fictional-drug trap; `--mode neural` produces the property metrics in the eval report; `docs/EVALUATION.md` §5 and the README quote the contrast numbers.
+**Done when:** `/compare` on the live deployment shows the curated questions across all three modes, defaulting to the fictional-drug trap; `--mode neural` produces the property metrics in the eval report; the page is linked from the About page and README. (Originally also required `docs/EVALUATION.md` §3 and the README to quote 2–3 headline contrast numbers in a static table — dropped, see Shipped note: not impactful enough to justify given the interactive page already shows the difference directly.)
 
 ---
 
@@ -929,6 +929,39 @@ Do these opportunistically, when a concrete query exposes a problem — not pree
 ## Shipped
 
 A record of completed work.
+
+**D4 — Neural vs symbolic vs combined**
+- `/compare` page rendering 8 curated questions (traps included) across
+  neural-only, symbolic-only, and combined modes from fixtures precomputed by
+  `scripts/build_compare_fixtures.py` — no per-visitor LLM cost, defaults to
+  the fictional-drug trap. Columns reuse the Ask page's own components
+  (query understanding, coverage audit, evidence-based answer, sources,
+  caveats) rather than lookalikes, with a custom question picker (category
+  chips, full question text), the rx-ray column centered and visually
+  highlighted, and all three columns held to equal height.
+- The deterministic property scorecard (`src/evals/compare.py`) is built and
+  unit-tested but hidden on the page for now — it read as noisy this far down
+  the page and didn't clearly tell the intended "raw LLM looks reckless"
+  story; the code is kept to revisit later rather than deleted.
+- Fixture-building surfaced and fixed two real pipeline bugs (not
+  compare-specific — both apply to the live Ask page too): a drug-fragment
+  extraction regex that swallowed "together" into the drug name ("Zortivan
+  together with ibuprofen" → drug name "Zortivan together"), and a coverage
+  item that mislabeled which drug's evidence was actually retrieved when the
+  stated primary drug failed to resolve and the pipeline fell back to a
+  different mentioned drug's dossier.
+- Sources in the combined column now show real OpenFDA product names
+  ("IBUPROFEN · Aurobindo Pharma Limited · Boxed Warning") instead of a
+  synthetic "label N" placeholder, reusing the Ask page's own
+  `citationDisplayLabel` formatter.
+- Linked from the About page (a third entry point alongside Ask a Question
+  and Drug Dossier) and the README (`What it does` + a pointer from the
+  evaluation section to the live page as a hands-on version of the ablation
+  story).
+- Dropped from the original scope: a static comparison table with 2–3
+  headline contrast numbers in `docs/EVALUATION.md` §3 — not impactful
+  enough to justify, since the interactive page already lets a reader
+  inspect the difference directly on any of the 8 questions.
 
 **D3a — Evaluation harness & curated question set**
 - Behavioral eval harness in `src/evals/` consuming the pipeline's structured
