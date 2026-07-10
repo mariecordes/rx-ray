@@ -193,11 +193,16 @@ function AskPageNavigation({
   );
 }
 
-export function AskQuestionExperience() {
+export function AskQuestionExperience({
+  autoDemo = false,
+}: {
+  autoDemo?: boolean;
+} = {}) {
   const searchParams = useSearchParams();
-  const initialQuestion =
-    searchParams.get("q")?.trim() ||
-    "Can I take ibuprofen for my migraine if I'm allergic to aspirin?";
+  const initialQuestion = autoDemo
+    ? DEMO_QUERY
+    : searchParams.get("q")?.trim() ||
+      "Can I take ibuprofen for my migraine if I'm allergic to aspirin?";
   const [question, setQuestion] = useState(initialQuestion);
   const [queryUnderstanding, setQueryUnderstanding] =
     useState<QueryUnderstandingResponse | null>(null);
@@ -207,7 +212,6 @@ export function AskQuestionExperience() {
   const [queryError, setQueryError] = useState<string | null>(null);
   const [dossier, setDossier] = useState<DrugDossier | null>(null);
   const [isEvidenceOpen, setIsEvidenceOpen] = useState(false);
-  const [isDemoMode, setIsDemoMode] = useState(false);
   const [highlightCitation, setHighlightCitation] =
     useState<EvidenceCitation | null>(null);
   const [highlightEvidenceRxcui, setHighlightEvidenceRxcui] =
@@ -312,7 +316,7 @@ export function AskQuestionExperience() {
     void runQuery(question);
   }
 
-  async function runQuery(queryText: string) {
+  async function runQuery(queryText: string, useDemo = false) {
     const requestId = queryRequestRef.current + 1;
     queryRequestRef.current = requestId;
     setIsUnderstandingLoading(true);
@@ -325,7 +329,7 @@ export function AskQuestionExperience() {
     setHighlightCitation(null);
     setHighlightEvidenceRxcui(null);
 
-    if (isDemoMode) {
+    if (useDemo) {
       setQuestion(DEMO_QUERY);
       window.setTimeout(() => {
         if (queryRequestRef.current !== requestId) {
@@ -427,6 +431,12 @@ export function AskQuestionExperience() {
     if (didAutoRunRef.current) {
       return;
     }
+    if (autoDemo) {
+      // /demo: run the local fixture once on mount, no live API call.
+      didAutoRunRef.current = true;
+      void runQuery(DEMO_QUERY, true);
+      return;
+    }
     const initial = searchParams.get("q")?.trim();
     if (!initial) {
       return;
@@ -436,7 +446,7 @@ export function AskQuestionExperience() {
     didAutoRunRef.current = true;
     void runQuery(initial);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams]);
+  }, [searchParams, autoDemo]);
 
   return (
     <div>
@@ -455,16 +465,9 @@ export function AskQuestionExperience() {
           isAnswerLoading={isAnswerLoading}
           isUnderstandingLoading={isUnderstandingLoading}
           onQuestionChange={setQuestion}
-          onDemoModeChange={(enabled) => {
-            setIsDemoMode(enabled);
-            if (enabled) {
-              setQuestion(DEMO_QUERY);
-            }
-          }}
           onSubmit={handleQuestionSubmit}
           question={question}
           result={queryUnderstanding}
-          isDemoMode={isDemoMode}
           onAnswerCitationClick={handleAnswerCitationClick}
           onCoverageTargetClick={handleCoverageTargetClick}
         />

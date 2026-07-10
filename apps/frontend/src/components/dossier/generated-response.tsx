@@ -49,13 +49,11 @@ export function QueryUnderstandingPanel({
   askRef,
   error,
   generatedResponseRef,
-  isDemoMode,
   isAnswerLoading,
   isUnderstandingLoading,
   onQuestionChange,
   onAnswerCitationClick,
   onCoverageTargetClick,
-  onDemoModeChange,
   onSubmit,
   question,
   result,
@@ -64,13 +62,11 @@ export function QueryUnderstandingPanel({
   askRef: RefObject<HTMLDivElement | null>;
   error: string | null;
   generatedResponseRef: RefObject<HTMLDivElement | null>;
-  isDemoMode: boolean;
   isAnswerLoading: boolean;
   isUnderstandingLoading: boolean;
   onQuestionChange: (value: string) => void;
   onAnswerCitationClick: (citation: EvidenceCitation) => void;
   onCoverageTargetClick: (target: EvidenceCoverageTarget) => void;
-  onDemoModeChange: (enabled: boolean) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   question: string;
   result: QueryUnderstandingResponse | null;
@@ -122,21 +118,6 @@ export function QueryUnderstandingPanel({
                 )}
               </Button>
             </form>
-            <div className="mx-auto mt-3 flex max-w-4xl flex-wrap items-center justify-between gap-2 text-sm text-slate-500">
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={isDemoMode}
-                  onChange={(event) => onDemoModeChange(event.target.checked)}
-                  className="size-4 rounded border-slate-300 text-[#371E8F] focus:ring-[#371E8F]"
-                />
-                Demo mode
-              </label>
-              <span className="text-xs leading-5">
-                Uses a local fixture for the cetirizine, ibuprofen, and aspirin
-                query. No LLM or live API calls.
-              </span>
-            </div>
           </CardContent>
         </Card>
       </div>

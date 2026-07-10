@@ -76,6 +76,7 @@ These determine first impressions.
 | [E5](#e5--frontend-performance-for-the-evidence-map) | Evidence map perf | Engineering | M | Low–Med | todo | — |
 | [F1–F5](#theme-f--ux-polish--smaller-improvements) | UX polish & small items | Polish | S–M | Low | todo | — |
 | [F6](#theme-f--ux-polish--smaller-improvements) | Richer drug-label cards & medication overview | Polish | M | Low | ✅ done | — |
+| [F7](#theme-f--ux-polish--smaller-improvements) | Hide demo mode from the public Ask page | Polish | S | Low | ✅ done | — |
 
 ---
 
@@ -923,12 +924,17 @@ Do these opportunistically, when a concrete query exposes a problem — not pree
 - **F4 — Prompt versioning** (`S`): keep all prompt text in `conf/base/prompts.yml`; add version labels so prompt changes are traceable.
 - **F5 — Parameter extraction** (`S`): move remaining magic numbers (`MAX_LABEL_TEXT_CHARS`, `MAX_LABEL_SECTIONS`, `MAX_RXNORM_RELATIONSHIPS`, section priority/order, graph caps) into `parameters.yml`.
 - **✅ F6 — Richer drug-label cards & "what is this medication" section** (`M`): normalize and surface more OpenFDA fields — `description`, `package_label_principal_display_panel`, active/inactive ingredient, purpose, dosage. Add a dedicated About section as the first Drug Labels section, showing product context per label source and visually separated from warnings/how-to-use sections. Once the cards carry this product-level detail, **retire the "labels matched by RXCUI / generic name" info-note** added in B5 (it exists only because the cards currently look ingredient-generic).
+- **✅ F7 — Hide demo mode from the public Ask page** (`S`): the local-fixture "Demo mode" checkbox on the Ask page was a dev convenience for reviewing frontend changes, never documented as a feature, and not something to show users on the live app. Replaced with a hidden, unlinked, `noindex` `/demo` route that auto-runs the same fixture on load - same capability, no visible toggle.
 
 ---
 
 ## Shipped
 
 A record of completed work.
+
+**F7 — Hide demo mode from the public Ask page**
+- Removed the "Demo mode" checkbox and its caption from the Ask page. It was a dev convenience for reviewing frontend changes without live API calls, never documented anywhere as a feature, and not something to surface to users on the live app.
+- Added a hidden `/demo` route (`noindex, nofollow`, not linked from nav) that auto-fills and auto-runs the same local fixture on mount. Same capability as the old checkbox, just reachable only if you know the URL. `AskQuestionExperience` gained an `autoDemo` prop reusing the same auto-run-once-on-mount pattern already built for the `/compare` "run this question live" deep link.
 
 **D4 — Neural vs symbolic vs combined**
 - `/compare` page rendering 8 curated questions (traps included) across

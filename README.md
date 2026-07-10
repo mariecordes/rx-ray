@@ -258,6 +258,8 @@ Use `http://localhost:3000` for local frontend work. If you intentionally open
 the dev server through a LAN host, set `NEXT_ALLOWED_DEV_ORIGINS` in
 `apps/frontend/.env.local` to that host and restart `npm run dev`.
 
+**Note**: `/demo` (not linked in the nav) loads the Ask page pre-filled with a fixed local fixture and runs it automatically without any LLM calls. This may be helpful if you're iterating on frontend-only changes and don't want to use API credits on every reload.
+
 ## Safety note
 
 `rx-ray` is an educational prototype. It can help inspect public medication
